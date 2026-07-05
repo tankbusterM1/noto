@@ -1,0 +1,217 @@
+/*
+ * Global interaction utilities. The prototype expresses hover/active inline
+ * (custom style-hover/style-active attributes); React needs real CSS, so the
+ * repeated patterns live here as small utility classes used alongside inline
+ * styles. README "Hover/active": cards lift + border darkens to --ink3;
+ * press targets scale on :active; rows tint to --sf2.
+ */
+
+.lift {
+  transition:
+    border-color 0.15s ease,
+    transform 0.12s ease;
+}
+.lift:hover {
+  border-color: var(--ink3);
+  transform: translateY(-1px);
+}
+
+.lift-2 {
+  transition:
+    border-color 0.15s ease,
+    transform 0.12s ease;
+}
+.lift-2:hover {
+  border-color: var(--ink3);
+  transform: translateY(-2px);
+}
+
+.border-hover {
+  transition: border-color 0.15s ease;
+}
+.border-hover:hover {
+  border-color: var(--ink3);
+}
+
+.press:active {
+  transform: scale(0.97);
+}
+.press-98:active {
+  transform: scale(0.98);
+}
+.press-sm:active {
+  transform: scale(0.9);
+}
+
+.tint {
+  transition: background 0.15s ease;
+}
+.tint:hover {
+  background: var(--sf2);
+}
+
+.dim {
+  transition: opacity 0.15s ease;
+}
+.dim:hover {
+  opacity: 0.88;
+}
+
+/* Ink-fade: the card's inner body re-inks to full opacity on hover. */
+.ink-card .ink-body {
+  transition: opacity 0.45s ease;
+}
+.ink-card:hover .ink-body {
+  opacity: 1 !important;
+}
+
+/* #tags — muted (ink3 → amber) or amber (lift only). */
+.tag {
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    transform 0.15s ease;
+}
+.tag:hover {
+  color: var(--am);
+  transform: translateY(-1px);
+}
+.tag-lift {
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+.tag-lift:hover {
+  transform: translateY(-1px);
+}
+
+/* buttons */
+.btn-accent {
+  transition:
+    opacity 0.15s ease,
+    transform 0.12s ease;
+}
+.btn-accent:hover {
+  opacity: 0.9;
+}
+.btn-accent:active {
+  transform: scale(0.97);
+}
+.btn-dark {
+  transition:
+    opacity 0.15s ease,
+    transform 0.12s ease;
+}
+.btn-dark:hover {
+  opacity: 0.88;
+}
+.btn-dark:active {
+  transform: scale(0.97);
+}
+.btn-lift {
+  transition: transform 0.12s ease;
+}
+.btn-lift:hover {
+  transform: translateY(-1px);
+}
+.btn-lift:active {
+  transform: scale(0.97);
+}
+
+.crumb:hover {
+  color: var(--ink) !important;
+}
+
+/* editor formatting-toolbar buttons */
+.tbtn {
+  transition: background 0.15s ease;
+}
+.tbtn:hover {
+  background: var(--sf2);
+}
+
+/* marginalia / thread rows nudge on hover */
+.nudge {
+  transition:
+    border-color 0.15s ease,
+    transform 0.12s ease;
+}
+.nudge:hover {
+  border-color: var(--ink3);
+  transform: translateX(2px);
+}
+.nudge:active {
+  transform: scale(0.98);
+}
+
+/* review-session grade buttons — invert on hover */
+.grade {
+  transition: all 0.15s ease;
+}
+.grade:active {
+  transform: scale(0.95);
+}
+.grade-g1:hover {
+  background: var(--g1);
+  color: var(--bg);
+}
+.grade-g2:hover {
+  background: var(--g2);
+  color: var(--bg);
+}
+.grade-g3:hover {
+  background: var(--ac);
+  color: var(--acI);
+}
+.grade-g4:hover {
+  background: var(--g4);
+  color: var(--bg);
+}
+
+/* watch drawer */
+.thumb-close {
+  transition: background 0.15s ease;
+}
+.thumb-close:hover {
+  background: rgba(20, 16, 8, 0.6) !important;
+}
+.thumb-close:active {
+  transform: scale(0.9);
+}
+.del-btn {
+  transition: all 0.15s ease;
+}
+.del-btn:hover {
+  color: var(--g1) !important;
+  border-color: var(--g1) !important;
+}
+.del-btn:active {
+  transform: scale(0.94);
+}
+.tag-x:hover {
+  background: var(--ln) !important;
+}
+.suggest:hover {
+  color: var(--am) !important;
+  border-color: var(--am) !important;
+}
+.circle-btn {
+  transition: background 0.15s ease;
+}
+.circle-btn:hover {
+  background: var(--sf2);
+}
+.circle-btn:active {
+  transform: scale(0.9);
+}
+
+/* todo → note/video reference chip */
+.ref-chip {
+  transition: all 0.15s ease;
+}
+.ref-chip:hover {
+  background: var(--am) !important;
+  color: var(--bg) !important;
+}
+.ref-chip:active {
+  transform: scale(0.85);
+}

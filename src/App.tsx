@@ -2,13 +2,18 @@ import { useEffect, type CSSProperties } from 'react'
 import { useUI } from './store/ui'
 import { useData } from './store/data'
 import { Sidebar } from './shell/Sidebar'
-import { ScreenPlaceholder } from './screens/ScreenPlaceholder'
+import { Router } from './screens/Router'
+import { Toast } from './components/Toast'
+import { WatchDrawer } from './components/WatchDrawer'
+import { useKeyboard } from './shell/useKeyboard'
 
 export default function App() {
   const dark = useUI((s) => s.dark)
   const accent = useUI((s) => s.accent)
   const hydrated = useData((s) => s.hydrated)
   const hydrate = useData((s) => s.hydrate)
+
+  useKeyboard()
 
   useEffect(() => {
     void hydrate()
@@ -29,21 +34,25 @@ export default function App() {
   return (
     <div className={dark ? 'theme-dark' : 'theme-light'} style={rootStyle}>
       {hydrated ? (
-        <div style={{ display: 'flex', height: '100%', width: '100%' }}>
-          <Sidebar />
-          <main
-            style={{
-              flex: 1,
-              minWidth: 0,
-              height: '100%',
-              overflowY: 'auto',
-              background: 'var(--bg)',
-              transition: 'background-color 0.35s ease',
-            }}
-          >
-            <ScreenPlaceholder />
-          </main>
-        </div>
+        <>
+          <div style={{ display: 'flex', height: '100%', width: '100%' }}>
+            <Sidebar />
+            <main
+              style={{
+                flex: 1,
+                minWidth: 0,
+                height: '100%',
+                overflowY: 'auto',
+                background: 'var(--bg)',
+                transition: 'background-color 0.35s ease',
+              }}
+            >
+              <Router />
+            </main>
+          </div>
+          <WatchDrawer />
+          <Toast />
+        </>
       ) : (
         <div
           style={{

@@ -1,0 +1,18 @@
+.box {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+/* Watch "mark-watched" control brightens its ring on hover. */
+.hoverable:hover {
+  border-color: var(--hb) !important;
+}
+.hoverable:active {
+  transform: scale(0.86);
+}

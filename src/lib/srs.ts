@@ -100,6 +100,18 @@ export function inkOpacity(
   return Math.min(1, 0.55 + 0.45 * (srs.due / Math.max(srs.ivl, 1)))
 }
 
+/** The little SRS status pill shown on note cards. */
+export function srsPill(srs: SrsState | null | undefined): {
+  label: string
+  color: string
+  bold: boolean
+} {
+  if (!srs) return { label: 'not in review', color: 'var(--ink3)', bold: false }
+  if (srs.due <= 0)
+    return { label: '◆ ' + dueLabel(srs.due), color: 'var(--am)', bold: true }
+  return { label: '◇ review ' + dueLabel(srs.due), color: 'var(--ink3)', bold: false }
+}
+
 export function gradeName(g: Grade): string {
   return ['', 'Again', 'Hard', 'Good', 'Easy'][g]
 }

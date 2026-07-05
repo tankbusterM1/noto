@@ -3,11 +3,13 @@ import { db } from '../data/db'
 import { seedDatabase } from '../data/seed'
 import { todayEpochDay } from '../lib/dates'
 import { domainOf } from '../lib/format'
+import { applyGrade, dueNotes } from '../lib/srs'
 import { useUI } from './ui'
 import type {
   Block,
   Folder,
   Goal,
+  Grade,
   JournalEntry,
   Note,
   Ranged,
@@ -18,6 +20,12 @@ import type {
   WatchKind,
   WeekItem,
 } from '../lib/types'
+
+export interface Session {
+  queue: string[]
+  idx: number
+  log: Grade[]
+}
 
 /*
  * Data store — the in-memory working set, hydrated once from Dexie and kept in
@@ -46,8 +54,14 @@ interface DataState {
   doneToday: number
   extra: Record<string, Block[]>
   langO: Record<string, string>
+  session: Session | null
+  sRevealed: boolean
 
   hydrate: () => Promise<void>
+  startSession: (ids?: string[]) => void
+  reveal: () => void
+  grade: (g: Grade) => void
+  endSession: () => void
   toggleTodo: (id: string) => void
   toggleGoal: (id: string) => void
   toggleWeek: (id: string) => void
@@ -177,11 +191,52 @@ export const useData = create<DataState>()((set, get) => ({
   doneToday: 0,
   extra: {},
   langO: {},
+  session: null,
+  sRevealed: false,
 
   hydrate: () => {
     if (get().hydrated) return Promise.resolve()
     if (!hydrating) hydrating = hydrateImpl(set)
     return hydrating
+  },
+
+  startSession: (ids) => {
+    const queue = ids ?? dueNotes(get().notes, get().srs).map((n) => n.id)
+    if (!queue.length) {
+      useUI.getState().showToast('Nothing due — your ink is dark')
+      return
+    }
+    set({ session: { queue, idx: 0, log: [] }, sRevealed: false })
+    useUI.getState().setScreen('session')
+  },
+  reveal: () => set({ sRevealed: true }),
+  grade: (g) => {
+    const s = get().session
+    if (!s || s.idx >= s.queue.length) return
+    const id = s.queue[s.idx]
+    const cur = get().srs[id]
+    if (!cur) return
+    const { state: next, requeue, toast } = applyGrade(cur, g)
+
+    const today = todayEpochDay()
+    void db.srs.put({ noteId: id, ease: next.ease, ivl: next.ivl, dueDay: today + next.due })
+    void db.ledger.add({ noteId: id, day: today, grade: g, ivl: next.ivl })
+
+    set({
+      srs: { ...get().srs, [id]: next },
+      session: {
+        queue: requeue ? [...s.queue, id] : s.queue,
+        idx: s.idx + 1,
+        log: [...s.log, g],
+      },
+      sRevealed: false,
+      doneToday: get().doneToday + 1,
+    })
+    useUI.getState().showToast(toast)
+  },
+  endSession: () => {
+    set({ session: null })
+    useUI.getState().setScreen('queue')
   },
 
   toggleTodo: (id) => {
