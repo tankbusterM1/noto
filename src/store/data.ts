@@ -52,8 +52,6 @@ interface DataState {
   journal: JournalEntry[]
   tagsPool: string[]
   doneToday: number
-  extra: Record<string, Block[]>
-  langO: Record<string, string>
   session: Session | null
 
   hydrate: () => Promise<void>
@@ -72,8 +70,9 @@ interface DataState {
   /** Normalize + register a tag, attach it to a watch item. Returns the tag. */
   watchAddTag: (id: string, rawTag: string) => string
   watchRemoveTag: (id: string, tag: string) => void
-  addBlock: (noteId: string, block: Block) => void
-  setLang: (key: string, lang: string) => void
+  newNote: () => void
+  updateNote: (id: string, patch: Partial<Note>) => void
+  appendBlock: (noteId: string, block: Block) => void
 }
 
 const numId = (id: string) => parseInt(id.replace(/\D/g, ''), 10) || 0
@@ -187,8 +186,6 @@ export const useData = create<DataState>()((set, get) => ({
   journal: [],
   tagsPool: [],
   doneToday: 0,
-  extra: {},
-  langO: {},
   session: null,
 
   hydrate: () => {
@@ -336,10 +333,43 @@ export const useData = create<DataState>()((set, get) => ({
     if (w) get().watchPatch(id, { tags: w.tags.filter((x) => x !== tag) })
   },
 
-  addBlock: (noteId, block) => {
-    set({ extra: { ...get().extra, [noteId]: [...(get().extra[noteId] ?? []), block] } })
+  newNote: () => {
+    const ui = useUI.getState()
+    const folders = get().folders
+    const sel = ui.selFolder
+    const folderId = sel !== 'all' && folders.some((f) => f.id === sel) ? sel : folders[0]?.id ?? ''
+    const id = 'n' + Date.now()
+    const note: Note = {
+      id,
+      title: 'Untitled note',
+      folderId,
+      tags: [],
+      created: 0,
+      updated: 0,
+      blocks: [{ t: 'p', text: '' }],
+    }
+    set({ notes: [...get().notes, note] })
+    const today = todayEpochDay()
+    void db.notes.add({ id, title: note.title, folderId, tags: [], createdDay: today, updatedDay: today, blocks: note.blocks })
+    ui.openNote(id)
+    ui.showToast('New note created')
   },
-  setLang: (key, lang) => {
-    set({ langO: { ...get().langO, [key]: lang } })
+  updateNote: (id, patch) => {
+    const notes = get().notes.map((n) => (n.id === id ? { ...n, ...patch, updated: 0 } : n))
+    set({ notes })
+    const n = notes.find((x) => x.id === id)
+    if (n) {
+      void db.notes.update(id, {
+        title: n.title,
+        blocks: n.blocks,
+        tags: n.tags,
+        folderId: n.folderId,
+        updatedDay: todayEpochDay(),
+      })
+    }
+  },
+  appendBlock: (noteId, block) => {
+    const n = get().notes.find((x) => x.id === noteId)
+    if (n) get().updateNote(noteId, { blocks: [...n.blocks, block] })
   },
 }))

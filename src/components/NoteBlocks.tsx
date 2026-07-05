@@ -6,40 +6,51 @@ import s from './NoteBlocks.module.css'
 
 /**
  * Renders a note's ordered blocks. `readOnly` (review session) drops the
- * contentEditable affordances and the img/link/call blocks, matching the
- * prototype's session renderer. Appended blocks (`extra`) and code-language
- * overrides (`langO`) come from the data store.
+ * contentEditable affordances and the img/link/call blocks.
  *
- * NOTE: text edits to existing blocks are not persisted — the prototype
- * doesn't wire contentEditable back to storage. Formatting (execCommand) and
- * block *appends* are live; body persistence is a flagged stub.
+ * When editable, text edits + list-item edits + the code language chip persist
+ * to the note (autosaved on blur via the data store → Dexie). Appended blocks
+ * come from the editor toolbar (also persisted).
  */
 export function NoteBlocks({ note, readOnly = false }: { note: Note; readOnly?: boolean }) {
-  const extra = useData((st) => st.extra)
-  const langO = useData((st) => st.langO)
-  const setLang = useData((st) => st.setLang)
+  const updateNote = useData((st) => st.updateNote)
 
-  const blocks: Block[] = [...note.blocks, ...(extra[note.id] ?? [])]
+  const blocks: Block[] = note.blocks
   const editable = readOnly
     ? {}
     : { contentEditable: true, suppressContentEditableWarning: true, spellCheck: false }
+
+  const saveText = (index: number, text: string) => {
+    if (blocks[index]?.text === text) return
+    updateNote(note.id, { blocks: blocks.map((b, i) => (i === index ? { ...b, text } : b)) })
+  }
+  const saveItem = (index: number, j: number, text: string) => {
+    const items = (blocks[index].items ?? []).map((it, k) => (k === j ? text : it))
+    updateNote(note.id, { blocks: blocks.map((b, i) => (i === index ? { ...b, items } : b)) })
+  }
+  const cycleLang = (index: number, lang: string) => {
+    const next = LANGS[(LANGS.indexOf(lang as (typeof LANGS)[number]) + 1) % LANGS.length]
+    updateNote(note.id, { blocks: blocks.map((b, i) => (i === index ? { ...b, lang: next } : b)) })
+  }
+  const onBlurText = (index: number) =>
+    readOnly ? undefined : (e: React.FocusEvent<HTMLElement>) => saveText(index, e.currentTarget.innerText)
 
   return (
     <div className={`${s.blocks} ${readOnly ? s.readOnly : ''}`}>
       {blocks.map((b, i) => {
         const key = `${note.id}:${i}`
-        const lang = langO[key] || b.lang || ''
+        const lang = b.lang || ''
 
         switch (b.t) {
           case 'h2':
             return (
-              <h2 key={key} className={s.h2} {...editable}>
+              <h2 key={key} className={s.h2} {...editable} onBlur={onBlurText(i)}>
                 {b.text}
               </h2>
             )
           case 'p':
             return (
-              <p key={key} className={s.p} {...editable}>
+              <p key={key} className={s.p} {...editable} onBlur={onBlurText(i)}>
                 {b.text}
               </p>
             )
@@ -49,7 +60,11 @@ export function NoteBlocks({ note, readOnly = false }: { note: Note; readOnly?: 
                 {(b.items ?? []).map((item, j) => (
                   <div key={j} className={s.listItem}>
                     <div className={s.bullet} />
-                    <div className={s.listText} {...editable}>
+                    <div
+                      className={s.listText}
+                      {...editable}
+                      onBlur={readOnly ? undefined : (e) => saveItem(i, j, e.currentTarget.innerText)}
+                    >
                       {item}
                     </div>
                   </div>
@@ -59,20 +74,13 @@ export function NoteBlocks({ note, readOnly = false }: { note: Note; readOnly?: 
           case 'code':
             return (
               <div key={key} className={s.codeWrap}>
-                <div className={s.code} {...editable}>
+                <div className={s.code} {...editable} onBlur={onBlurText(i)}>
                   {b.text}
                 </div>
                 {readOnly ? (
                   <div className={s.langLabel}>{lang}</div>
                 ) : (
-                  <div
-                    className={s.langChip}
-                    title="Click to cycle language"
-                    onClick={() => {
-                      const next = LANGS[(LANGS.indexOf(lang as (typeof LANGS)[number]) + 1) % LANGS.length]
-                      setLang(key, next)
-                    }}
-                  >
+                  <div className={s.langChip} title="Click to cycle language" onClick={() => cycleLang(i, lang)}>
                     {lang} ↺
                   </div>
                 )}
@@ -80,7 +88,7 @@ export function NoteBlocks({ note, readOnly = false }: { note: Note; readOnly?: 
             )
           case 'q':
             return (
-              <div key={key} className={s.quote} {...editable}>
+              <div key={key} className={s.quote} {...editable} onBlur={onBlurText(i)}>
                 {b.text}
               </div>
             )
@@ -93,7 +101,7 @@ export function NoteBlocks({ note, readOnly = false }: { note: Note; readOnly?: 
                   <ImageIcon size={26} strokeWidth={1.3} />
                   <span className={s.imgHint}>drop an image · paste · or click</span>
                 </div>
-                <figcaption className={s.imgCaption} {...editable}>
+                <figcaption className={s.imgCaption} {...editable} onBlur={onBlurText(i)}>
                   {b.text}
                 </figcaption>
               </figure>
@@ -105,7 +113,7 @@ export function NoteBlocks({ note, readOnly = false }: { note: Note; readOnly?: 
               <div key={key} className={s.link}>
                 <div className={s.linkTile}>{initial}</div>
                 <div className={s.linkBody}>
-                  <div className={s.linkTitle} {...editable}>
+                  <div className={s.linkTitle} {...editable} onBlur={onBlurText(i)}>
                     {b.text}
                   </div>
                   <div className={s.linkDomain}>{b.domain}</div>
@@ -121,7 +129,7 @@ export function NoteBlocks({ note, readOnly = false }: { note: Note; readOnly?: 
                 <span className={s.calloutIcon}>
                   <LightbulbIcon style={{ color: 'var(--am)' }} />
                 </span>
-                <div className={s.calloutText} {...editable}>
+                <div className={s.calloutText} {...editable} onBlur={onBlurText(i)}>
                   {b.text}
                 </div>
               </div>

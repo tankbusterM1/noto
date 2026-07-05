@@ -19,6 +19,7 @@ interface Row {
 export function Notes() {
   const notes = useData((s) => s.notes)
   const folders = useData((s) => s.folders)
+  const newNote = useData((s) => s.newNote)
   const showToast = useUI((s) => s.showToast)
   const selFolder = useUI((s) => s.selFolder)
   const libQ = useUI((s) => s.libQ)
@@ -101,7 +102,7 @@ export function Notes() {
           </div>
           <button
             className="btn-dark"
-            onClick={() => showToast('New note — not wired in this prototype')}
+            onClick={newNote}
             style={{ background: 'var(--ink)', color: 'var(--bg)', border: 'none', borderRadius: 10, padding: '9px 15px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 7 }}
           >
             <PlusIcon />

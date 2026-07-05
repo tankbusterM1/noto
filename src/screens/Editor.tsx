@@ -40,7 +40,8 @@ export function Editor() {
   const notes = useData((s) => s.notes)
   const folders = useData((s) => s.folders)
   const srs = useData((s) => s.srs)
-  const addBlock = useData((s) => s.addBlock)
+  const appendBlock = useData((s) => s.appendBlock)
+  const updateNote = useData((s) => s.updateNote)
   const addToReview = useData((s) => s.addToReview)
   const startSession = useData((s) => s.startSession)
   const noteId = useUI((s) => s.noteId)
@@ -52,8 +53,8 @@ export function Editor() {
   const sr = srs[note.id]
 
   const exec = (cmd: string, arg?: string) => () => document.execCommand(cmd, false, arg)
-  const append = (block: Parameters<typeof addBlock>[1], msg: string) => () => {
-    addBlock(note.id, block)
+  const append = (block: Parameters<typeof appendBlock>[1], msg: string) => () => {
+    appendBlock(note.id, block)
     showToast(msg)
   }
 
@@ -111,9 +112,11 @@ export function Editor() {
           </div>
 
           <h1
+            key={note.id}
             contentEditable
             suppressContentEditableWarning
             spellCheck={false}
+            onBlur={(e) => updateNote(note.id, { title: e.currentTarget.innerText })}
             style={{ fontFamily: SERIF, fontSize: 37, fontWeight: 500, letterSpacing: '-0.015em', lineHeight: 1.15, margin: '0 0 8px', outline: 'none' }}
           >
             {note.title}
