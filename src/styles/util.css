@@ -121,6 +121,34 @@
   color: var(--ink) !important;
 }
 
+/* clean "+ add" affordance: ghost row → focused field */
+@keyframes addpop {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.addghost {
+  transition:
+    color 0.15s ease,
+    background 0.15s ease;
+}
+.addghost:hover {
+  color: var(--ink2) !important;
+  background: var(--sf2);
+}
+.addopen {
+  animation: addpop 0.18s cubic-bezier(0.3, 0.7, 0.3, 1) both;
+  transition: border-color 0.15s ease;
+}
+.addopen:focus-within {
+  border-color: var(--am) !important;
+}
+
 /* reveal a delete (×) affordance on row hover (folders, todos, tasks) */
 .frow-del,
 .hoverdel {

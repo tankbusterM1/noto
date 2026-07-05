@@ -7,8 +7,8 @@ import { MONO, SERIF, kicker, rise } from '../lib/ui'
 import { Checkbox } from '../components/Checkbox'
 import { StrikeText } from '../components/StrikeText'
 import { TodoLine } from '../components/TodoLine'
-import { AddInput } from '../components/AddInput'
-import { StarIcon, CloseIcon } from '../components/icons'
+import { AddRow } from '../components/AddRow'
+import { StarIcon, CloseIcon, PlusIcon } from '../components/icons'
 
 /** Small × shown on task-row hover. */
 function DelX({ onClick }: { onClick: () => void }) {
@@ -27,8 +27,9 @@ function DelX({ onClick }: { onClick: () => void }) {
   )
 }
 
-/** Inline "add a commitment" form (text + day-of-month range). */
+/** Collapse/expand "add a commitment" form (text + day-of-month range). */
 function RangedAdd({ onAdd }: { onAdd: (text: string, from: number, to: number) => void }) {
+  const [open, setOpen] = useState(false)
   const [text, setText] = useState('')
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
@@ -40,14 +41,29 @@ function RangedAdd({ onAdd }: { onAdd: (text: string, from: number, to: number) 
       setText('')
       setFrom('')
       setTo('')
+      setOpen(false)
     }
   }
-  const num: CSSProperties = { width: 42, border: '1px dashed var(--ln)', outline: 'none', background: 'transparent', fontFamily: MONO, fontSize: 12, color: 'var(--ink)', borderRadius: 8, padding: '7px 6px', textAlign: 'center' }
+  if (!open) {
+    return (
+      <button className="addghost" onClick={() => setOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', marginTop: 13, border: 'none', background: 'transparent', color: 'var(--ink3)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5, padding: '7px 8px', borderRadius: 8, textAlign: 'left' }}>
+        <PlusIcon size={11} />
+        Add a commitment
+      </button>
+    )
+  }
+  const num: CSSProperties = { width: 40, border: '1px solid var(--ln)', outline: 'none', background: 'var(--bg)', fontFamily: MONO, fontSize: 12, color: 'var(--ink)', borderRadius: 7, padding: '6px 4px', textAlign: 'center' }
   return (
-    <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
-      <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submit()} placeholder="+ commitment" style={{ flex: 1, border: '1px dashed var(--ln)', outline: 'none', background: 'transparent', fontSize: 12.5, color: 'var(--ink)', borderRadius: 8, padding: '7px 10px' }} />
-      <input value={from} onChange={(e) => setFrom(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submit()} placeholder="d1" style={num} />
-      <input value={to} onChange={(e) => setTo(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submit()} placeholder="d2" style={num} />
+    <div className="addopen" style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 13, background: 'var(--sf2)', border: '1px solid var(--ln)', borderRadius: 10, padding: 11 }}>
+      <input value={text} autoFocus onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submit()} placeholder="What's the commitment?" style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 13, color: 'var(--ink)', fontFamily: 'inherit', padding: '2px 0' }} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+        <span style={{ fontFamily: MONO, fontSize: 9.5, color: 'var(--ink3)' }}>day</span>
+        <input value={from} onChange={(e) => setFrom(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submit()} placeholder="1" style={num} />
+        <span style={{ color: 'var(--ink3)' }}>→</span>
+        <input value={to} onChange={(e) => setTo(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submit()} placeholder="14" style={num} />
+        <span style={{ flex: 1 }} />
+        <button className="press" onClick={submit} style={{ background: 'var(--ac)', color: 'var(--acI)', border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Add</button>
+      </div>
     </div>
   )
 }
@@ -149,8 +165,8 @@ export function Todos() {
             {todos.map((t) => (
               <TodoLine key={t.id} todo={t} onDelete={() => deleteTodo(t.id)} />
             ))}
-            <div style={{ marginTop: 10 }}>
-              <AddInput placeholder="+ add a task — use #tag to thread it" onAdd={addTodo} />
+            <div style={{ marginTop: 6 }}>
+              <AddRow placeholder="Add a task — use #tag" onAdd={addTodo} />
             </div>
           </div>
 
@@ -168,8 +184,8 @@ export function Todos() {
                   <DelX onClick={() => deleteGoal(g.id)} />
                 </div>
               ))}
-              <div style={{ marginTop: 10 }}>
-                <AddInput placeholder="+ add a goal" onAdd={addGoal} />
+              <div style={{ marginTop: 6 }}>
+                <AddRow placeholder="Add a goal" onAdd={addGoal} />
               </div>
             </div>
 
@@ -188,8 +204,8 @@ export function Todos() {
                   <DelX onClick={() => deleteRitual(r.id)} />
                 </div>
               ))}
-              <div style={{ marginTop: 10 }}>
-                <AddInput placeholder="+ add a ritual" onAdd={addRitual} />
+              <div style={{ marginTop: 6 }}>
+                <AddRow placeholder="Add a ritual" onAdd={addRitual} />
               </div>
             </div>
 
@@ -254,7 +270,7 @@ export function Todos() {
                       <DelX onClick={() => deleteWeekItem(t.id)} />
                     </div>
                   ))}
-                  <AddInput placeholder="+" onAdd={(v) => addWeekItem(i, v)} fontSize={11} />
+                  <AddRow placeholder="Add" onAdd={(v) => addWeekItem(i, v)} dense />
                 </div>
               </div>
             )
