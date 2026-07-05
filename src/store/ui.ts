@@ -36,13 +36,17 @@ interface UIState {
   slim: boolean
   accent: Accent
   inkFade: boolean
+  toast: string | null
 
   setScreen: (screen: Screen) => void
   toggleTheme: () => void
   toggleSlim: () => void
   setAccent: (accent: Accent) => void
   setInkFade: (inkFade: boolean) => void
+  showToast: (msg: string) => void
 }
+
+let toastTimer: ReturnType<typeof setTimeout> | undefined
 
 export const useUI = create<UIState>()(
   persist(
@@ -52,12 +56,18 @@ export const useUI = create<UIState>()(
       slim: false,
       accent: '#35518E',
       inkFade: true,
+      toast: null,
 
       setScreen: (screen) => set({ screen }),
       toggleTheme: () => set((s) => ({ dark: !s.dark })),
       toggleSlim: () => set((s) => ({ slim: !s.slim })),
       setAccent: (accent) => set({ accent }),
       setInkFade: (inkFade) => set({ inkFade }),
+      showToast: (msg) => {
+        clearTimeout(toastTimer)
+        set({ toast: msg })
+        toastTimer = setTimeout(() => set({ toast: null }), 2400)
+      },
     }),
     {
       name: 'noto-ui',

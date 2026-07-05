@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { useUI, type Screen } from '../store/ui'
+import { useData } from '../store/data'
 import {
   Caret,
   TodayIcon,
@@ -12,21 +13,6 @@ import {
   AppearanceIcon,
 } from '../components/icons'
 import s from './Sidebar.module.css'
-
-/*
- * TODO(step 2): these counts are wired to the Dexie-backed data store.
- * For now they mirror the prototype's seed so the shell renders truthfully:
- *   notes = 10, todos left = 4, due = 5, in-review = 8, reviews/week = 23,
- *   vault files = notes(10) + watch(6) + journal(4) + todos(6) = 26.
- */
-const PLACEHOLDER = {
-  notes: 10,
-  todosLeft: 4,
-  due: 5,
-  inReview: 8,
-  reviewsWeek: 23,
-  vaultFiles: 26,
-}
 
 /** Which nav row is highlighted for the current screen. */
 function isActive(navId: Screen, screen: Screen): boolean {
@@ -64,6 +50,23 @@ export function Sidebar() {
   const setScreen = useUI((st) => st.setScreen)
   const toggleSlim = useUI((st) => st.toggleSlim)
   const toggleTheme = useUI((st) => st.toggleTheme)
+
+  const notes = useData((st) => st.notes)
+  const srs = useData((st) => st.srs)
+  const todos = useData((st) => st.todos)
+  const watch = useData((st) => st.watch)
+  const journal = useData((st) => st.journal)
+  const doneToday = useData((st) => st.doneToday)
+
+  const notesCount = notes.length
+  const todosLeft = todos.filter((t) => !t.done).length
+  const dueCount = notes.filter((n) => {
+    const sr = srs[n.id]
+    return sr && sr.due <= 0
+  }).length
+  const inReview = notes.filter((n) => srs[n.id]).length
+  const reviewsWeek = 23 + doneToday
+  const vaultFiles = notes.length + watch.length + journal.length + todos.length
 
   const width = screen === 'session' ? 0 : slim ? 64 : 236
   const go = (target: Screen) => () => setScreen(target)
@@ -113,7 +116,7 @@ export function Sidebar() {
             label="Notes"
             active={isActive('notes', screen)}
             onClick={go('notes')}
-            right={<span className={s.count}>{PLACEHOLDER.notes}</span>}
+            right={<span className={s.count}>{notesCount}</span>}
           />
           <NavItem
             icon={<JournalIcon />}
@@ -126,7 +129,7 @@ export function Sidebar() {
             label="Todos"
             active={isActive('todos', screen)}
             onClick={go('todos')}
-            right={<span className={s.count}>{PLACEHOLDER.todosLeft}</span>}
+            right={<span className={s.count}>{todosLeft}</span>}
           />
           <NavItem
             icon={<WatchIcon />}
@@ -147,10 +150,10 @@ export function Sidebar() {
             active={isActive('queue', screen)}
             onClick={go('queue')}
             right={
-              PLACEHOLDER.due > 0
+              dueCount > 0
                 ? slim
                   ? <span className={s.dot} />
-                  : <span className={s.badge}>{PLACEHOLDER.due}</span>
+                  : <span className={s.badge}>{dueCount}</span>
                 : undefined
             }
           />
@@ -162,12 +165,12 @@ export function Sidebar() {
       {/* Footer */}
       <div className={s.footer}>
         <div className={s.vault}>
-          {PLACEHOLDER.inReview} notes in review
+          {inReview} notes in review
           <br />
-          {PLACEHOLDER.reviewsWeek} reviews this week
+          {reviewsWeek} reviews this week
           <br />
           <span className={s.vaultAmber}>vault</span> · local-first ·{' '}
-          {PLACEHOLDER.vaultFiles} files
+          {vaultFiles} files
         </div>
 
         {/* Search opens the ⌘K palette — wired in step 5. */}
