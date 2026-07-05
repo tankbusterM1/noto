@@ -11,6 +11,25 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
+  build: {
+    chunkSizeWarningLimit: 700,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ['react', 'react-dom'],
+          codemirror: [
+            '@codemirror/state',
+            '@codemirror/view',
+            '@codemirror/commands',
+            '@codemirror/lang-markdown',
+            '@codemirror/language',
+            '@lezer/highlight',
+          ],
+          dexie: ['dexie'],
+        },
+      },
+    },
+  },
   test: {
     // The SRS engine is pure — no DOM needed, so the fast node env is fine.
     environment: 'node',
