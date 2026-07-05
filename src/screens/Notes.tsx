@@ -1,11 +1,13 @@
+import { useState, type MouseEvent } from 'react'
 import { useData } from '../store/data'
 import { useUI } from '../store/ui'
 import { kidsOf, notesIn, countRec, pathOf } from '../lib/tree'
 import { noteFullText } from '../lib/format'
 import { MONO, SERIF, kicker, rise } from '../lib/ui'
 import { NoteCard } from '../components/NoteCard'
-import { GridIcon, FolderIcon, TreeCaret, SearchIcon, PlusIcon, CloseIcon } from '../components/icons'
-import type { Folder } from '../lib/types'
+import { ContextMenu, type MenuState } from '../components/ContextMenu'
+import { GridIcon, FolderIcon, TreeCaret, SearchIcon, PlusIcon, CloseIcon, TrashIcon, ReviewIcon } from '../components/icons'
+import type { Folder, Note } from '../lib/types'
 
 interface Row {
   folder: Folder
@@ -19,10 +21,15 @@ interface Row {
 export function Notes() {
   const notes = useData((s) => s.notes)
   const folders = useData((s) => s.folders)
+  const srs = useData((s) => s.srs)
   const newNote = useData((s) => s.newNote)
   const newFolder = useData((s) => s.newFolder)
   const renameFolder = useData((s) => s.renameFolder)
   const deleteFolder = useData((s) => s.deleteFolder)
+  const deleteNote = useData((s) => s.deleteNote)
+  const addToReview = useData((s) => s.addToReview)
+  const startSession = useData((s) => s.startSession)
+  const openNote = useUI((s) => s.openNote)
   const selFolder = useUI((s) => s.selFolder)
   const libQ = useUI((s) => s.libQ)
   const expanded = useUI((s) => s.expanded)
@@ -33,6 +40,54 @@ export function Notes() {
   const toggleExpand = useUI((s) => s.toggleExpand)
   const startRenameFolder = useUI((s) => s.startRenameFolder)
   const stopRenameFolder = useUI((s) => s.stopRenameFolder)
+
+  const [menu, setMenu] = useState<MenuState | null>(null)
+
+  const folderMenu = (e: MouseEvent, folder: Folder) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setMenu({
+      x: e.clientX,
+      y: e.clientY,
+      items: [
+        { label: 'New note here', icon: <PlusIcon size={11} />, onClick: () => { setSelFolder(folder.id); newNote() } },
+        { label: 'New subfolder', icon: <FolderIcon size={13} />, onClick: () => newFolder(folder.id) },
+        { label: '', onClick: () => {}, divider: true },
+        { label: 'Rename', onClick: () => startRenameFolder(folder.id) },
+        { label: 'Delete folder', icon: <TrashIcon size={12} />, danger: true, onClick: () => deleteFolder(folder.id) },
+      ],
+    })
+  }
+
+  const noteMenu = (e: MouseEvent, note: Note) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const inReview = !!srs[note.id]
+    setMenu({
+      x: e.clientX,
+      y: e.clientY,
+      items: [
+        { label: 'Open', onClick: () => openNote(note.id) },
+        inReview
+          ? { label: 'Review now', icon: <ReviewIcon size={13} />, onClick: () => startSession([note.id]) }
+          : { label: 'Add to review', icon: <ReviewIcon size={13} />, onClick: () => addToReview(note.id) },
+        { label: '', onClick: () => {}, divider: true },
+        { label: 'Delete note', icon: <TrashIcon size={12} />, danger: true, onClick: () => deleteNote(note.id) },
+      ],
+    })
+  }
+
+  const bgMenu = (e: MouseEvent) => {
+    e.preventDefault()
+    setMenu({
+      x: e.clientX,
+      y: e.clientY,
+      items: [
+        { label: 'New note', icon: <PlusIcon size={11} />, onClick: () => newNote() },
+        { label: 'New folder', icon: <FolderIcon size={13} />, onClick: () => newFolder(selFolder === 'all' ? null : selFolder) },
+      ],
+    })
+  }
 
   const q = libQ.toLowerCase()
   const isSearching = q.length > 0
@@ -112,7 +167,7 @@ export function Notes() {
 
       <div style={{ display: 'flex', gap: 28, alignItems: 'flex-start' }}>
         {/* Folder tree */}
-        <div style={{ width: 216, flexShrink: 0 }}>
+        <div style={{ width: 216, flexShrink: 0 }} onContextMenu={bgMenu}>
           <div
             className="tint"
             onClick={() => {
@@ -151,6 +206,7 @@ export function Notes() {
                     e.stopPropagation()
                     startRenameFolder(r.folder.id)
                   }}
+                  onContextMenu={(e) => folderMenu(e, r.folder)}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -224,7 +280,7 @@ export function Notes() {
         </div>
 
         {/* Folder contents */}
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ flex: 1, minWidth: 0 }} onContextMenu={bgMenu}>
           {isSearching ? (
             <div style={{ fontFamily: MONO, fontSize: 11, color: 'var(--ink3)', marginBottom: 14 }}>
               results for "{libQ}" · {searchResults.length} {searchResults.length === 1 ? 'note' : 'notes'}
@@ -272,7 +328,7 @@ export function Notes() {
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))', gap: 14 }}>
             {gridSrc.map((n, i) => (
-              <NoteCard key={n.id} note={n} variant="grid" index={i} />
+              <NoteCard key={n.id} note={n} variant="grid" index={i} onContextMenu={(e) => noteMenu(e, n)} />
             ))}
           </div>
           {folderEmpty && (
@@ -282,6 +338,8 @@ export function Notes() {
           )}
         </div>
       </div>
+
+      <ContextMenu menu={menu} onClose={() => setMenu(null)} />
     </div>
   )
 }

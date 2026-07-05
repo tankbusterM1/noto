@@ -13,10 +13,12 @@ export function NoteCard({
   note,
   variant,
   index = 0,
+  onContextMenu,
 }: {
   note: Note
   variant: 'recent' | 'grid'
   index?: number
+  onContextMenu?: (e: React.MouseEvent) => void
 }) {
   const folders = useData((s) => s.folders)
   const srs = useData((s) => s.srs)
@@ -34,6 +36,7 @@ export function NoteCard({
       <div
         className="ink-card lift"
         onClick={() => openNote(note.id)}
+        onContextMenu={onContextMenu}
         style={{
           background: 'var(--sf)',
           border: '1px solid var(--ln)',
@@ -79,6 +82,7 @@ export function NoteCard({
     <div
       className="ink-card lift-2"
       onClick={() => openNote(note.id)}
+      onContextMenu={onContextMenu}
       style={{
         background: 'var(--sf)',
         border: '1px solid var(--ln)',
