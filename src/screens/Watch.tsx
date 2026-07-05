@@ -136,13 +136,16 @@ function WatchCard({ item: w }: { item: WatchItem }) {
       style={{ background: 'var(--sf)', border: '1px solid var(--ln)', borderRadius: 16, overflow: 'hidden', cursor: 'pointer', opacity: w.done ? 0.55 : 1 }}
     >
       <div style={{ height: 110, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(250,248,240,0.95)', background: `linear-gradient(135deg, hsl(${w.hue},30%,62%), hsl(${w.hue + 34},32%,42%))` }}>
+        {w.thumb && (
+          <img src={w.thumb} alt="" onError={(e) => (e.currentTarget.style.display = 'none')} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+        )}
         {w.kind === 'video' && (
-          <div style={{ width: 38, height: 38, borderRadius: 99, background: 'rgba(20,16,8,0.35)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: 38, height: 38, borderRadius: 99, background: 'rgba(20,16,8,0.4)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1 }}>
             <PlayTriangle size={13} style={{ marginLeft: 2 }} />
           </div>
         )}
-        {w.kind === 'article' && <ArticleIcon size={22} />}
-        {w.kind === 'paper' && <PaperIcon size={22} />}
+        {w.kind === 'article' && !w.thumb && <ArticleIcon size={22} />}
+        {w.kind === 'paper' && !w.thumb && <PaperIcon size={22} />}
         <span style={{ position: 'absolute', left: 10, bottom: 9, fontFamily: MONO, fontSize: 9, background: 'rgba(20,16,8,0.4)', backdropFilter: 'blur(4px)', borderRadius: 6, padding: '3px 7px' }}>{domainOf(w.url)}</span>
         <span style={{ position: 'absolute', right: 10, bottom: 9, fontFamily: MONO, fontSize: 9, background: 'rgba(20,16,8,0.4)', backdropFilter: 'blur(4px)', borderRadius: 6, padding: '3px 7px' }}>{w.mins ? fmtMins(w.mins) : '—'}</span>
       </div>

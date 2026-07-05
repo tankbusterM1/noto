@@ -3,6 +3,7 @@ import { db } from '../data/db'
 import { seedDatabase } from '../data/seed'
 import { todayEpochDay } from '../lib/dates'
 import { domainOf } from '../lib/format'
+import { scrapeLink, type Scraped } from '../lib/scrape'
 import { applyGrade, dueNotes } from '../lib/srs'
 import { notesIn, kidsOf } from '../lib/tree'
 import { blockId } from '../lib/types'
@@ -373,8 +374,6 @@ export const useData = create<DataState>()((set, get) => ({
         ? 'paper'
         : 'article'
     const id = 'v' + Date.now()
-    // STUB: real URL scraping (title / thumbnail / duration) is not implemented.
-    // We fake it with a shimmer skeleton, then resolve to placeholder metadata.
     const item: Watch = {
       id,
       kind,
@@ -391,15 +390,20 @@ export const useData = create<DataState>()((set, get) => ({
     }
     set({ watch: [item, ...get().watch] })
     void db.watch.add({ ...item, addedAt: Date.now() })
-    setTimeout(() => {
-      const label =
-        (kind === 'video' ? 'Video' : kind === 'paper' ? 'Paper' : 'Article') +
-        ' from ' +
-        domain +
-        ' — click to rename'
-      get().watchPatch(id, { loading: false, title: label, mins: kind === 'video' ? 34 : 12 })
-      toast('Saved · scraped from ' + domain)
-    }, 1100)
+    // Real client-side scrape (noembed / YouTube thumbnail / OG tags via a CORS
+    // proxy). Durations still need a server API, so they stay unknown.
+    void (async () => {
+      const scraped = await scrapeLink(trimmed).catch((): Scraped => ({}))
+      const fallback = (kind === 'video' ? 'Video' : kind === 'paper' ? 'Paper' : 'Article') + ' · ' + domain
+      get().watchPatch(id, {
+        loading: false,
+        title: scraped.title || fallback,
+        thumb: scraped.thumb,
+        source: scraped.source || domain,
+        mins: scraped.mins ?? 0,
+      })
+      toast(scraped.title ? 'Saved · ' + domain : 'Saved · ' + domain + ' (no preview)')
+    })()
   },
 
   watchPatch: (id, patch) => {

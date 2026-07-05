@@ -122,6 +122,8 @@ export interface Watch {
   tags: string[]
   note: string
   loading?: boolean
+  /** Scraped thumbnail URL (falls back to the hue gradient). */
+  thumb?: string
 }
 
 export interface JournalEntry {

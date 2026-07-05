@@ -38,13 +38,16 @@ export function WatchDrawer() {
       <div style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 400, maxWidth: '92vw', zIndex: 131, background: 'var(--bg)', borderLeft: '1px solid var(--ln)', boxShadow: '-24px 0 60px rgba(24,19,10,0.18)', display: 'flex', flexDirection: 'column', animation: 'drawerin 0.35s cubic-bezier(0.3,0.7,0.3,1) both' }}>
         {/* thumb */}
         <div style={{ height: 150, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(250,248,240,0.95)', flexShrink: 0, background: `linear-gradient(135deg, hsl(${dw.hue},30%,62%), hsl(${dw.hue + 34},32%,42%))` }}>
+          {dw.thumb && (
+            <img src={dw.thumb} alt="" onError={(e) => (e.currentTarget.style.display = 'none')} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+          )}
           {dw.kind === 'video' && (
-            <div style={{ width: 46, height: 46, borderRadius: 99, background: 'rgba(20,16,8,0.35)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ width: 46, height: 46, borderRadius: 99, background: 'rgba(20,16,8,0.4)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1 }}>
               <PlayTriangle size={16} style={{ marginLeft: 2 }} />
             </div>
           )}
-          {dw.kind === 'article' && <ArticleIcon size={28} />}
-          {dw.kind === 'paper' && <PaperIcon size={28} />}
+          {dw.kind === 'article' && !dw.thumb && <ArticleIcon size={28} />}
+          {dw.kind === 'paper' && !dw.thumb && <PaperIcon size={28} />}
           <div className="thumb-close" onClick={closeWatch} style={{ position: 'absolute', top: 14, right: 14, width: 30, height: 30, borderRadius: 99, background: 'rgba(20,16,8,0.4)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
             <CloseIcon />
           </div>
