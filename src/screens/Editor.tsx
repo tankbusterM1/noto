@@ -6,8 +6,8 @@ import { folderPath } from '../lib/tree'
 import { words } from '../lib/format'
 import { ago, addDays, fmtShort } from '../lib/dates'
 import { MONO, SERIF, rise } from '../lib/ui'
-import { NoteEditor } from '../components/NoteEditor'
-import { ImageIcon, LinkIcon, TrashIcon } from '../components/icons'
+import { MarkdownEditor } from '../components/MarkdownEditor'
+import { TrashIcon } from '../components/icons'
 
 const railLabel: CSSProperties = {
   fontFamily: MONO,
@@ -23,23 +23,10 @@ const statLabel: CSSProperties = {
   textTransform: 'uppercase',
   color: 'var(--ink3)',
 }
-const tbtn: CSSProperties = {
-  border: 'none',
-  background: 'transparent',
-  padding: '6px 9px',
-  borderRadius: 7,
-  cursor: 'pointer',
-  fontFamily: MONO,
-  fontSize: 11,
-  fontWeight: 600,
-  color: 'var(--ink2)',
-}
-
 export function Editor() {
   const notes = useData((s) => s.notes)
   const folders = useData((s) => s.folders)
   const srs = useData((s) => s.srs)
-  const appendBlock = useData((s) => s.appendBlock)
   const updateNote = useData((s) => s.updateNote)
   const moveNote = useData((s) => s.moveNote)
   const deleteNote = useData((s) => s.deleteNote)
@@ -70,11 +57,6 @@ export function Editor() {
     armTimer.current = setTimeout(() => setArmed(false), 3000)
   }
 
-  const append = (block: Parameters<typeof appendBlock>[1], msg: string) => () => {
-    appendBlock(note.id, block)
-    showToast(msg)
-  }
-
   const related = notes
     .filter((n) => n.id !== note.id && n.tags.some((t) => note.tags.includes(t)))
     .slice(0, 3)
@@ -92,37 +74,6 @@ export function Editor() {
             <span>{folderPath(folders, note.folderId)}</span>
             <span style={{ flex: 1 }} />
             <span style={{ fontFamily: MONO, fontSize: 10 }}>edited {ago(note.updated)}</span>
-          </div>
-
-          {/* Sticky formatting toolbar */}
-          <div
-            style={{
-              display: 'flex',
-              gap: 4,
-              marginBottom: 24,
-              background: 'var(--sf)',
-              border: '1px solid var(--ln)',
-              borderRadius: 11,
-              padding: 4,
-              width: 'fit-content',
-              position: 'sticky',
-              top: 16,
-              zIndex: 10,
-              boxShadow: '0 4px 14px rgba(38,30,14,0.06)',
-            }}
-          >
-            <button className="tbtn" title="Heading  ( # )" style={tbtn} onClick={append({ t: 'h2', text: '' }, 'Heading added')}>H</button>
-            <button className="tbtn" title="Bulleted list  ( - )" style={{ ...tbtn, fontFamily: 'inherit', fontSize: 12, fontWeight: 400, padding: '6px 10px' }} onClick={append({ t: 'ul', items: [''] }, 'List added')}>• list</button>
-            <button className="tbtn" title="Quote  ( > )" style={{ ...tbtn, fontFamily: SERIF, fontSize: 14, fontWeight: 400 }} onClick={append({ t: 'q', text: '' }, 'Quote added')}>❝</button>
-            <button className="tbtn" title="Code block  ( ``` )" style={tbtn} onClick={append({ t: 'code', lang: 'python', text: '' }, 'Code block added')}>&lt;/&gt;</button>
-            <div style={{ width: 1, background: 'var(--ln)', margin: '4px 3px' }} />
-            <button className="tbtn" title="Callout" style={{ ...tbtn, display: 'flex', alignItems: 'center', padding: '6px 8px' }} onClick={append({ t: 'call', text: '' }, 'Callout added')}>💡</button>
-            <button className="tbtn" title="Image" style={{ ...tbtn, display: 'flex', alignItems: 'center', color: 'var(--ink2)' }} onClick={append({ t: 'img', text: 'caption…' }, 'Image block added')}>
-              <ImageIcon />
-            </button>
-            <button className="tbtn" title="Link card" style={{ ...tbtn, display: 'flex', alignItems: 'center', color: 'var(--ink2)' }} onClick={append({ t: 'link', text: 'New link — rename me', domain: 'example.com' }, 'Link card added')}>
-              <LinkIcon />
-            </button>
           </div>
 
           <h1
@@ -159,7 +110,10 @@ export function Editor() {
             />
           </div>
 
-          <NoteEditor note={note} />
+          <MarkdownEditor key={note.id} note={note} />
+          <div style={{ fontFamily: MONO, fontSize: 9.5, color: 'var(--ink3)', marginTop: 20, letterSpacing: '0.04em' }}>
+            markdown · # heading · - list · &gt; quote · ``` code · paste or drop an image
+          </div>
         </div>
       </div>
 
