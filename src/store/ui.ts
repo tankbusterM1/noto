@@ -51,7 +51,6 @@ interface UIState {
   wOpenId: string | null
   jLocked: boolean
   jMode: JournalMode
-  jSaved: boolean
   thread: string | null
   pal: string | null
   palIdx: number
@@ -89,7 +88,6 @@ interface UIState {
   unlockJournal: () => void
   toggleJournalLock: () => void
   setJMode: (m: JournalMode) => void
-  saveJournal: () => void
 
   // toast
   showToast: (msg: string) => void
@@ -117,7 +115,6 @@ export const useUI = create<UIState>()(
       wOpenId: null,
       jLocked: true,
       jMode: 'prompt',
-      jSaved: false,
       thread: null,
       pal: null,
       palIdx: 0,
@@ -155,14 +152,6 @@ export const useUI = create<UIState>()(
       },
       toggleJournalLock: () => set((s) => ({ jLocked: !s.jLocked })),
       setJMode: (jMode) => set({ jMode }),
-      saveJournal: () => {
-        if (get().jSaved) {
-          get().showToast('Already saved — see you tomorrow')
-          return
-        }
-        set({ jSaved: true })
-        get().showToast('Saved · streak extended to 7 days')
-      },
 
       showToast: (msg) => {
         clearTimeout(toastTimer)

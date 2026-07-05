@@ -219,7 +219,7 @@ export async function seedDatabase(): Promise<void> {
       await db.ranged.bulkAdd(SEED_RANGED)
       const watchRows: WatchRow[] = SEED_WATCH.map((w, i) => ({ ...w, addedAt: WATCH_BASE - i }))
       await db.watch.bulkAdd(watchRows)
-      await db.journal.bulkAdd(SEED_JOURNAL)
+      await db.journal.bulkAdd(SEED_JOURNAL.map((e) => ({ day: T + e.off, words: e.words, text: e.text })))
       await db.meta.bulkAdd([
         { key: 'tagsPool', value: SEED_TAGS_POOL },
         { key: 'installDay', value: T },

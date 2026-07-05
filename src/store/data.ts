@@ -51,6 +51,7 @@ interface DataState {
   ranged: Ranged[]
   watch: Watch[]
   journal: JournalEntry[]
+  scratchpad: string
   tagsPool: string[]
   doneToday: number
   session: Session | null
@@ -91,6 +92,8 @@ interface DataState {
   deleteWeekItem: (id: string) => void
   addRanged: (text: string, from: number, to: number) => void
   deleteRanged: (id: string) => void
+  saveJournalEntry: (text: string) => void
+  saveScratchpad: (text: string) => void
 }
 
 /** Shared tag normalizer: lowercase, spaces → hyphens. */
@@ -177,14 +180,18 @@ async function hydrateImpl(set: (partial: Partial<DataState>) => void): Promise<
   }
 
   const watch: Watch[] = watchRows.slice().sort((a, b) => b.addedAt - a.addedAt)
-  const journal: JournalEntry[] = journalRows.map((r) => ({
-    id: r.id,
-    off: r.off,
-    words: r.words,
-    text: r.text,
-  }))
+  const journal: JournalEntry[] = journalRows
+    .map((r) => ({
+      id: r.id,
+      off: r.day !== undefined ? r.day - today : r.off ?? 0,
+      words: r.words,
+      text: r.text,
+    }))
+    .sort((a, b) => b.off - a.off)
   const tagsPool =
     (metaRows.find((m) => m.key === 'tagsPool')?.value as string[] | undefined) ?? []
+  const scratchpad =
+    (metaRows.find((m) => m.key === 'scratchpad')?.value as string | undefined) ?? ''
 
   set({
     hydrated: true,
@@ -199,6 +206,7 @@ async function hydrateImpl(set: (partial: Partial<DataState>) => void): Promise<
     watch,
     journal,
     tagsPool,
+    scratchpad,
   })
 }
 
@@ -214,6 +222,7 @@ export const useData = create<DataState>()((set, get) => ({
   ranged: [],
   watch: [],
   journal: [],
+  scratchpad: '',
   tagsPool: [],
   doneToday: 0,
   session: null,
@@ -540,5 +549,31 @@ export const useData = create<DataState>()((set, get) => ({
   deleteRanged: (id) => {
     set({ ranged: get().ranged.filter((r) => r.id !== id) })
     void db.ranged.delete(id)
+  },
+
+  saveJournalEntry: (text) => {
+    const clean = text.trim()
+    const toast = useUI.getState().showToast
+    const existing = get().journal.find((e) => e.off === 0)
+    if (!clean && !existing) {
+      toast('Write something first')
+      return
+    }
+    const wordCount = clean ? clean.split(/\s+/).filter(Boolean).length : 0
+    const today = todayEpochDay()
+    if (existing) {
+      set({ journal: get().journal.map((e) => (e.off === 0 ? { ...e, words: wordCount, text: clean } : e)) })
+      if (existing.id !== undefined) void db.journal.update(existing.id, { day: today, words: wordCount, text: clean })
+    } else {
+      set({ journal: [{ off: 0, words: wordCount, text: clean }, ...get().journal] })
+      void db.journal.add({ day: today, words: wordCount, text: clean }).then((id) => {
+        set({ journal: get().journal.map((e) => (e.off === 0 && e.id === undefined ? { ...e, id: id as number } : e)) })
+      })
+    }
+    toast("Saved · today's entry kept")
+  },
+  saveScratchpad: (text) => {
+    set({ scratchpad: text })
+    void db.meta.put({ key: 'scratchpad', value: text })
   },
 }))

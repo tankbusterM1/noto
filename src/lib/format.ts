@@ -27,3 +27,16 @@ export function words(note: Note): number {
     .split(/\s+/)
     .filter(Boolean).length
 }
+
+/** Consecutive-day journal streak, counting from today (or yesterday, grace). */
+export function journalStreak(entries: { off: number }[]): number {
+  const set = new Set(entries.map((e) => e.off))
+  let d = set.has(0) ? 0 : set.has(-1) ? -1 : null
+  if (d === null) return 0
+  let streak = 0
+  while (set.has(d)) {
+    streak++
+    d--
+  }
+  return streak
+}

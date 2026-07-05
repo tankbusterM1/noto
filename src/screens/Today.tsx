@@ -3,7 +3,7 @@ import { useUI } from '../store/ui'
 import { forecastCounts, dueNotes } from '../lib/srs'
 import { PROMPTS } from '../lib/constants'
 import { addDays } from '../lib/dates'
-import { fmtMins } from '../lib/format'
+import { fmtMins, journalStreak } from '../lib/format'
 import { MONO, SERIF, kicker } from '../lib/ui'
 import { useMounted } from '../lib/useMounted'
 import { NoteCard } from '../components/NoteCard'
@@ -34,7 +34,6 @@ export function Today() {
   const startSession = useData((s) => s.startSession)
   const setScreen = useUI((s) => s.setScreen)
   const openWatchItem = useUI((s) => s.openWatchItem)
-  const jSaved = useUI((s) => s.jSaved)
   const mounted = useMounted()
 
   const now = new Date()
@@ -55,10 +54,10 @@ export function Today() {
   const recent = notes.slice().sort((a, b) => b.updated - a.updated).slice(0, 3)
   const doneN = todos.filter((t) => t.done).length
   const tPct = Math.round((100 * doneN) / todos.length)
-  const jStreak = '◆ ' + (jSaved ? 7 : 6) + '-day streak'
+  const jStreak = '◆ ' + journalStreak(journal) + '-day streak'
   const jPrompt = PROMPTS[now.getDate() % PROMPTS.length]
   const jWeekDots = [6, 5, 4, 3, 2, 1, 0].map((k) => ({
-    filled: (k === 0 && jSaved) || journal.some((e) => e.off === -k),
+    filled: journal.some((e) => e.off === -k),
     today: k === 0,
   }))
   const watchNext = watch.filter((w) => !w.done && !w.loading).slice(0, 2)

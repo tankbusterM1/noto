@@ -1,8 +1,9 @@
-import type { CSSProperties } from 'react'
+import { useEffect, useRef, type CSSProperties } from 'react'
 import { useData } from '../store/data'
 import { useUI } from '../store/ui'
 import { PROMPTS } from '../lib/constants'
 import { addDays, fmtShort } from '../lib/dates'
+import { journalStreak } from '../lib/format'
 import { MONO, SERIF, kicker, clamp } from '../lib/ui'
 import { LockIcon, QuillIcon } from '../components/icons'
 
@@ -16,26 +17,36 @@ const microLabel: CSSProperties = {
 
 export function Journal() {
   const journal = useData((s) => s.journal)
+  const scratchpad = useData((s) => s.scratchpad)
+  const saveJournalEntry = useData((s) => s.saveJournalEntry)
+  const saveScratchpad = useData((s) => s.saveScratchpad)
   const jLocked = useUI((s) => s.jLocked)
   const jMode = useUI((s) => s.jMode)
-  const jSaved = useUI((s) => s.jSaved)
   const setJMode = useUI((s) => s.setJMode)
-  const saveJournal = useUI((s) => s.saveJournal)
   const toggleJournalLock = useUI((s) => s.toggleJournalLock)
   const unlockJournal = useUI((s) => s.unlockJournal)
 
+  const editorRef = useRef<HTMLDivElement>(null)
+  const scratchRef = useRef<HTMLDivElement>(null)
+
   const now = new Date()
-  const jStreak = '◆ ' + (jSaved ? 7 : 6) + '-day streak'
+  const todayEntry = journal.find((e) => e.off === 0)
+  const hasToday = !!todayEntry
+  const streak = journalStreak(journal)
+  const jStreak = '◆ ' + streak + '-day streak'
   const jPrompt = PROMPTS[now.getDate() % PROMPTS.length]
   const jWeekDots = [6, 5, 4, 3, 2, 1, 0].map((k) => ({
-    filled: (k === 0 && jSaved) || journal.some((e) => e.off === -k),
+    filled: journal.some((e) => e.off === -k),
     today: k === 0,
   }))
-  const entries = journal.map((e) => ({
-    date: addDays(e.off).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
-    words: e.words,
-    text: e.text,
-  }))
+  const earlier = journal.filter((e) => e.off < 0)
+
+  // Load stored content once on mount (uncontrolled editors — no clobber).
+  useEffect(() => {
+    if (editorRef.current) editorRef.current.innerText = todayEntry?.text ?? ''
+    if (scratchRef.current) scratchRef.current.innerText = scratchpad
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const seg = (active: boolean): CSSProperties => ({
     fontFamily: MONO,
@@ -63,22 +74,7 @@ export function Journal() {
               className="border-hover press-98"
               onClick={toggleJournalLock}
               title={jLocked ? 'Unlock journal' : 'Blur & lock journal'}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                border: '1px solid var(--ln)',
-                borderRadius: 999,
-                padding: '5px 11px',
-                cursor: 'pointer',
-                fontFamily: MONO,
-                fontSize: 9.5,
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
-                color: jLocked ? 'var(--ink)' : 'var(--ink2)',
-                background: jLocked ? 'var(--sf2)' : undefined,
-                transition: 'all 0.2s ease',
-              }}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, border: '1px solid var(--ln)', borderRadius: 999, padding: '5px 11px', cursor: 'pointer', fontFamily: MONO, fontSize: 9.5, letterSpacing: '0.08em', textTransform: 'uppercase', color: jLocked ? 'var(--ink)' : 'var(--ink2)', background: jLocked ? 'var(--sf2)' : undefined, transition: 'all 0.2s ease' }}
             >
               <LockIcon locked={jLocked} />
               {jLocked ? 'locked' : 'lock'}
@@ -87,16 +83,7 @@ export function Journal() {
           </div>
           <div style={{ display: 'flex', gap: 4, marginTop: 7 }}>
             {jWeekDots.map((d, i) => (
-              <div
-                key={i}
-                style={{
-                  width: 20,
-                  height: 5,
-                  borderRadius: 99,
-                  background: d.filled ? 'var(--am)' : 'var(--sf2)',
-                  transition: 'background 0.4s ease',
-                }}
-              />
+              <div key={i} style={{ width: 20, height: 5, borderRadius: 99, background: d.filled ? 'var(--am)' : d.today ? 'transparent' : 'var(--sf2)', border: !d.filled && d.today ? '1px dashed var(--ink3)' : undefined, transition: 'background 0.4s ease' }} />
             ))}
           </div>
         </div>
@@ -123,8 +110,8 @@ export function Journal() {
                 ) : (
                   <div style={{ margin: '14px 0 6px', borderTop: '1px dashed var(--ln)' }} />
                 )}
-                {/* STUB: entry text is not persisted — Save flips the streak (matches prototype). */}
                 <div
+                  ref={editorRef}
                   contentEditable
                   suppressContentEditableWarning
                   data-ph="Start writing — it stays between you and the page…"
@@ -132,14 +119,14 @@ export function Journal() {
                 />
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--ln)', paddingTop: 14, marginTop: 18 }}>
                   <span style={{ fontFamily: MONO, fontSize: 10, color: 'var(--ink3)' }}>
-                    {jSaved ? 'saved today · private' : 'autosaves · private'}
+                    {hasToday ? 'saved today · private' : 'private to this device'}
                   </span>
                   <button
                     className="btn-dark"
-                    onClick={saveJournal}
-                    style={{ background: jSaved ? 'var(--g4)' : 'var(--ink)', color: 'var(--bg)', border: 'none', borderRadius: 9, padding: '8px 15px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.2s ease' }}
+                    onClick={() => saveJournalEntry(editorRef.current?.innerText ?? '')}
+                    style={{ background: hasToday ? 'var(--g4)' : 'var(--ink)', color: 'var(--bg)', border: 'none', borderRadius: 9, padding: '8px 15px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.2s ease' }}
                   >
-                    {jSaved ? '✓ Saved' : 'Save entry'}
+                    {hasToday ? '✓ Saved' : 'Save entry'}
                   </button>
                 </div>
               </div>
@@ -152,8 +139,10 @@ export function Journal() {
                   <span style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 12.5, color: 'var(--ink3)' }}>— no dates, no rules</span>
                 </div>
                 <div
+                  ref={scratchRef}
                   contentEditable
                   suppressContentEditableWarning
+                  onBlur={() => saveScratchpad(scratchRef.current?.innerText ?? '')}
                   data-ph="Fragments, ideas, half-thoughts, rants…"
                   style={{ minHeight: 110, marginTop: 12, fontFamily: SERIF, fontSize: 15.5, lineHeight: 1.75, color: 'var(--ink)', outline: 'none' }}
                 />
@@ -163,19 +152,22 @@ export function Journal() {
             {/* Earlier entries */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div style={{ ...microLabel, fontSize: 10.5, letterSpacing: '0.15em', padding: '0 2px' }}>Earlier entries</div>
-              {entries.map((e, i) => (
-                <div
-                  key={i}
-                  className="border-hover"
-                  style={{ background: 'var(--sf)', border: '1px solid var(--ln)', borderRadius: 14, padding: '15px 18px', cursor: 'pointer', animation: 'rise 0.4s ease both', animationDelay: `${Math.min(i * 0.045, 0.4)}s` }}
-                >
+              {earlier.map((e, i) => (
+                <div key={e.id ?? i} className="border-hover" style={{ background: 'var(--sf)', border: '1px solid var(--ln)', borderRadius: 14, padding: '15px 18px', cursor: 'pointer', animation: 'rise 0.4s ease both', animationDelay: `${Math.min(i * 0.045, 0.4)}s` }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                    <span style={{ fontFamily: SERIF, fontSize: 16, fontWeight: 500 }}>{e.date}</span>
+                    <span style={{ fontFamily: SERIF, fontSize: 16, fontWeight: 500 }}>
+                      {addDays(e.off).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                    </span>
                     <span style={{ fontFamily: MONO, fontSize: 9.5, color: 'var(--ink3)' }}>{e.words} words</span>
                   </div>
                   <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.55, marginTop: 6, fontFamily: SERIF, ...clamp(2) }}>{e.text}</div>
                 </div>
               ))}
+              {earlier.length === 0 && (
+                <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 13, color: 'var(--ink3)', padding: '4px 2px' }}>
+                  No earlier entries yet — today is page one.
+                </div>
+              )}
             </div>
           </div>
         </div>

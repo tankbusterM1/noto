@@ -56,7 +56,10 @@ export interface LedgerRow {
 
 export interface JournalRow {
   id?: number
-  off: number
+  /** Absolute epoch-day the entry was written (so entries age). */
+  day?: number
+  /** Legacy relative offset (older rows); read via fallback. */
+  off?: number
   words: number
   text: string
 }
