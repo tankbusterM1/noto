@@ -7,19 +7,21 @@ import { NoteBlocks } from '../components/NoteBlocks'
 import { CloseIcon } from '../components/icons'
 import type { Grade } from '../lib/types'
 
-const GRADES: { g: Grade; label: string; cls: string; color: string; textColor: string }[] = [
-  { g: 1, label: 'Again', cls: 'grade-g1', color: 'var(--g1)', textColor: 'var(--bg)' },
-  { g: 2, label: 'Hard', cls: 'grade-g2', color: 'var(--g2)', textColor: 'var(--bg)' },
-  { g: 3, label: 'Good', cls: 'grade-g3', color: 'var(--ac)', textColor: 'var(--acI)' },
-  { g: 4, label: 'Easy', cls: 'grade-g4', color: 'var(--g4)', textColor: 'var(--bg)' },
+const GRADES: { g: Grade; label: string; cls: string; color: string }[] = [
+  { g: 1, label: 'Again', cls: 'grade-g1', color: 'var(--g1)' },
+  { g: 2, label: 'Hard', cls: 'grade-g2', color: 'var(--g2)' },
+  { g: 3, label: 'Good', cls: 'grade-g3', color: 'var(--ac)' },
+  { g: 4, label: 'Easy', cls: 'grade-g4', color: 'var(--g4)' },
 ]
 
+/**
+ * Whole-note review — NOT flashcards. The full note is shown; you read it and
+ * grade how well you remembered it (1-4). No blur / reveal gate.
+ */
 export function Session() {
   const notes = useData((s) => s.notes)
   const srs = useData((s) => s.srs)
   const session = useData((s) => s.session)
-  const sRevealed = useData((s) => s.sRevealed)
-  const reveal = useData((s) => s.reveal)
   const grade = useData((s) => s.grade)
   const endSession = useData((s) => s.endSession)
   const folders = useData((s) => s.folders)
@@ -31,7 +33,6 @@ export function Session() {
   const curId = done ? null : queue[idx]
   const cur = curId ? notes.find((n) => n.id === curId) ?? null : null
   const cSrs = curId ? srs[curId] : null
-  const hidden = !done && !!cur && !sRevealed
   const pct = Math.round((100 * idx) / total)
 
   return (
@@ -63,39 +64,17 @@ export function Session() {
                 </span>
               </div>
               <h1 style={{ fontFamily: SERIF, fontSize: 34, fontWeight: 500, letterSpacing: '-0.015em', margin: '0 0 22px', lineHeight: 1.15 }}>{cur.title}</h1>
-
-              <div style={{ position: 'relative' }}>
-                <div style={{ transition: 'filter 0.5s ease', filter: hidden ? 'blur(10px)' : 'blur(0px)', pointerEvents: hidden ? 'none' : undefined, userSelect: hidden ? 'none' : undefined }}>
-                  <NoteBlocks note={cur} readOnly />
-                </div>
-                {hidden && (
-                  <div onClick={reveal} style={{ position: 'absolute', inset: -10, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: 70, cursor: 'pointer', zIndex: 5 }}>
-                    <div style={{ background: 'var(--sf)', border: '1px solid var(--ln)', borderRadius: 14, padding: '16px 22px', textAlign: 'center', boxShadow: '0 14px 40px rgba(30,24,12,0.14)', animation: 'rise 0.35s ease both' }}>
-                      <div style={{ fontFamily: SERIF, fontSize: 19, fontWeight: 500 }}>What do you remember?</div>
-                      <div style={{ fontSize: 12, color: 'var(--ink2)', marginTop: 4 }}>Recall it out loud, then reveal to check yourself.</div>
-                    </div>
-                  </div>
-                )}
-              </div>
+              <NoteBlocks note={cur} readOnly />
             </div>
           </div>
 
           {/* grade bar */}
           <div style={{ position: 'sticky', bottom: 0, borderTop: '1px solid var(--ln)', background: 'var(--bg)', padding: '16px 48px 20px', zIndex: 20 }}>
             <div style={{ maxWidth: 680, margin: '0 auto' }}>
-              {hidden ? (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, marginBottom: 11 }}>
-                  <button className="btn-dark" onClick={reveal} style={{ background: 'var(--ink)', color: 'var(--bg)', border: 'none', borderRadius: 10, padding: '10px 22px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
-                    Reveal note · space
-                  </button>
-                  <div style={{ fontFamily: MONO, fontSize: 9.5, color: 'var(--ink3)' }}>the rep that counts happens before you peek</div>
-                </div>
-              ) : (
-                <div style={{ fontFamily: MONO, fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ink3)', textAlign: 'center', marginBottom: 11, animation: 'fadein 0.3s ease both' }}>
-                  How well did you recall this? · keys 1–4
-                </div>
-              )}
-              <div style={{ display: hidden ? 'none' : 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
+              <div style={{ fontFamily: MONO, fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ink3)', textAlign: 'center', marginBottom: 11 }}>
+                How well did you remember this? · keys 1–4
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
                 {GRADES.map((gr) => (
                   <button
                     key={gr.g}

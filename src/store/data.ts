@@ -55,11 +55,9 @@ interface DataState {
   extra: Record<string, Block[]>
   langO: Record<string, string>
   session: Session | null
-  sRevealed: boolean
 
   hydrate: () => Promise<void>
   startSession: (ids?: string[]) => void
-  reveal: () => void
   grade: (g: Grade) => void
   endSession: () => void
   toggleTodo: (id: string) => void
@@ -192,7 +190,6 @@ export const useData = create<DataState>()((set, get) => ({
   extra: {},
   langO: {},
   session: null,
-  sRevealed: false,
 
   hydrate: () => {
     if (get().hydrated) return Promise.resolve()
@@ -206,10 +203,9 @@ export const useData = create<DataState>()((set, get) => ({
       useUI.getState().showToast('Nothing due — your ink is dark')
       return
     }
-    set({ session: { queue, idx: 0, log: [] }, sRevealed: false })
+    set({ session: { queue, idx: 0, log: [] } })
     useUI.getState().setScreen('session')
   },
-  reveal: () => set({ sRevealed: true }),
   grade: (g) => {
     const s = get().session
     if (!s || s.idx >= s.queue.length) return
@@ -229,7 +225,6 @@ export const useData = create<DataState>()((set, get) => ({
         idx: s.idx + 1,
         log: [...s.log, g],
       },
-      sRevealed: false,
       doneToday: get().doneToday + 1,
     })
     useUI.getState().showToast(toast)

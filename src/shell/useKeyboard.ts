@@ -4,10 +4,10 @@ import { useUI } from '../store/ui'
 import type { Grade } from '../lib/types'
 
 /**
- * Global keyboard handling (README "Keyboard"):
- *  - in a session: `space` reveals, `1–4` grade (only once revealed)
- *  - `esc` closes thread → watch drawer → session, in that priority
- * The ⌘K palette + palette navigation are layered on in step 5.
+ * Global keyboard handling:
+ *  - ⌘/Ctrl-K toggles the command palette (its input owns ↑/↓/↵)
+ *  - in a session: `1–4` grade the whole note directly (no reveal gate)
+ *  - `esc` closes palette → thread → watch drawer → session, in that priority
  */
 export function useKeyboard() {
   useEffect(() => {
@@ -30,15 +30,10 @@ export function useKeyboard() {
         return
       }
 
+      // Whole-note review: no reveal gate — 1-4 grade the note directly.
       const s = data.session
       if (s && ui.screen === 'session' && s.idx < s.queue.length) {
-        if (!data.sRevealed) {
-          if (e.key === ' ' && !typing) {
-            e.preventDefault()
-            data.reveal()
-            return
-          }
-        } else if (['1', '2', '3', '4'].includes(e.key) && !typing) {
+        if (['1', '2', '3', '4'].includes(e.key) && !typing) {
           data.grade(Number(e.key) as Grade)
           return
         }
