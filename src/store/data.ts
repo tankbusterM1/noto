@@ -6,7 +6,21 @@ import { domainOf } from '../lib/format'
 import { applyGrade, dueNotes } from '../lib/srs'
 import { notesIn, kidsOf } from '../lib/tree'
 import { blockId } from '../lib/types'
+import {
+  deriveKey,
+  makeVerifier,
+  checkVerifier,
+  encryptJSON,
+  decryptJSON,
+  randomSalt,
+  type Cipher,
+} from '../lib/crypto'
 import { useUI } from './ui'
+
+interface JournalCrypto {
+  salt: string
+  verifier: Cipher
+}
 import type {
   Block,
   Folder,
@@ -53,6 +67,10 @@ interface DataState {
   watch: Watch[]
   journal: JournalEntry[]
   scratchpad: string
+  /** Set once a passphrase exists; null = journal is plaintext. */
+  journalCrypto: JournalCrypto | null
+  /** In-memory AES key while unlocked; null = locked (or no passphrase). */
+  journalKey: CryptoKey | null
   tagsPool: string[]
   doneToday: number
   /** Review counts keyed by absolute epoch-day (from the ledger). */
@@ -97,6 +115,9 @@ interface DataState {
   deleteRanged: (id: string) => void
   saveJournalEntry: (text: string) => void
   saveScratchpad: (text: string) => void
+  setJournalPassphrase: (pass: string) => Promise<void>
+  unlockJournalCrypto: (pass: string) => Promise<boolean>
+  lockJournalCrypto: () => void
   exportData: () => Promise<string>
   importData: (json: string) => Promise<boolean>
   resetData: () => Promise<void>
@@ -201,18 +222,25 @@ async function hydrateImpl(set: (partial: Partial<DataState>) => void): Promise<
   }
 
   const watch: Watch[] = watchRows.slice().sort((a, b) => b.addedAt - a.addedAt)
-  const journal: JournalEntry[] = journalRows
-    .map((r) => ({
-      id: r.id,
-      off: r.day !== undefined ? r.day - today : r.off ?? 0,
-      words: r.words,
-      text: r.text,
-    }))
-    .sort((a, b) => b.off - a.off)
+  const journalCrypto =
+    (metaRows.find((m) => m.key === 'journalCrypto')?.value as JournalCrypto | undefined) ?? null
+  // Encrypted journals stay locked (empty) until the passphrase is entered.
+  const journal: JournalEntry[] = journalCrypto
+    ? []
+    : journalRows
+        .filter((r) => !r.enc && r.text !== undefined)
+        .map((r) => ({
+          id: r.id,
+          off: r.day !== undefined ? r.day - today : r.off ?? 0,
+          words: r.words ?? 0,
+          text: r.text ?? '',
+        }))
+        .sort((a, b) => b.off - a.off)
   const tagsPool =
     (metaRows.find((m) => m.key === 'tagsPool')?.value as string[] | undefined) ?? []
-  const scratchpad =
-    (metaRows.find((m) => m.key === 'scratchpad')?.value as string | undefined) ?? ''
+  const scratchpad = journalCrypto
+    ? ''
+    : (metaRows.find((m) => m.key === 'scratchpad')?.value as string | undefined) ?? ''
 
   const ledgerByDay: Record<number, number> = {}
   for (const l of ledgerRows) ledgerByDay[l.day] = (ledgerByDay[l.day] ?? 0) + 1
@@ -232,6 +260,7 @@ async function hydrateImpl(set: (partial: Partial<DataState>) => void): Promise<
     journal,
     tagsPool,
     scratchpad,
+    journalCrypto,
     ledgerByDay,
     doneToday,
   })
@@ -250,6 +279,8 @@ export const useData = create<DataState>()((set, get) => ({
   watch: [],
   journal: [],
   scratchpad: '',
+  journalCrypto: null,
+  journalKey: null,
   tagsPool: [],
   doneToday: 0,
   ledgerByDay: {},
@@ -580,7 +611,7 @@ export const useData = create<DataState>()((set, get) => ({
     void db.ranged.delete(id)
   },
 
-  saveJournalEntry: (text) => {
+  saveJournalEntry: async (text) => {
     const clean = text.trim()
     const toast = useUI.getState().showToast
     const existing = get().journal.find((e) => e.off === 0)
@@ -588,23 +619,95 @@ export const useData = create<DataState>()((set, get) => ({
       toast('Write something first')
       return
     }
-    const wordCount = clean ? clean.split(/\s+/).filter(Boolean).length : 0
+    const words = clean ? clean.split(/\s+/).filter(Boolean).length : 0
     const today = todayEpochDay()
+    const key = get().journalKey
     if (existing) {
-      set({ journal: get().journal.map((e) => (e.off === 0 ? { ...e, words: wordCount, text: clean } : e)) })
-      if (existing.id !== undefined) void db.journal.update(existing.id, { day: today, words: wordCount, text: clean })
+      set({ journal: get().journal.map((e) => (e.off === 0 ? { ...e, words, text: clean } : e)) })
+      if (existing.id !== undefined) {
+        if (key) await db.journal.put({ id: existing.id, day: today, enc: await encryptJSON(key, { text: clean, words }) })
+        else await db.journal.update(existing.id, { day: today, words, text: clean })
+      }
     } else {
-      set({ journal: [{ off: 0, words: wordCount, text: clean }, ...get().journal] })
-      void db.journal.add({ day: today, words: wordCount, text: clean }).then((id) => {
-        set({ journal: get().journal.map((e) => (e.off === 0 && e.id === undefined ? { ...e, id: id as number } : e)) })
-      })
+      set({ journal: [{ off: 0, words, text: clean }, ...get().journal] })
+      const row = key
+        ? { day: today, enc: await encryptJSON(key, { text: clean, words }) }
+        : { day: today, words, text: clean }
+      const id = await db.journal.add(row)
+      set({ journal: get().journal.map((e) => (e.off === 0 && e.id === undefined ? { ...e, id: id as number } : e)) })
     }
     toast("Saved · today's entry kept")
   },
-  saveScratchpad: (text) => {
+  saveScratchpad: async (text) => {
     set({ scratchpad: text })
-    void db.meta.put({ key: 'scratchpad', value: text })
+    const key = get().journalKey
+    if (key) await db.meta.put({ key: 'scratchpadEnc', value: await encryptJSON(key, text) })
+    else await db.meta.put({ key: 'scratchpad', value: text })
   },
+  setJournalPassphrase: async (pass) => {
+    const toast = useUI.getState().showToast
+    if (get().journalCrypto) {
+      toast('Passphrase already set')
+      return
+    }
+    if (pass.trim().length < 4) {
+      toast('Use at least 4 characters')
+      return
+    }
+    const salt = randomSalt()
+    const key = await deriveKey(pass, salt)
+    const verifier = await makeVerifier(key)
+    const today = todayEpochDay()
+    const entries = get().journal
+    const scratch = get().scratchpad
+    await db.transaction('rw', db.journal, db.meta, async () => {
+      for (const e of entries) {
+        const enc = await encryptJSON(key, { text: e.text, words: e.words })
+        await db.journal.put(e.id !== undefined ? { id: e.id, day: today + e.off, enc } : { day: today + e.off, enc })
+      }
+      await db.meta.put({ key: 'journalCrypto', value: { salt, verifier } })
+      await db.meta.put({ key: 'scratchpadEnc', value: await encryptJSON(key, scratch) })
+      await db.meta.delete('scratchpad')
+    })
+    set({ journalKey: key, journalCrypto: { salt, verifier } })
+    toast('Journal encrypted — keep your passphrase safe')
+  },
+  unlockJournalCrypto: async (pass) => {
+    const jc = get().journalCrypto
+    if (!jc) return false
+    const key = await deriveKey(pass, jc.salt)
+    if (!(await checkVerifier(key, jc.verifier))) {
+      useUI.getState().showToast('Wrong passphrase')
+      return false
+    }
+    const today = todayEpochDay()
+    const rows = await db.journal.toArray()
+    const journal: JournalEntry[] = []
+    for (const r of rows) {
+      if (r.enc) {
+        try {
+          const p = await decryptJSON<{ text: string; words: number }>(key, r.enc)
+          journal.push({ id: r.id, off: (r.day ?? today) - today, words: p.words, text: p.text })
+        } catch {
+          /* skip unreadable */
+        }
+      }
+    }
+    journal.sort((a, b) => b.off - a.off)
+    let scratchpad = ''
+    const se = await db.meta.get('scratchpadEnc')
+    if (se?.value) {
+      try {
+        scratchpad = await decryptJSON<string>(key, se.value as Cipher)
+      } catch {
+        /* ignore */
+      }
+    }
+    set({ journalKey: key, journal, scratchpad })
+    useUI.getState().showToast('Journal unlocked')
+    return true
+  },
+  lockJournalCrypto: () => set({ journalKey: null, journal: [], scratchpad: '' }),
 
   exportData: async () => {
     const dump: Record<string, unknown> = {

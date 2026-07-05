@@ -60,8 +60,11 @@ export interface JournalRow {
   day?: number
   /** Legacy relative offset (older rows); read via fallback. */
   off?: number
-  words: number
-  text: string
+  /** Plaintext (only when the journal has no passphrase). */
+  words?: number
+  text?: string
+  /** Encrypted payload {text, words} once a passphrase is set. */
+  enc?: { iv: string; ct: string }
 }
 
 /** Watch item + a monotonic sort key so newest-first order survives reloads. */

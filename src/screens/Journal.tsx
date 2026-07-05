@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { useData } from '../store/data'
 import { useUI } from '../store/ui'
 import { PROMPTS } from '../lib/constants'
@@ -14,20 +14,55 @@ const microLabel: CSSProperties = {
   textTransform: 'uppercase',
   color: 'var(--ink3)',
 }
+const passInput: CSSProperties = {
+  width: '100%',
+  border: '1px solid var(--ln)',
+  borderRadius: 9,
+  padding: '9px 12px',
+  fontSize: 13,
+  fontFamily: 'inherit',
+  color: 'var(--ink)',
+  background: 'var(--bg)',
+  outline: 'none',
+}
+const darkBtn: CSSProperties = {
+  background: 'var(--ink)',
+  color: 'var(--bg)',
+  border: 'none',
+  borderRadius: 9,
+  padding: '9px 16px',
+  fontSize: 12.5,
+  fontWeight: 600,
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+}
 
 export function Journal() {
   const journal = useData((s) => s.journal)
   const scratchpad = useData((s) => s.scratchpad)
+  const journalCrypto = useData((s) => s.journalCrypto)
+  const journalKey = useData((s) => s.journalKey)
   const saveJournalEntry = useData((s) => s.saveJournalEntry)
   const saveScratchpad = useData((s) => s.saveScratchpad)
+  const setJournalPassphrase = useData((s) => s.setJournalPassphrase)
+  const unlockJournalCrypto = useData((s) => s.unlockJournalCrypto)
+  const lockJournalCrypto = useData((s) => s.lockJournalCrypto)
   const jLocked = useUI((s) => s.jLocked)
   const jMode = useUI((s) => s.jMode)
   const setJMode = useUI((s) => s.setJMode)
   const toggleJournalLock = useUI((s) => s.toggleJournalLock)
   const unlockJournal = useUI((s) => s.unlockJournal)
+  const showToast = useUI((s) => s.showToast)
+
+  const hasPassphrase = journalCrypto !== null
+  const unlocked = journalKey !== null
+  const locked = hasPassphrase ? !unlocked : jLocked
 
   const editorRef = useRef<HTMLDivElement>(null)
   const scratchRef = useRef<HTMLDivElement>(null)
+  const [unlockPass, setUnlockPass] = useState('')
+  const [setupPass, setSetupPass] = useState('')
+  const [setupOpen, setSetupOpen] = useState(false)
 
   const now = new Date()
   const todayEntry = journal.find((e) => e.off === 0)
@@ -41,12 +76,34 @@ export function Journal() {
   }))
   const earlier = journal.filter((e) => e.off < 0)
 
-  // Load stored content once on mount (uncontrolled editors — no clobber).
+  // (Re)load stored content whenever lock state changes (uncontrolled editors).
+  const loadKey = `${hasPassphrase}-${unlocked}`
   useEffect(() => {
     if (editorRef.current) editorRef.current.innerText = todayEntry?.text ?? ''
     if (scratchRef.current) scratchRef.current.innerText = scratchpad
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [loadKey])
+
+  const onLockToggle = () => {
+    if (hasPassphrase) {
+      if (unlocked) lockJournalCrypto()
+    } else {
+      toggleJournalLock()
+    }
+  }
+  const doUnlock = async () => {
+    if (hasPassphrase) {
+      const ok = await unlockJournalCrypto(unlockPass)
+      if (ok) setUnlockPass('')
+    } else {
+      unlockJournal()
+    }
+  }
+  const doSetup = async () => {
+    await setJournalPassphrase(setupPass)
+    setSetupPass('')
+    setSetupOpen(false)
+  }
 
   const seg = (active: boolean): CSSProperties => ({
     fontFamily: MONO,
@@ -65,19 +122,19 @@ export function Journal() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 28 }}>
         <div>
-          <div style={kicker}>Daily journal</div>
+          <div style={kicker}>Daily journal{hasPassphrase ? ' · encrypted' : ''}</div>
           <h1 style={{ fontFamily: SERIF, fontSize: 36, fontWeight: 500, letterSpacing: '-0.015em', margin: '6px 0 0' }}>Journal</h1>
         </div>
         <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
             <div
               className="border-hover press-98"
-              onClick={toggleJournalLock}
-              title={jLocked ? 'Unlock journal' : 'Blur & lock journal'}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, border: '1px solid var(--ln)', borderRadius: 999, padding: '5px 11px', cursor: 'pointer', fontFamily: MONO, fontSize: 9.5, letterSpacing: '0.08em', textTransform: 'uppercase', color: jLocked ? 'var(--ink)' : 'var(--ink2)', background: jLocked ? 'var(--sf2)' : undefined, transition: 'all 0.2s ease' }}
+              onClick={onLockToggle}
+              title={locked ? 'Locked' : hasPassphrase ? 'Lock journal' : 'Blur & lock journal'}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, border: '1px solid var(--ln)', borderRadius: 999, padding: '5px 11px', cursor: 'pointer', fontFamily: MONO, fontSize: 9.5, letterSpacing: '0.08em', textTransform: 'uppercase', color: locked ? 'var(--ink)' : 'var(--ink2)', background: locked ? 'var(--sf2)' : undefined, transition: 'all 0.2s ease' }}
             >
-              <LockIcon locked={jLocked} />
-              {jLocked ? 'locked' : 'lock'}
+              <LockIcon locked={locked} />
+              {locked ? 'locked' : 'lock'}
             </div>
             <div style={{ fontFamily: MONO, fontSize: 10.5, color: 'var(--am)', fontWeight: 600 }}>{jStreak}</div>
           </div>
@@ -91,7 +148,7 @@ export function Journal() {
 
       {/* Blur-gated body */}
       <div style={{ position: 'relative' }}>
-        <div style={{ transition: 'filter 0.5s ease', filter: jLocked ? 'blur(9px)' : 'blur(0px)', pointerEvents: jLocked ? 'none' : undefined, userSelect: jLocked ? 'none' : undefined }}>
+        <div key={loadKey} style={{ transition: 'filter 0.5s ease', filter: locked ? 'blur(9px)' : 'blur(0px)', pointerEvents: locked ? 'none' : undefined, userSelect: locked ? 'none' : undefined }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 22, alignItems: 'start' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0 }}>
               {/* Today card */}
@@ -110,22 +167,12 @@ export function Journal() {
                 ) : (
                   <div style={{ margin: '14px 0 6px', borderTop: '1px dashed var(--ln)' }} />
                 )}
-                <div
-                  ref={editorRef}
-                  contentEditable
-                  suppressContentEditableWarning
-                  data-ph="Start writing — it stays between you and the page…"
-                  style={{ minHeight: 230, fontFamily: SERIF, fontSize: 17, lineHeight: 1.8, color: 'var(--ink)', outline: 'none' }}
-                />
+                <div ref={editorRef} contentEditable suppressContentEditableWarning data-ph="Start writing — it stays between you and the page…" style={{ minHeight: 230, fontFamily: SERIF, fontSize: 17, lineHeight: 1.8, color: 'var(--ink)', outline: 'none' }} />
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--ln)', paddingTop: 14, marginTop: 18 }}>
                   <span style={{ fontFamily: MONO, fontSize: 10, color: 'var(--ink3)' }}>
-                    {hasToday ? 'saved today · private' : 'private to this device'}
+                    {hasPassphrase ? 'encrypted · this device' : hasToday ? 'saved today · private' : 'private to this device'}
                   </span>
-                  <button
-                    className="btn-dark"
-                    onClick={() => saveJournalEntry(editorRef.current?.innerText ?? '')}
-                    style={{ background: hasToday ? 'var(--g4)' : 'var(--ink)', color: 'var(--bg)', border: 'none', borderRadius: 9, padding: '8px 15px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.2s ease' }}
-                  >
+                  <button className="btn-dark" onClick={() => saveJournalEntry(editorRef.current?.innerText ?? '')} style={{ background: hasToday ? 'var(--g4)' : 'var(--ink)', color: 'var(--bg)', border: 'none', borderRadius: 9, padding: '8px 15px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.2s ease' }}>
                     {hasToday ? '✓ Saved' : 'Save entry'}
                   </button>
                 </div>
@@ -138,14 +185,7 @@ export function Journal() {
                   <span style={microLabel}>Scratchpad</span>
                   <span style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 12.5, color: 'var(--ink3)' }}>— no dates, no rules</span>
                 </div>
-                <div
-                  ref={scratchRef}
-                  contentEditable
-                  suppressContentEditableWarning
-                  onBlur={() => saveScratchpad(scratchRef.current?.innerText ?? '')}
-                  data-ph="Fragments, ideas, half-thoughts, rants…"
-                  style={{ minHeight: 110, marginTop: 12, fontFamily: SERIF, fontSize: 15.5, lineHeight: 1.75, color: 'var(--ink)', outline: 'none' }}
-                />
+                <div ref={scratchRef} contentEditable suppressContentEditableWarning onBlur={() => saveScratchpad(scratchRef.current?.innerText ?? '')} data-ph="Fragments, ideas, half-thoughts, rants…" style={{ minHeight: 110, marginTop: 12, fontFamily: SERIF, fontSize: 15.5, lineHeight: 1.75, color: 'var(--ink)', outline: 'none' }} />
               </div>
             </div>
 
@@ -163,7 +203,7 @@ export function Journal() {
                   <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.55, marginTop: 6, fontFamily: SERIF, ...clamp(2) }}>{e.text}</div>
                 </div>
               ))}
-              {earlier.length === 0 && (
+              {earlier.length === 0 && !locked && (
                 <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 13, color: 'var(--ink3)', padding: '4px 2px' }}>
                   No earlier entries yet — today is page one.
                 </div>
@@ -172,21 +212,81 @@ export function Journal() {
           </div>
         </div>
 
-        {jLocked && (
+        {locked && (
           <div style={{ position: 'absolute', inset: -12, display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'fadein 0.35s ease both' }}>
-            <div style={{ background: 'var(--sf)', border: '1px solid var(--ln)', borderRadius: 18, padding: '28px 34px', textAlign: 'center', boxShadow: '0 18px 44px rgba(30,24,12,0.14)', maxWidth: 300 }}>
+            <div style={{ background: 'var(--sf)', border: '1px solid var(--ln)', borderRadius: 18, padding: '28px 34px', textAlign: 'center', boxShadow: '0 18px 44px rgba(30,24,12,0.14)', width: 320 }}>
               <div style={{ width: 40, height: 40, margin: '0 auto 12px', borderRadius: 99, background: 'var(--sf2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--am)' }}>
                 <LockIcon size={16} locked />
               </div>
-              <div style={{ fontFamily: SERIF, fontSize: 20, fontWeight: 500 }}>This journal is private.</div>
-              <div style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.55, marginTop: 6 }}>Entries stay on this device and blur when locked.</div>
-              <button className="btn-dark" onClick={unlockJournal} style={{ marginTop: 14, background: 'var(--ink)', color: 'var(--bg)', border: 'none', borderRadius: 9, padding: '9px 18px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
-                Unlock
-              </button>
+              <div style={{ fontFamily: SERIF, fontSize: 20, fontWeight: 500 }}>
+                {hasPassphrase ? 'This journal is encrypted.' : 'This journal is private.'}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.55, marginTop: 6 }}>
+                {hasPassphrase
+                  ? 'Enter your passphrase to decrypt it on this device.'
+                  : 'Blurred on this device. Set a passphrase to encrypt it for real.'}
+              </div>
+
+              {hasPassphrase ? (
+                <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <input
+                    type="password"
+                    autoFocus
+                    value={unlockPass}
+                    onChange={(e) => setUnlockPass(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && doUnlock()}
+                    placeholder="Passphrase"
+                    style={passInput}
+                  />
+                  <button className="btn-dark" onClick={doUnlock} style={darkBtn}>Unlock</button>
+                </div>
+              ) : setupOpen ? (
+                <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <input
+                    type="password"
+                    autoFocus
+                    value={setupPass}
+                    onChange={(e) => setSetupPass(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && doSetup()}
+                    placeholder="Choose a passphrase (4+ chars)"
+                    style={passInput}
+                  />
+                  <div style={{ fontFamily: MONO, fontSize: 9, color: 'var(--g1)', lineHeight: 1.5 }}>
+                    No recovery — if you forget it, the entries are unreadable.
+                  </div>
+                  <button className="btn-dark" onClick={doSetup} style={{ ...darkBtn, background: 'var(--ac)', color: 'var(--acI)' }}>Encrypt journal</button>
+                  <button onClick={() => setSetupOpen(false)} style={{ background: 'transparent', border: 'none', color: 'var(--ink3)', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>cancel</button>
+                </div>
+              ) : (
+                <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <button className="btn-dark" onClick={unlockJournal} style={darkBtn}>Unlock (blur only)</button>
+                  <button onClick={() => setSetupOpen(true)} style={{ background: 'transparent', border: '1px solid var(--ln)', color: 'var(--ink2)', borderRadius: 9, padding: '8px 16px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                    Encrypt with a passphrase →
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
       </div>
+
+      {/* Encrypt affordance while viewing an un-encrypted journal */}
+      {!hasPassphrase && !locked && (
+        <div style={{ marginTop: 20, display: 'flex', alignItems: 'center', gap: 10, background: 'var(--sf2)', border: '1px solid var(--ln)', borderRadius: 12, padding: '11px 15px' }}>
+          <LockIcon size={13} locked style={{ color: 'var(--am)' }} />
+          <span style={{ fontSize: 12.5, color: 'var(--ink2)', flex: 1 }}>
+            This journal isn't encrypted yet. A passphrase makes it unreadable without it — even from the raw database.
+          </span>
+          {setupOpen ? (
+            <div style={{ display: 'flex', gap: 6 }}>
+              <input type="password" autoFocus value={setupPass} onChange={(e) => setSetupPass(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && doSetup()} placeholder="passphrase" style={{ ...passInput, width: 170 }} />
+              <button className="btn-accent" onClick={doSetup} style={{ background: 'var(--ac)', color: 'var(--acI)', border: 'none', borderRadius: 9, padding: '0 14px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Encrypt</button>
+            </div>
+          ) : (
+            <button onClick={() => (showToast('Choose a passphrase to encrypt'), setSetupOpen(true))} style={{ ...darkBtn, background: 'var(--ink)' }}>Set passphrase</button>
+          )}
+        </div>
+      )}
     </div>
   )
 }
