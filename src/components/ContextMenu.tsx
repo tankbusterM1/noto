@@ -58,6 +58,8 @@ export function ContextMenu({ menu, onClose }: { menu: MenuState | null; onClose
         borderRadius: 12,
         boxShadow: '0 18px 44px rgba(24,19,10,0.24)',
         padding: 6,
+        maxHeight: '80vh',
+        overflowY: 'auto',
         animation: 'rise 0.14s cubic-bezier(0.3,0.7,0.3,1) both',
       }}
     >

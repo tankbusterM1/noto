@@ -43,12 +43,16 @@ export function NoteBlocks({ note, readOnly = false }: { note: Note; readOnly?: 
         const lang = b.lang || ''
 
         switch (b.t) {
-          case 'h2':
+          case 'h2': {
+            const size = readOnly
+              ? b.level === 1 ? 25 : b.level === 3 ? 18 : 21
+              : b.level === 1 ? 27 : b.level === 3 ? 19 : 23
             return (
-              <h2 key={key} className={s.h2} {...editable} onBlur={onBlurText(i)}>
+              <h2 key={key} className={s.h2} style={{ fontSize: size }} {...editable} onBlur={onBlurText(i)}>
                 {b.text}
               </h2>
             )
+          }
           case 'p':
             return (
               <p key={key} className={s.p} {...editable} onBlur={onBlurText(i)}>

@@ -25,6 +25,8 @@ export interface Block {
   /** Stable id so the editor can keep uncontrolled DOM across inserts/merges. */
   id?: string
   t: BlockType
+  /** Heading level 1–3 (for `h2` blocks); defaults to 2. */
+  level?: number
   text?: string
   items?: string[]
   lang?: string

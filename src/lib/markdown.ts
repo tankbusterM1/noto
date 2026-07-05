@@ -12,7 +12,7 @@ export function blocksToMarkdown(blocks: Block[]): string {
     .map((b) => {
       switch (b.t) {
         case 'h2':
-          return '## ' + (b.text ?? '')
+          return '#'.repeat(Math.min(6, Math.max(1, b.level ?? 2))) + ' ' + (b.text ?? '')
         case 'ul':
           return (b.items ?? []).map((it) => '- ' + it).join('\n')
         case 'code':
@@ -70,10 +70,10 @@ export function markdownToBlocks(md: string): Block[] {
       continue
     }
 
-    const h = line.match(/^#{1,6}\s+(.*)$/)
+    const h = line.match(/^(#{1,6})\s+(.*)$/)
     if (h) {
       flush()
-      blocks.push({ id: blockId(), t: 'h2', text: h[1].trim() })
+      blocks.push({ id: blockId(), t: 'h2', level: h[1].length, text: h[2].trim() })
       i++
       continue
     }
