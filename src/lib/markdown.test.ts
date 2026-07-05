@@ -42,7 +42,7 @@ describe('markdown ⇄ blocks', () => {
   it('round-trips blocks → markdown → blocks (content preserved)', () => {
     const original: Block[] = [
       { id: 'a', t: 'p', text: 'Intro line.' },
-      { id: 'b', t: 'h2', text: 'Section' },
+      { id: 'b', t: 'h2', level: 2, text: 'Section' },
       { id: 'c', t: 'ul', items: ['alpha', 'beta'] },
       { id: 'd', t: 'code', lang: 'sql', text: 'SELECT 1;' },
       { id: 'e', t: 'q', text: 'wisdom' },
@@ -51,6 +51,14 @@ describe('markdown ⇄ blocks', () => {
     const round = markdownToBlocks(blocksToMarkdown(original))
     // ids are regenerated on parse; compare the meaningful shape
     expect(strip(round)).toEqual(strip(original))
+  })
+
+  it('preserves heading levels (font sizes)', () => {
+    const md = '# Big\n\n### Small'
+    const blocks = markdownToBlocks(md)
+    expect(blocks[0]).toMatchObject({ t: 'h2', level: 1, text: 'Big' })
+    expect(blocks[1]).toMatchObject({ t: 'h2', level: 3, text: 'Small' })
+    expect(blocksToMarkdown(blocks)).toBe(md)
   })
 
   it('handles an empty document', () => {
