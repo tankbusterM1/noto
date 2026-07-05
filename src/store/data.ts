@@ -81,10 +81,29 @@ interface DataState {
   newFolder: (parentId: string | null) => void
   renameFolder: (id: string, name: string) => void
   deleteFolder: (id: string) => void
+  addTodo: (raw: string) => void
+  deleteTodo: (id: string) => void
+  addGoal: (text: string) => void
+  deleteGoal: (id: string) => void
+  addRitual: (text: string) => void
+  deleteRitual: (id: string) => void
+  addWeekItem: (day: number, text: string) => void
+  deleteWeekItem: (id: string) => void
+  addRanged: (text: string, from: number, to: number) => void
+  deleteRanged: (id: string) => void
 }
 
 /** Shared tag normalizer: lowercase, spaces → hyphens. */
 const normalizeTag = (raw: string) => raw.trim().toLowerCase().replace(/\s+/g, '-')
+
+/** Pull the first #tag out of free text (used when adding todos). */
+const extractTag = (raw: string): { text: string; tag?: string } => {
+  const m = raw.match(/#([a-z0-9][a-z0-9-]*)/i)
+  if (!m) return { text: raw.trim() }
+  const tag = normalizeTag(m[1])
+  const text = raw.replace(m[0], '').replace(/\s+/g, ' ').trim() || raw.trim()
+  return { text, tag }
+}
 
 const numId = (id: string) => parseInt(id.replace(/\D/g, ''), 10) || 0
 const WATCH_HUES = [358, 215, 165, 262, 32, 205]
@@ -457,5 +476,69 @@ export const useData = create<DataState>()((set, get) => ({
     const ui = useUI.getState()
     if (ui.selFolder === id) ui.setSelFolder('all')
     ui.showToast('Folder deleted')
+  },
+
+  addTodo: (raw) => {
+    const { text, tag } = extractTag(raw)
+    if (!text) return
+    if (tag && !get().tagsPool.includes(tag)) {
+      const pool = [...get().tagsPool, tag]
+      set({ tagsPool: pool })
+      void db.meta.put({ key: 'tagsPool', value: pool })
+    }
+    const todo: Todo = { id: 't' + Date.now(), text, done: false, ...(tag ? { tag } : {}) }
+    set({ todos: [...get().todos, todo] })
+    void db.todos.add(todo)
+  },
+  deleteTodo: (id) => {
+    set({ todos: get().todos.filter((t) => t.id !== id) })
+    void db.todos.delete(id)
+  },
+  addGoal: (text) => {
+    const t = text.trim()
+    if (!t) return
+    const g: Goal = { id: 'g' + Date.now(), text: t, done: false }
+    set({ goals: [...get().goals, g] })
+    void db.goals.add(g)
+  },
+  deleteGoal: (id) => {
+    set({ goals: get().goals.filter((g) => g.id !== id) })
+    void db.goals.delete(id)
+  },
+  addRitual: (text) => {
+    const t = text.trim()
+    if (!t) return
+    const r: Ritual = { id: 'r' + Date.now(), text: t, streak: 0, done: false }
+    set({ rituals: [...get().rituals, r] })
+    void db.rituals.add(r)
+  },
+  deleteRitual: (id) => {
+    set({ rituals: get().rituals.filter((r) => r.id !== id) })
+    void db.rituals.delete(id)
+  },
+  addWeekItem: (day, text) => {
+    const t = text.trim()
+    if (!t) return
+    const w: WeekItem = { id: 'w' + Date.now(), day, text: t, done: false }
+    set({ week: [...get().week, w] })
+    void db.week.add(w)
+  },
+  deleteWeekItem: (id) => {
+    set({ week: get().week.filter((w) => w.id !== id) })
+    void db.week.delete(id)
+  },
+  addRanged: (text, from, to) => {
+    const t = text.trim()
+    if (!t) return
+    const lo = Math.max(1, Math.min(31, Math.min(from, to)))
+    const hi = Math.max(1, Math.min(31, Math.max(from, to)))
+    const hue = [215, 28, 262, 165, 320][get().ranged.length % 5]
+    const r: Ranged = { id: 'rg' + Date.now(), text: t, from: lo, to: hi, hue }
+    set({ ranged: [...get().ranged, r] })
+    void db.ranged.add(r)
+  },
+  deleteRanged: (id) => {
+    set({ ranged: get().ranged.filter((r) => r.id !== id) })
+    void db.ranged.delete(id)
   },
 }))

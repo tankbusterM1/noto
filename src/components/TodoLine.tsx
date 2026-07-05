@@ -4,14 +4,15 @@ import { useUI } from '../store/ui'
 import { Checkbox } from './Checkbox'
 import { StrikeText } from './StrikeText'
 import { TagLink } from './TagLink'
-import { PlayTriangle, NibIcon } from './icons'
+import { PlayTriangle, NibIcon, CloseIcon } from './icons'
 import type { Todo } from '../lib/types'
 
 /**
  * A single checklist row (Today dashboard + Todos screen). Optional reference
- * chip opens the linked note/video; optional tag pulls its thread.
+ * chip opens the linked note/video; optional tag pulls its thread; optional
+ * delete (×) removes it.
  */
-export function TodoLine({ todo, dense = false }: { todo: Todo; dense?: boolean }) {
+export function TodoLine({ todo, dense = false, onDelete }: { todo: Todo; dense?: boolean; onDelete?: () => void }) {
   const toggleTodo = useData((s) => s.toggleTodo)
   const openNote = useUI((s) => s.openNote)
   const openWatchItem = useUI((s) => s.openWatchItem)
@@ -23,6 +24,7 @@ export function TodoLine({ todo, dense = false }: { todo: Todo; dense?: boolean 
 
   return (
     <div
+      className="hoverrow"
       onClick={() => toggleTodo(todo.id)}
       style={{
         display: 'flex',
@@ -71,6 +73,19 @@ export function TodoLine({ todo, dense = false }: { todo: Todo; dense?: boolean 
         </span>
       )}
       {todo.tag && <TagLink tag={todo.tag} variant="muted" size={dense ? 9.5 : 10} />}
+      {onDelete && (
+        <span
+          className="hoverdel"
+          title="Delete"
+          onClick={(e) => {
+            e.stopPropagation()
+            onDelete()
+          }}
+          style={{ display: 'flex', alignItems: 'center', color: 'var(--ink3)', cursor: 'pointer', flexShrink: 0 }}
+        >
+          <CloseIcon size={9} />
+        </span>
+      )}
     </div>
   )
 }

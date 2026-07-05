@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { useData } from '../store/data'
 import { useUI, type TodoSeg } from '../store/ui'
 import { MONTH_EXTRA } from '../lib/constants'
@@ -7,7 +7,50 @@ import { MONO, SERIF, kicker, rise } from '../lib/ui'
 import { Checkbox } from '../components/Checkbox'
 import { StrikeText } from '../components/StrikeText'
 import { TodoLine } from '../components/TodoLine'
-import { StarIcon } from '../components/icons'
+import { AddInput } from '../components/AddInput'
+import { StarIcon, CloseIcon } from '../components/icons'
+
+/** Small × shown on task-row hover. */
+function DelX({ onClick }: { onClick: () => void }) {
+  return (
+    <span
+      className="hoverdel"
+      title="Delete"
+      onClick={(e) => {
+        e.stopPropagation()
+        onClick()
+      }}
+      style={{ display: 'flex', alignItems: 'center', color: 'var(--ink3)', cursor: 'pointer', flexShrink: 0 }}
+    >
+      <CloseIcon size={9} />
+    </span>
+  )
+}
+
+/** Inline "add a commitment" form (text + day-of-month range). */
+function RangedAdd({ onAdd }: { onAdd: (text: string, from: number, to: number) => void }) {
+  const [text, setText] = useState('')
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
+  const submit = () => {
+    const f = parseInt(from, 10)
+    const t = parseInt(to, 10)
+    if (text.trim() && f && t) {
+      onAdd(text, f, t)
+      setText('')
+      setFrom('')
+      setTo('')
+    }
+  }
+  const num: CSSProperties = { width: 42, border: '1px dashed var(--ln)', outline: 'none', background: 'transparent', fontFamily: MONO, fontSize: 12, color: 'var(--ink)', borderRadius: 8, padding: '7px 6px', textAlign: 'center' }
+  return (
+    <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
+      <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submit()} placeholder="+ commitment" style={{ flex: 1, border: '1px dashed var(--ln)', outline: 'none', background: 'transparent', fontSize: 12.5, color: 'var(--ink)', borderRadius: 8, padding: '7px 10px' }} />
+      <input value={from} onChange={(e) => setFrom(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submit()} placeholder="d1" style={num} />
+      <input value={to} onChange={(e) => setTo(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submit()} placeholder="d2" style={num} />
+    </div>
+  )
+}
 
 const cardTitle: CSSProperties = { fontSize: 14, fontWeight: 600 }
 const meta: CSSProperties = { fontFamily: MONO, fontSize: 10, color: 'var(--ink3)' }
@@ -23,6 +66,16 @@ export function Todos() {
   const toggleGoal = useData((s) => s.toggleGoal)
   const toggleWeek = useData((s) => s.toggleWeek)
   const toggleRitual = useData((s) => s.toggleRitual)
+  const addTodo = useData((s) => s.addTodo)
+  const deleteTodo = useData((s) => s.deleteTodo)
+  const addGoal = useData((s) => s.addGoal)
+  const deleteGoal = useData((s) => s.deleteGoal)
+  const addRitual = useData((s) => s.addRitual)
+  const deleteRitual = useData((s) => s.deleteRitual)
+  const addWeekItem = useData((s) => s.addWeekItem)
+  const deleteWeekItem = useData((s) => s.deleteWeekItem)
+  const addRanged = useData((s) => s.addRanged)
+  const deleteRanged = useData((s) => s.deleteRanged)
   const tSeg = useUI((s) => s.tSeg)
   const setTSeg = useUI((s) => s.setTSeg)
 
@@ -94,8 +147,11 @@ export function Todos() {
               <div style={{ height: '100%', background: 'var(--am)', borderRadius: 99, transition: 'width 0.45s cubic-bezier(0.65,0,0.35,1)', width: `${tPct}%` }} />
             </div>
             {todos.map((t) => (
-              <TodoLine key={t.id} todo={t} />
+              <TodoLine key={t.id} todo={t} onDelete={() => deleteTodo(t.id)} />
             ))}
+            <div style={{ marginTop: 10 }}>
+              <AddInput placeholder="+ add a task — use #tag to thread it" onAdd={addTodo} />
+            </div>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0 }}>
@@ -104,13 +160,17 @@ export function Todos() {
               <div style={{ ...cardTitle, marginBottom: 4 }}>Goals this week</div>
               <div style={{ ...meta, marginBottom: 10 }}>{weekRange}</div>
               {goals.map((g) => (
-                <div key={g.id} onClick={() => toggleGoal(g.id)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 2px', cursor: 'pointer', borderBottom: '1px solid var(--ln)' }}>
+                <div key={g.id} className="hoverrow" onClick={() => toggleGoal(g.id)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 2px', cursor: 'pointer', borderBottom: '1px solid var(--ln)' }}>
                   <Checkbox done={g.done} shape="round" size={18} borderColor="var(--am)" doneColor="var(--am)" />
                   <span style={{ flex: 1, fontSize: 13.5, lineHeight: 1.4, transition: 'color 0.35s ease', color: g.done ? 'var(--ink3)' : undefined }}>
                     <StrikeText text={g.text} done={g.done} />
                   </span>
+                  <DelX onClick={() => deleteGoal(g.id)} />
                 </div>
               ))}
+              <div style={{ marginTop: 10 }}>
+                <AddInput placeholder="+ add a goal" onAdd={addGoal} />
+              </div>
             </div>
 
             {/* Rituals */}
@@ -121,12 +181,16 @@ export function Todos() {
                 <span style={meta}>· every day, forever</span>
               </div>
               {rituals.map((r) => (
-                <div key={r.id} onClick={() => toggleRitual(r.id)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 2px', cursor: 'pointer', borderBottom: '1px solid var(--ln)' }}>
+                <div key={r.id} className="hoverrow" onClick={() => toggleRitual(r.id)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 2px', cursor: 'pointer', borderBottom: '1px solid var(--ln)' }}>
                   <Checkbox done={r.done} shape="round" size={18} borderColor="var(--ink3)" doneColor="var(--am)" />
                   <span style={{ flex: 1, fontSize: 13, lineHeight: 1.4, transition: 'color 0.35s ease', color: r.done ? 'var(--ink3)' : undefined }}>{r.text}</span>
                   <span style={{ fontFamily: MONO, fontSize: 9.5, color: 'var(--am)' }}>◆ {(r.done ? r.streak + 1 : r.streak)}d</span>
+                  <DelX onClick={() => deleteRitual(r.id)} />
                 </div>
               ))}
+              <div style={{ marginTop: 10 }}>
+                <AddInput placeholder="+ add a ritual" onAdd={addRitual} />
+              </div>
             </div>
 
             {/* Ongoing */}
@@ -135,10 +199,11 @@ export function Todos() {
               <div style={{ ...meta, marginBottom: 13 }}>date-to-date commitments</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
                 {ongoing.map((r) => (
-                  <div key={r.id}>
+                  <div key={r.id} className="hoverrow">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
-                      <span style={{ fontSize: 13, fontWeight: 500 }}>{r.text}</span>
+                      <span style={{ fontSize: 13, fontWeight: 500, flex: 1 }}>{r.text}</span>
                       <span style={{ fontFamily: MONO, fontSize: 9.5, color: 'var(--ink3)', flexShrink: 0 }}>{r.range}</span>
+                      <DelX onClick={() => deleteRanged(r.id)} />
                     </div>
                     <div style={{ height: 4, background: 'var(--sf2)', borderRadius: 99, marginTop: 7, overflow: 'hidden' }}>
                       <div style={{ height: '100%', borderRadius: 99, transition: 'width 0.6s cubic-bezier(0.65,0,0.35,1)', background: r.color, width: `${r.pct}%` }} />
@@ -147,6 +212,7 @@ export function Todos() {
                   </div>
                 ))}
               </div>
+              <RangedAdd onAdd={addRanged} />
             </div>
           </div>
         </div>
@@ -178,15 +244,17 @@ export function Todos() {
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
                   {items.map((t) => (
-                    <div key={t.id} onClick={() => toggleWeek(t.id)} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', cursor: 'pointer' }}>
+                    <div key={t.id} className="hoverrow" onClick={() => toggleWeek(t.id)} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', cursor: 'pointer' }}>
                       <div style={{ marginTop: 1 }}>
                         <Checkbox done={t.done} size={13} radius={4.5} checkSize={8} checkStroke={2.4} doneColor="var(--ac)" />
                       </div>
-                      <span style={{ fontSize: 11.5, lineHeight: 1.4, transition: 'color 0.35s ease', color: t.done ? 'var(--ink3)' : undefined }}>
+                      <span style={{ flex: 1, minWidth: 0, fontSize: 11.5, lineHeight: 1.4, transition: 'color 0.35s ease', color: t.done ? 'var(--ink3)' : undefined }}>
                         <StrikeText text={t.text} done={t.done} thickness={1.2} />
                       </span>
+                      <DelX onClick={() => deleteWeekItem(t.id)} />
                     </div>
                   ))}
+                  <AddInput placeholder="+" onAdd={(v) => addWeekItem(i, v)} fontSize={11} />
                 </div>
               </div>
             )
