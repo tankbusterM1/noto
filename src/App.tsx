@@ -7,6 +7,7 @@ import { Toast } from './components/Toast'
 import { WatchDrawer } from './components/WatchDrawer'
 import { ThreadDrawer } from './components/ThreadDrawer'
 import { CommandPalette } from './components/CommandPalette'
+import { Settings } from './components/Settings'
 import { useKeyboard } from './shell/useKeyboard'
 
 export default function App() {
@@ -55,6 +56,7 @@ export default function App() {
           <WatchDrawer />
           <ThreadDrawer />
           <CommandPalette />
+          <Settings />
           <Toast />
         </>
       ) : (

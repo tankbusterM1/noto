@@ -13,6 +13,7 @@ import {
   ReviewIcon,
   SearchIcon,
   AppearanceIcon,
+  GearIcon,
 } from '../components/icons'
 import s from './Sidebar.module.css'
 
@@ -53,6 +54,7 @@ export function Sidebar() {
   const toggleSlim = useUI((st) => st.toggleSlim)
   const toggleTheme = useUI((st) => st.toggleTheme)
   const openPalette = useUI((st) => st.openPalette)
+  const openSettings = useUI((st) => st.openSettings)
 
   const notes = useData((st) => st.notes)
   const srs = useData((st) => st.srs)
@@ -196,6 +198,13 @@ export function Sidebar() {
           </span>
           <span className={s.footLabel}>Appearance</span>
           <span className={s.themeLabel}>{dark ? 'dark' : 'light'}</span>
+        </button>
+
+        <button type="button" className={s.footBtn} onClick={openSettings} title="Settings">
+          <span className={s.footIcon}>
+            <GearIcon />
+          </span>
+          <span className={s.footLabel}>Settings</span>
         </button>
       </div>
     </aside>

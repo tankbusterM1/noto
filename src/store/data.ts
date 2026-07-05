@@ -96,7 +96,25 @@ interface DataState {
   deleteRanged: (id: string) => void
   saveJournalEntry: (text: string) => void
   saveScratchpad: (text: string) => void
+  exportData: () => Promise<string>
+  importData: (json: string) => Promise<boolean>
+  resetData: () => Promise<void>
 }
+
+const TABLE_NAMES = [
+  'folders',
+  'notes',
+  'srs',
+  'ledger',
+  'todos',
+  'goals',
+  'week',
+  'rituals',
+  'ranged',
+  'watch',
+  'journal',
+  'meta',
+]
 
 /** Shared tag normalizer: lowercase, spaces → hyphens. */
 const normalizeTag = (raw: string) => raw.trim().toLowerCase().replace(/\s+/g, '-')
@@ -585,5 +603,45 @@ export const useData = create<DataState>()((set, get) => ({
   saveScratchpad: (text) => {
     set({ scratchpad: text })
     void db.meta.put({ key: 'scratchpad', value: text })
+  },
+
+  exportData: async () => {
+    const dump: Record<string, unknown> = {
+      _app: 'noto',
+      _schema: 1,
+      _exportedAt: new Date().toISOString(),
+    }
+    for (const name of TABLE_NAMES) dump[name] = await db.table(name).toArray()
+    return JSON.stringify(dump, null, 2)
+  },
+  importData: async (json) => {
+    const toast = useUI.getState().showToast
+    let data: Record<string, unknown[]>
+    try {
+      data = JSON.parse(json)
+    } catch {
+      toast('Import failed — not valid JSON')
+      return false
+    }
+    if (!Array.isArray(data.notes) || !Array.isArray(data.folders)) {
+      toast('Import failed — not a Noto vault')
+      return false
+    }
+    try {
+      await db.transaction('rw', db.tables, async () => {
+        for (const name of TABLE_NAMES) {
+          await db.table(name).clear()
+          const rows = data[name]
+          if (Array.isArray(rows) && rows.length) await db.table(name).bulkAdd(rows)
+        }
+      })
+      return true
+    } catch {
+      toast('Import failed while writing')
+      return false
+    }
+  },
+  resetData: async () => {
+    await db.delete()
   },
 }))

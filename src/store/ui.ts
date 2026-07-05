@@ -54,6 +54,7 @@ interface UIState {
   thread: string | null
   pal: string | null
   palIdx: number
+  settingsOpen: boolean
   toast: string | null
 
   // preference actions
@@ -83,6 +84,10 @@ interface UIState {
   closePalette: () => void
   setPalQ: (q: string) => void
   movePalette: (dir: number) => void
+
+  // settings
+  openSettings: () => void
+  closeSettings: () => void
 
   // journal actions
   unlockJournal: () => void
@@ -118,6 +123,7 @@ export const useUI = create<UIState>()(
       thread: null,
       pal: null,
       palIdx: 0,
+      settingsOpen: false,
       toast: null,
 
       toggleTheme: () => set((s) => ({ dark: !s.dark })),
@@ -145,6 +151,9 @@ export const useUI = create<UIState>()(
       closePalette: () => set({ pal: null }),
       setPalQ: (pal) => set({ pal, palIdx: 0 }),
       movePalette: (dir) => set((s) => ({ palIdx: s.palIdx + dir })),
+
+      openSettings: () => set({ settingsOpen: true }),
+      closeSettings: () => set({ settingsOpen: false }),
 
       unlockJournal: () => {
         set({ jLocked: false })

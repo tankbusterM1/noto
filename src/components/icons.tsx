@@ -380,6 +380,16 @@ export function ThreadIcon({ size = 17, ...props }: IconProps) {
   )
 }
 
+/** Gear — settings. */
+export function GearIcon({ size = 14, ...props }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <circle cx="9" cy="9" r="2.4" />
+      <path d="M9 1.6v2M9 14.4v2M1.6 9h2M14.4 9h2M3.8 3.8l1.4 1.4M12.8 12.8l1.4 1.4M14.2 3.8l-1.4 1.4M5.2 12.8l-1.4 1.4" />
+    </svg>
+  )
+}
+
 /** Checkmark polyline (used inside todo/watch checkboxes). */
 export function CheckMark({ size = 10, ...props }: IconProps) {
   return (
