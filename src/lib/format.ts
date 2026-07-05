@@ -19,6 +19,14 @@ export function snippet(note: Note): string {
   return p?.text ?? note.blocks[0]?.items?.[0] ?? ''
 }
 
+/** All searchable text for a note — title, tags, and every block body. */
+export function noteFullText(note: Note): string {
+  const body = note.blocks
+    .map((b) => (b.text || '') + ' ' + (b.items || []).join(' '))
+    .join(' ')
+  return (note.title + ' ' + note.tags.join(' ') + ' ' + body).toLowerCase()
+}
+
 /** Rough word count across all block text. */
 export function words(note: Note): number {
   return note.blocks

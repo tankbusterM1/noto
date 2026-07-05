@@ -1,7 +1,7 @@
 import { useData } from '../store/data'
 import { useUI } from '../store/ui'
 import { kidsOf, notesIn, countRec, pathOf } from '../lib/tree'
-import { snippet } from '../lib/format'
+import { noteFullText } from '../lib/format'
 import { MONO, SERIF, kicker, rise } from '../lib/ui'
 import { NoteCard } from '../components/NoteCard'
 import { GridIcon, FolderIcon, TreeCaret, SearchIcon, PlusIcon, CloseIcon } from '../components/icons'
@@ -37,14 +37,8 @@ export function Notes() {
   const q = libQ.toLowerCase()
   const isSearching = q.length > 0
 
-  // STUB: search matches title / first-paragraph snippet / tags — full-text
-  // search over every block body is a flagged production task.
-  const searchResults = notes.filter(
-    (n) =>
-      n.title.toLowerCase().includes(q) ||
-      snippet(n).toLowerCase().includes(q) ||
-      n.tags.join(' ').includes(q),
-  )
+  // Full-text search across title, tags, and every block body.
+  const searchResults = notes.filter((n) => noteFullText(n).includes(q))
 
   // Build the flattened, indented folder tree.
   const rows: Row[] = []

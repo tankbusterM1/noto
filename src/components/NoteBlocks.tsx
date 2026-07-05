@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { useData } from '../store/data'
 import { LANGS } from '../lib/constants'
 import { ImageIcon, ExternalArrow, LightbulbIcon } from './icons'
@@ -95,16 +96,13 @@ export function NoteBlocks({ note, readOnly = false }: { note: Note; readOnly?: 
           case 'img':
             if (readOnly) return null
             return (
-              <figure key={key} className={s.imgFig}>
-                {/* STUB: real image upload/drop is not wired — this is the drop affordance only. */}
-                <div className={s.imgDrop}>
-                  <ImageIcon size={26} strokeWidth={1.3} />
-                  <span className={s.imgHint}>drop an image · paste · or click</span>
-                </div>
-                <figcaption className={s.imgCaption} {...editable} onBlur={onBlurText(i)}>
-                  {b.text}
-                </figcaption>
-              </figure>
+              <ImgBlock
+                key={key}
+                src={b.src}
+                caption={b.text}
+                onSrc={(url) => updateNote(note.id, { blocks: blocks.map((x, j) => (j === i ? { ...x, src: url } : x)) })}
+                onCaption={(text) => saveText(i, text)}
+              />
             )
           case 'link': {
             if (readOnly) return null
@@ -139,5 +137,61 @@ export function NoteBlocks({ note, readOnly = false }: { note: Note; readOnly?: 
         }
       })}
     </div>
+  )
+}
+
+/** Editable image block: click / drop to upload; stored as a data-URL. */
+function ImgBlock({
+  src,
+  caption,
+  onSrc,
+  onCaption,
+}: {
+  src?: string
+  caption?: string
+  onSrc: (dataUrl: string) => void
+  onCaption: (text: string) => void
+}) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const read = (file?: File | null) => {
+    if (!file || !file.type.startsWith('image/')) return
+    const reader = new FileReader()
+    reader.onload = () => onSrc(reader.result as string)
+    reader.readAsDataURL(file)
+  }
+  return (
+    <figure className={s.imgFig}>
+      {src ? (
+        <img
+          src={src}
+          alt={caption || ''}
+          title="Click to replace"
+          onClick={() => inputRef.current?.click()}
+          style={{ maxWidth: '100%', borderRadius: 14, display: 'block', cursor: 'pointer' }}
+        />
+      ) : (
+        <div
+          className={s.imgDrop}
+          onClick={() => inputRef.current?.click()}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => {
+            e.preventDefault()
+            read(e.dataTransfer.files[0])
+          }}
+        >
+          <ImageIcon size={26} strokeWidth={1.3} />
+          <span className={s.imgHint}>drop an image · or click</span>
+        </div>
+      )}
+      <input ref={inputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => read(e.target.files?.[0])} />
+      <figcaption
+        className={s.imgCaption}
+        contentEditable
+        suppressContentEditableWarning
+        onBlur={(e) => onCaption(e.currentTarget.innerText)}
+      >
+        {caption}
+      </figcaption>
+    </figure>
   )
 }

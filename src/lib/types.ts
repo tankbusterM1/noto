@@ -27,6 +27,8 @@ export interface Block {
   items?: string[]
   lang?: string
   domain?: string
+  /** Image blocks: an uploaded data-URL (local-first). */
+  src?: string
 }
 
 export interface Folder {

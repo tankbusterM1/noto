@@ -1,7 +1,7 @@
 import { useData } from '../store/data'
 import { useUI } from '../store/ui'
 import { dueNotes } from '../lib/srs'
-import { fmtMins } from '../lib/format'
+import { fmtMins, noteFullText } from '../lib/format'
 import { MONO } from '../lib/ui'
 import { SearchIcon } from './icons'
 
@@ -10,6 +10,8 @@ interface PalItem {
   kind: Kind
   label: string
   meta: string
+  /** Extra searchable text (note body) so ⌘K matches inside notes. */
+  body?: string
   go: () => void
 }
 
@@ -57,6 +59,7 @@ export function CommandPalette() {
     kind: 'note',
     label: n.title,
     meta: n.tags.slice(0, 2).map((t) => '#' + t).join(' '),
+    body: noteFullText(n),
     go: () => { closePalette(); openNote(n.id) },
   }))
   const watchItems: PalItem[] = watch.filter((w) => !w.loading).map((w) => ({
@@ -74,7 +77,7 @@ export function CommandPalette() {
 
   const q = pal.toLowerCase()
   const all = [...actions, ...noteItems, ...watchItems, ...todoItems]
-  const items = (q ? all.filter((x) => (x.label + ' ' + x.meta).toLowerCase().includes(q)) : all).slice(0, 9)
+  const items = (q ? all.filter((x) => (x.label + ' ' + x.meta + ' ' + (x.body ?? '')).toLowerCase().includes(q)) : all).slice(0, 9)
   const sel = items.length ? ((palIdx % items.length) + items.length) % items.length : 0
 
   return (
