@@ -1,0 +1,6 @@
+# Normalize line endings to LF for text files across platforms.
+* text=auto eol=lf
+
+# Binary-ish reference docs left as-is
+*.png binary
+*.jpg binary

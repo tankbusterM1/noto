@@ -1,0 +1,53 @@
+/*
+ * Temporary placeholder shown for every screen while the shell is built.
+ * Real screens (Today, Notes, Editor, …) arrive in step 4 and replace this.
+ */
+
+.wrap {
+  max-width: 1060px;
+  margin: 0 auto;
+  padding: 44px 48px 120px;
+  animation: rise 0.4s ease both;
+}
+
+.kicker {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink3);
+}
+
+.title {
+  font-family: 'Newsreader', Georgia, serif;
+  font-size: 42px;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  margin: 8px 0 20px;
+  line-height: 1.1;
+}
+
+.card {
+  background: var(--sf);
+  border: 1px solid var(--ln);
+  border-radius: 16px;
+  padding: 22px 24px;
+  max-width: 520px;
+}
+
+.note {
+  font-family: 'Newsreader', Georgia, serif;
+  font-style: italic;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--ink2);
+  margin: 0;
+}
+
+.hint {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--ink3);
+  margin-top: 14px;
+}

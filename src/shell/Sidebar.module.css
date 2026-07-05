@@ -1,0 +1,274 @@
+/*
+ * Collapsible left sidebar (README "Global chrome").
+ * 236px expanded → 64px slim icon-rail → 0 during a review session.
+ * Caret rotates 180°, labels fade (display:none), section headers collapse to 0.
+ */
+
+.sidebar {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--ln);
+  background: var(--bg);
+  overflow: hidden;
+  transition:
+    width 0.45s cubic-bezier(0.65, 0, 0.35, 1),
+    background-color 0.35s ease;
+}
+
+/* ── Header (brand + collapse toggle) ────────────────────────────── */
+.header {
+  padding: 22px 14px 14px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  justify-content: flex-start;
+}
+.sidebar.slim .header {
+  justify-content: center;
+}
+
+.brand {
+  flex: 1;
+  white-space: nowrap;
+  padding-left: 6px;
+}
+.brandName {
+  font-family: 'Newsreader', Georgia, serif;
+  font-size: 25px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1;
+}
+.brandDot {
+  color: var(--am);
+}
+.brandTag {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink3);
+  margin-top: 7px;
+}
+
+.collapse {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--ink3);
+  flex-shrink: 0;
+  border: 1px solid var(--ln);
+  background: transparent;
+  transition: background 0.15s ease;
+}
+.collapse:hover {
+  background: var(--sf2);
+  color: var(--ink);
+}
+.collapse:active {
+  transform: scale(0.9);
+}
+.caret {
+  transition: transform 0.45s cubic-bezier(0.65, 0, 0.35, 1);
+}
+.sidebar.slim .caret {
+  transform: rotate(180deg);
+}
+
+/* ── Nav sections ────────────────────────────────────────────────── */
+.navGroup {
+  padding: 6px 12px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.section {
+  padding: 16px 12px 0;
+}
+.sectionInner {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sectionLabel {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink3);
+  padding: 0 11px 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  transition:
+    opacity 0.3s ease,
+    height 0.3s ease;
+}
+.sidebar.slim .sectionLabel {
+  opacity: 0;
+  height: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 11px;
+  border-radius: 9px;
+  cursor: pointer;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--ink2);
+  transition: background 0.15s ease;
+  position: relative;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+}
+.navItem:hover {
+  background: var(--sf2);
+}
+.navItem:active {
+  transform: scale(0.98);
+}
+.navItem.active {
+  background: var(--sf2);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.navIcon {
+  flex-shrink: 0;
+  display: flex;
+}
+.navLabel {
+  flex: 1;
+  white-space: nowrap;
+}
+.sidebar.slim .navLabel {
+  display: none;
+}
+
+.count {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10.5px;
+  color: var(--ink3);
+}
+.sidebar.slim .count {
+  display: none;
+}
+
+/* amber due badge (expanded) / amber dot (slim) */
+.badge {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+  background: var(--am);
+  color: var(--bg);
+  border-radius: 999px;
+  padding: 2px 7px;
+}
+.sidebar.slim .badge {
+  display: none;
+}
+.dot {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  width: 7px;
+  height: 7px;
+  border-radius: 99px;
+  background: var(--am);
+}
+
+.spacer {
+  flex: 1;
+}
+
+/* ── Footer (vault line, search, appearance) ─────────────────────── */
+.footer {
+  padding: 14px 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.vault {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10px;
+  color: var(--ink3);
+  line-height: 1.7;
+  white-space: nowrap;
+  overflow: hidden;
+  transition:
+    opacity 0.3s ease,
+    height 0.3s ease;
+}
+.vaultAmber {
+  color: var(--am);
+}
+.sidebar.slim .vault {
+  opacity: 0;
+  height: 0;
+}
+
+.footBtn {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 11px;
+  border-radius: 9px;
+  border: 1px solid var(--ln);
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink2);
+  transition: background 0.15s ease;
+  background: transparent;
+  font-family: inherit;
+  width: 100%;
+  text-align: left;
+}
+.footBtn:hover {
+  background: var(--sf2);
+}
+.footBtn:active {
+  transform: scale(0.98);
+}
+.footIcon {
+  flex-shrink: 0;
+  display: flex;
+}
+.footLabel {
+  flex: 1;
+  white-space: nowrap;
+}
+.sidebar.slim .footLabel {
+  display: none;
+}
+.kbd {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 9.5px;
+  color: var(--ink3);
+  border: 1px solid var(--ln);
+  border-radius: 5px;
+  padding: 1px 5px;
+}
+.sidebar.slim .kbd {
+  display: none;
+}
+.themeLabel {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10px;
+  color: var(--ink3);
+}
+.sidebar.slim .themeLabel {
+  display: none;
+}

@@ -1,0 +1,49 @@
+/*
+ * Noto design tokens — from design_handoff_noto/README.md "Design tokens".
+ * Everything is driven by CSS custom properties set per-theme on a root wrapper.
+ * Two themes: light (default) and dark. Accent is a user tweak layered on top
+ * via --accent-base (default #35518E), so dark can desaturate it toward paper.
+ */
+
+:root {
+  --accent-base: #35518e;
+}
+
+/* ── Light (default) ─────────────────────────────────────────────── */
+.theme-light {
+  --bg: #f4f1e9; /* app background (warm paper) */
+  --sf: #fbf9f3; /* surface / card */
+  --sf2: #ede9dd; /* secondary surface / chip / track */
+  --ink: #211d14; /* primary text */
+  --ink2: #6e6557; /* secondary text */
+  --ink3: #a79d8c; /* tertiary text / muted / placeholder */
+  --ln: #e3dccc; /* hairline borders / dividers */
+  --cd: #221e15; /* code-block background */
+  --am: #b87a26; /* amber accent (SRS "due", streaks, tags) */
+  --g1: #b0523c; /* grade "Again" (terracotta) */
+  --g2: #b87a26; /* grade "Hard" (amber) */
+  --g4: #4a7350; /* grade "Easy" (green); "Good" uses --ac */
+
+  --ac: var(--accent-base); /* primary accent (user-tweakable) */
+  --acI: #f7f5ee; /* ink on primary accent */
+}
+
+/* ── Dark ────────────────────────────────────────────────────────── */
+.theme-dark {
+  --bg: #14110c;
+  --sf: #1d1912;
+  --sf2: #282218;
+  --ink: #ece6d8;
+  --ink2: #a69c89;
+  --ink3: #6e6557;
+  --ln: #2e2820;
+  --cd: #0e0c08;
+  --am: #d9a45c;
+  --g1: #d98d77;
+  --g2: #d9a45c;
+  --g4: #93bb98;
+
+  /* dark accent is desaturated toward the paper */
+  --ac: color-mix(in oklab, var(--accent-base) 45%, #e8e4d8);
+  --acI: #14110c;
+}

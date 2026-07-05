@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=JetBrains+Mono:wght@400;500;600&display=swap">
+  <style>
+    html,body{margin:0;padding:0}
+    *{box-sizing:border-box}
+    ::selection{background:rgba(78,106,170,0.22)}
+    [contenteditable]:focus{outline:none}
+    [data-ph]:empty::before{content:attr(data-ph);color:#A79D8C;font-style:italic}
+    @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes fadein{from{opacity:0}to{opacity:1}}
+    @keyframes popin{from{opacity:0;transform:translate(-50%,10px)}to{opacity:1;transform:translate(-50%,0)}}
+    @keyframes stamp{0%{opacity:0;transform:scale(0.4)}65%{opacity:1;transform:scale(1.09)}100%{opacity:1;transform:scale(1)}}
+    @keyframes sheet{from{opacity:0;transform:translateY(26px)}to{opacity:1;transform:translateY(0)}}
+  </style>
+</helmet>
+<div style="min-height:100dvh; background:var(--bg,#F4F1E9); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; padding:30px 20px 90px; transition:background-color 0.35s ease; {{ themeVars }}">
+
+  <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ isDark }}" width="{{ ipW }}" height="{{ ipH }}" hint-size="430px,932px">
+    <div style="height:100%; position:relative; background:var(--bg,#F4F1E9); color:var(--ink,#211D14); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; transition:background-color 0.35s ease; {{ themeVars }}">
+
+      <div style="height:100%; overflow-y:auto; padding:74px 22px 150px;">
+
+        <!-- ── TODAY ── -->
+        <sc-if value="{{ mt.today }}" hint-placeholder-val="{{ true }}">
+          <div data-screen-label="iOS · Today" style="animation:rise 0.35s ease both;">
+            <div style="display:flex; align-items:flex-start; justify-content:space-between;">
+              <div>
+                <div style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--ink3,#A79D8C);">{{ dateLine }}</div>
+                <div style="font-family:'Newsreader',Georgia,serif; font-size:32px; font-weight:500; letter-spacing:-0.015em; margin-top:5px;">{{ greeting }}</div>
+              </div>
+              <div onClick="{{ toggleTheme }}" style="width:36px; height:36px; border-radius:99px; border:1px solid var(--ln,#E3DCCC); display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--ink2,#6E6557); background:var(--sf,#FBF9F3); transition:background 0.3s ease;" style-active="transform:scale(0.92)">
+                <svg width="15" height="15" viewBox="0 0 18 18" stroke="currentColor" stroke-width="1.5" fill="none"><circle cx="9" cy="9" r="6.5"></circle><path d="M9 2.5a6.5 6.5 0 010 13z" fill="currentColor" stroke="none"></path></svg>
+              </div>
+            </div>
+
+            <div style="background:var(--ac,#35518E); color:var(--acI,#F7F5EE); border-radius:20px; padding:22px; margin-top:20px;">
+              <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:14px;">
+                <div>
+                  <div style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:9.5px; letter-spacing:0.15em; text-transform:uppercase; opacity:0.72;">Memory · spaced review</div>
+                  <div style="font-family:'Newsreader',Georgia,serif; font-size:26px; font-weight:500; margin-top:7px; line-height:1.2;">{{ dueHeadline }}</div>
+                </div>
+                <div style="display:flex; align-items:flex-end; gap:4px; height:46px; flex-shrink:0; padding-top:2px;">
+                  <sc-for list="{{ forecast }}" as="f" hint-placeholder-count="7">
+                    <div style="width:9px; border-radius:3px; background:rgba(250,248,240,0.92); transition:height 0.5s cubic-bezier(0.65,0,0.35,1); height:{{ f.h2 }}; opacity:{{ f.op }};"></div>
+                  </sc-for>
+                </div>
+              </div>
+              <sc-if value="{{ hasDue }}" hint-placeholder-val="{{ true }}">
+                <button onClick="{{ mStart }}" style="margin-top:16px; background:var(--acI,#F7F5EE); color:var(--ac,#35518E); border:none; border-radius:11px; padding:11px 18px; font-size:13.5px; font-weight:600; cursor:pointer; font-family:inherit; min-height:44px;" style-active="transform:scale(0.97)">Review now →</button>
+              </sc-if>
+            </div>
+
+            <div style="background:var(--sf,#FBF9F3); border:1px solid var(--ln,#E3DCCC); border-radius:17px; padding:17px 18px; margin-top:13px;">
+              <div style="display:flex; justify-content:space-between; align-items:baseline;">
+                <span style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:9.5px; letter-spacing:0.14em; text-transform:uppercase; color:var(--ink3,#A79D8C);">Today's list</span>
+                <span style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:9.5px; color:var(--ink3,#A79D8C);">{{ tProgress }}</span>
+              </div>
+              <div style="height:3px; background:var(--sf2,#EDE9DD); border-radius:99px; margin:11px 0 3px; overflow:hidden;"><div style="height:100%; background:var(--am,#B87A26); border-radius:99px; transition:width 0.45s cubic-bezier(0.65,0,0.35,1); width:{{ tPct }};"></div></div>
+              <sc-for list="{{ todosTop }}" as="t" hint-placeholder-count="3">
+                <div onClick="{{ t.onToggle }}" style="display:flex; align-items:center; gap:12px; padding:11px 0; cursor:pointer; border-bottom:1px solid var(--ln,#E3DCCC); min-height:46px;">
+                  <div style="width:19px; height:19px; border-radius:6.5px; border:1.5px solid var(--ink3,#A79D8C); flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:background 0.2s ease, border-color 0.2s ease; {{ t.boxStyle }}">
+                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="var(--bg,#F4F1E9)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,6.5 4.8,9 10,3.5" style="stroke-dasharray:12; transition:stroke-dashoffset 0.3s cubic-bezier(0.65,0,0.35,1) 0.06s; stroke-dashoffset:{{ t.dash }};"></polyline></svg>
+                  </div>
+                  <span style="flex:1; font-size:14.5px; line-height:1.4; transition:color 0.35s ease; {{ t.textStyle }}"><span style="position:relative;">{{ t.text }}<span style="position:absolute; left:-2px; top:53%; height:1.5px; background:currentColor; opacity:0.75; border-radius:2px; pointer-events:none; transition:width 0.35s cubic-bezier(0.65,0,0.35,1); width:{{ t.strikeW }};"></span></span></span>
+                  <span style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:9px; color:var(--ink3,#A79D8C);">{{ t.tag }}</span>
+                </div>
+              </sc-for>
+              <div onClick="{{ mGoTodos }}" style="font-size:12.5px; font-weight:500; color:var(--ac,#35518E); cursor:pointer; padding-top:11px;">Open todos →</div>
+            </div>
+
+            <div style="margin-top:18px;">
+              <div style="display:flex; justify-content:space-between; align-items:baseline; padding:0 2px 9px;">
+                <span style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:9.5px; letter-spacing:0.14em; text-transform:uppercase; color:var(--ink3,#A79D8C);">Recently edited</span>
+                <span onClick="{{ mGoNotes }}" style="font-size:12.5px; font-weight:500; color:var(--ac,#35518E); cursor:pointer;">All →</span>
+              </div>
+              <sc-for list="{{ recentTop }}" as="n" hint-placeholder-count="2">
+                <div onClick="{{ n.onOpenM }}" style="background:var(--sf,#FBF9F3); border:1px solid var(--ln,#E3DCCC); border-radius:15px; padding:15px 17px; margin-bottom:9px; cursor:pointer; animation:rise 0.4s ease both; {{ n.delay }}" style-active="transform:scale(0.985)">
+                  <div style="opacity:{{ n.inkOp }}; transition:opacity 0.45s ease;">
+                    <div style="font-family:'Newsreader',Georgia,serif; font-size:17.5px; font-weight:500;">{{ n.title }}</div>
+                    <div style="font-size:12.5px; color:var(--ink2,#6E6557); margin-top:4px; display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical; overflow:hidden;">{{ n.snippet }}</div>
+                  </div>
+                  <div style="display:flex; align-items:center; justify-content:space-between; margin-top:10px;">
+                    <span style="font-size:10.5px; font-weight:600; color:var(--ink2,#6E6557); background:var(--sf2,#EDE9DD); border-radius:999px; padding:3px 9px;">{{ n.folder }}</span>
+                    <span style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:9.5px; {{ n.pillStyle }}">{{ n.srsPill }}</span>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ── NOTES (folder drill-down) ── -->
+        <sc-if value="{{ mt.notes }}" hint-placeholder-val="{{ false }}">
+          <div data-screen-label="iOS · Notes" style="animation:rise 0.35s ease both;">
+            <sc-if value="{{ mHasBack }}" hint-placeholder-val="{{ false }}">
+              <div onClick="{{ mFolderBack }}" style="display:flex; align-items:center; gap:5px; font-size:13.5px; font-weight:500; color:var(--ac,#35518E); cursor:pointer; margin-bottom:6px; min-height:32px;">
+                <svg width="8" height="14" viewBox="0 0 12 20" fill="none"><path d="M10 2L2 10l8 8" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                {{ mParentName }}
+              </div>
+            </sc-if>
+            <div style="display:flex; align-items:baseline; justify-content:space-between;">
+              <div style="font-family:'Newsreader',Georgia,serif; font-size:32px; font-weight:500; letter-spacing:-0.015em;">{{ mFolderTitle }}</div>
+              <span style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:10px; color:var(--ink3,#A79D8C);">{{ mFolderCount }}</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px; background:var(--sf,#FBF9F3); border:1px solid var(--ln,#E3DCCC); border-radius:12px; padding:11px 14px; margin:14px 0 12px;">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--ink3,#A79D8C)" stroke-width="1.6" stroke-linecap="round"><circle cx="6" cy="6" r="4.5"></circle><line x1="9.5" y1="9.5" x2="13" y2="13"></line></svg>
+              <input value="{{ libQ }}" onChange="{{ onSearch }}" placeholder="Search all notes…" style="border:none; outline:none; background:transparent; font-size:14.5px; font-family:inherit; color:var(--ink,#211D14); width:100%;">
+            </div>
+
+            <sc-if value="{{ isSearching }}" hint-placeholder-val="{{ false }}">
+              <div style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:10px; color:var(--ink3,#A79D8C); margin-bottom:10px;">results for "{{ libQ }}" · {{ resultCount }}</div>
+            </sc-if>
+
+            <sc-if value="{{ mShowSubs }}" hint-placeholder-val="{{ false }}">
+              <div style="background:var(--sf,#FBF9F3); border:1px solid var(--ln,#E3DCCC); border-radius:15px; overflow:hidden; margin-bottom:14px;">
+                <sc-for list="{{ mSubs }}" as="sf" hint-placeholder-count="3">
+                  <div onClick="{{ sf.onPick }}" style="display:flex; align-items:center; gap:12px; padding:13px 15px; border-bottom:1px solid var(--ln,#E3DCCC); cursor:pointer; min-height:52px;" style-active="background:var(--sf2,#EDE9DD)">
+                    <div style="width:32px; height:32px; border-radius:9px; background:var(--sf2,#EDE9DD); display:flex; align-items:center; justify-content:center; color:var(--am,#B87A26); flex-shrink:0;">
+                      <svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M2.4 6A1.6 1.6 0 014 4.4h3.4L9 6h5a1.6 1.6 0 011.6 1.6v5.2A1.6 1.6 0 0114 14.4H4a1.6 1.6 0 01-1.6-1.6V6z"></path></svg>
+                    </div>
+                    <span style="flex:1; font-size:14.5px; font-weight:600;">{{ sf.name }}</span>
+                    <span style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:10px; color:var(--ink3,#A79D8C);">{{ sf.count }}</span>
+                    <svg width="7" height="12" viewBox="0 0 8 14" style="flex-shrink:0;"><path d="M1 1l6 6-6 6" stroke="var(--ink3,#A79D8C)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+
+            <sc-for list="{{ mNotes }}" as="n" hint-placeholder-count="4">
+              <div onClick="{{ n.onOpenM }}" style="background:var(--sf,#FBF9F3); border:1px solid var(--ln,#E3DCCC); border-radius:15px; padding:15px 17px; margin-bottom:9px; cursor:pointer; animation:rise 0.4s ease both; {{ n.delay }}" style-active="transform:scale(0.985)">
+                <div style="opacity:{{ n.inkOp }}; transition:opacity 0.45s ease;">
+                  <div style="font-family:'Newsreader',Georgia,serif; font-size:17.5px; font-weight:500; line-height:1.25;">{{ n.title }}</div>
+                  <div style="font-size:12.5px; color:var(--ink2,#6E6557); margin-top:5px; line-height:1.5; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">{{ n.snippet }}</div>
+                </div>
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-top:10px;">
+                  <div style="display:flex; gap:6px; align-items:center;">
+                    <span style="font-size:10.5px; font-weight:600; color:var(--ink2,#6E6557); background:var(--sf2,#EDE9DD); border-radius:999px; padding:3px 9px;">{{ n.folder }}</span>
+                    <sc-for list="{{ n.tags }}" as="tg" hint-placeholder-count="1">
+                      <span style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:9.5px; color:var(--ink3,#A79D8C);">#{{ tg.t }}</span>
+                    </sc-for>
+                  </div>
+                  <span style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:9.5px; {{ n.pillStyle }}">{{ n.srsPill }}</span>
+                </div>
+              </div>
+            </sc-for>
+            <sc-if value="{{ mFolderEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:34px 0; text-align:center; font-family:'Newsreader',Georgia,serif; font-style:italic; font-size:15px; color:var(--ink2,#6E6557);">Nothing here yet.</div>
+            </sc-if>
+          </div>
+        </sc-if>
+
+        <!-- ── REVIEW ── -->
+        <sc-if value="{{ mt.review }}" hint-placeholder-val="{{ false }}">
+          <div data-screen-label="iOS · Review" style="animation:rise 0.35s ease both;">
+            <sc-if value="{{ mSessionOff }}" hint-placeholder-val="{{ true }}">
+              <div style="font-family:'Newsreader',Georgia,serif; font-size:32px; font-weight:500; letter-spacing:-0.015em;">Review</div>
+              <div style="font-family:'Newsreader',Georgia,serif; font-style:italic; font-size:14px; color:var(--ink2,#6E6557); margin-top:4px;">Ink fades as memory does.</div>
+              <div style="display:flex; gap:9px; margin:16px 0;">
+                <div style="flex:1; background:var(--sf,#FBF9F3); border:1px solid var(--ln,#E3DCCC); border-radius:14px; padding:13px 15px;"><div style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:9px; letter-spacing:0.12em; text-transform:uppercase; color:var(--ink3,#A79D8C);">due</div><div style="font-family:'Newsreader',Georgia,serif; font-size:26px; font-weight:500; color:var(--am,#B87A26); margin-top:2px;">{{ dueCount }}</div></div>
+                <div style="flex:1; background:var(--sf,#FBF9F3); border:1px solid var(--ln,#E3DCCC); border-radius:14px; padding:13px 15px;"><div style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:9px; letter-spacing:0.12em; text-transform:uppercase; color:var(--ink3,#A79D8C);">done today</div><div style="font-family:'Newsreader',Georgia,serif; font-size:26px; font-weight:500; margin-top:2px;">{{ doneToday }}</div></div>
+                <div style="flex:1; background:var(--sf,#FBF9F3); border:1px solid var(--ln,#E3DCCC); border-radius:14px; padding:13px 15px;"><div style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:9px; letter-spacing:0.12em; text-transform:uppercase; color:var(--ink3,#A79D8C);">rotation</div><div style="font-family:'Newsreader',Georgia,serif; font-size:26px; font-weight:500; margin-top:2px;">{{ inReviewCount }}</div></div>
+              </div>
+              <sc-if value="{{ hasDue }}" hint-placeholder-val="{{ true }}">
+                <button onClick="{{ mStart }}" style="width:100%; background:var(--ac,#35518E); color:var(--acI,#F7F5EE); border:none; border-radius:14px; padding:15px 0; font-size:15px; font-weight:600; cursor:pointer; font-family:inherit; min-height:50px;" style-active="transform:scale(0.98)">Start session · {{ dueCount }} due</button>
+              </sc-if>
+              <div style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:9.5px; letter-spacing:0.14em; text-transform:uppercase; color:var(--ink3,#A79D8C); margin:20px 0 9px;">Due now</div>
+              <sc-for list="{{ qDue }}" as="n" hint-placeholder-count="4">
+                <div onClick="{{ n.onOpenM }}" style="background:var(--sf,#FBF9F3); border:1px solid var(--ln,#E3DCCC); border-radius:14px; padding:14px 16px; margin-bottom:8px; display:flex; align-items:center; gap:12px; cursor:pointer; min-height:50px; animation:rise 0.35s ease both; {{ n.delay }}" style-active="transform:scale(0.985)">
+                  <div style="width:7px; height:7px; background:var(--am,#B87A26); transform:rotate(45deg); flex-shrink:0;"></div>
+                  <div style="flex:1; min-width:0; opacity:{{ n.inkOp }}; transition:opacity 0.45s ease;"><div style="font-family:'Newsreader',Georgia,serif; font-size:16px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ n.title }}</div><div style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:9.5px; color:var(--ink3,#A79D8C); margin-top:2px;">{{ n.folder }} · {{ n.ivl }}</div></div>
+                  <span style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:9.5px; font-weight:600; {{ n.dueStyle }}">{{ n.dueLabel }}</span>
+                </div>
+              </sc-for>
+              <div style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:9.5px; letter-spacing:0.14em; text-transform:uppercase; color:var(--ink3,#A79D8C); margin:18px 0 9px;">Upcoming</div>
+              <sc-for list="{{ qUpcoming }}" as="n" hint-placeholder-count="3">
+                <div onClick="{{ n.onOpenM }}" style="display:flex; align-items:center; gap:12px; padding:11px 4px; border-bottom:1px solid var(--ln,#E3DCCC); cursor:pointer; min-height:44px;">
+                  <div style="width:7px; height:7px; border:1.5px solid var(--ink3,#A79D8C); transform:rotate(45deg); flex-shrink:0;"></div>
+                  <span style="flex:1; font-family:'Newsreader',Georgia,serif; font-size:15px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ n.title }}</span>
+                  <span style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:9.5px; color:var(--ink3,#A79D8C);">{{ n.dueLabel }}</span>
+                </div>
+              </sc-for>
+            </sc-if>
+
+            <sc-if value="{{ mSessionOn }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; align-items:center; gap:12px; margin-bottom:18px;">
+                <div onClick="{{ sExit }}" style="font-size:12.5px; font-weight:500; color:var(--ink2,#6E6557); cursor:pointer; min-height:32px; display:flex; align-items:center;">✕ End</div>
+                <div style="flex:1; height:3px; background:var(--sf2,#EDE9DD); border-radius:99px; overflow:hidden;"><div style="height:100%; background:var(--ac,#35518E); border-radius:99px; transition:width 0.4s cubic-bezier(0.65,0,0.35,1); width:{{ sPct }};"></div></div>
+                <div style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:10px; color:var(--ink2,#6E6557);">{{ sProg }}</div>
+              </div>
+              <sc-if value="{{ sShowCard }}" hint-placeholder-val="{{ true }}">
+                <div key="{{ sKey }}" style="animation:rise 0.4s cubic-bezier(0.3,0.7,0.3,1) both; padding-bottom:96px;">
+                  <span style="font-size:10.5px; font-weight:600; color:var(--ink2,#6E6557); background:var(--sf2,#EDE9DD); border-radius:999px; padding:4px 10px;">{{ sFolder }}</span>
+                  <h1 style="font-family:'Newsreader',Georgia,serif; font-size:27px; font-weight:500; letter-spacing:-0.01em; margin:13px 0 14px; line-height:1.2;">{{ sTitle }}</h1>
+                  <div style="display:flex; flex-direction:column; gap:3px;">
+                    <sc-for list="{{ sBlocks }}" as="b" hint-placeholder-count="4">
+                      <div>
+                        <sc-if value="{{ b.isH2 }}" hint-placeholder-val="{{ false }}"><h2 style="font-family:'Newsreader',Georgia,serif; font-size:19px; font-weight:500; margin:15px 0 3px;">{{ b.text }}</h2></sc-if>
+                        <sc-if value="{{ b.isP }}" hint-placeholder-val="{{ true }}"><p style="font-size:14.5px; line-height:1.7; margin:5px 0;">{{ b.text }}</p></sc-if>
+                        <sc-if value="{{ b.isList }}" hint-placeholder-val="{{ false }}">
+                          <div style="display:flex; flex-direction:column; gap:6px; margin:7px 0;">
+                            <sc-for list="{{ b.items }}" as="li" hint-placeholder-count="3">
+                              <div style="display:flex; gap:9px; align-items:baseline;"><div style="width:5px; height:5px; background:var(--am,#B87A26); flex-shrink:0; transform:translateY(-2px) rotate(45deg);"></div><div style="font-size:14.5px; line-height:1.55;">{{ li.text }}</div></div>
+                            </sc-for>
+                          </div>
+                        </sc-if>
+                        <sc-if value="{{ b.isCode }}" hint-placeholder-val="{{ false }}"><div style="background:var(--cd,#221E15); color:#E9E2CF; border-radius:12px; padding:14px 15px; margin:9px 0; font-family:'JetBrains Mono',ui-monospace,monospace; font-size:11.5px; line-height:1.7; overflow-x:auto; white-space:pre;">{{ b.text }}</div></sc-if>
+                        <sc-if value="{{ b.isQuote }}" hint-placeholder-val="{{ false }}"><div style="border-left:2px solid var(--am,#B87A26); padding-left:13px; margin:11px 0; font-family:'Newsreader',Georgia,serif; font-style:italic; font-size:15.5px; line-height:1.5; color:var(--ink2,#6E6557);">{{ b.text }}</div></sc-if>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-if>
+              <sc-if value="{{ sDone }}" hint-placeholder-val="{{ false }}">
+                <div style="text-align:center; padding:70px 10px;">
+                  <div style="width:50px; height:50px; margin:0 auto 16px; animation:stamp 0.5s cubic-bezier(0.3,0.7,0.4,1.1) both;">
+                    <div style="width:50px; height:50px; background:var(--ac,#35518E); transform:rotate(45deg); border-radius:12px; display:flex; align-items:center; justify-content:center;">
+                      <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="var(--acI,#F7F5EE)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="transform:rotate(-45deg);"><polyline points="4,13 9.5,18 20,6"></polyline></svg>
+                    </div>
+                  </div>
+                  <div style="font-family:'Newsreader',Georgia,serif; font-size:28px; font-weight:500;">Session complete.</div>
+                  <div style="font-size:13px; color:var(--ink2,#6E6557); margin-top:6px;">{{ sSummary }}</div>
+                  <div style="display:flex; justify-content:center; gap:14px; margin:18px 0; font-family:'JetBrains Mono',ui-monospace,monospace; font-size:10.5px;">
+                    <span style="color:var(--g1,#B0523C);">{{ sAgainN }} again</span>
+                    <span style="color:var(--g2,#B87A26);">{{ sHardN }} hard</span>
+                    <span style="color:var(--ac,#35518E);">{{ sGoodN }} good</span>
+                    <span style="color:var(--g4,#4A7350);">{{ sEasyN }} easy</span>
+                  </div>
+                  <button onClick="{{ sExit }}" style="background:var(--ink,#211D14); color:var(--bg,#F4F1E9); border:none; border-radius:12px; padding:12px 20px; font-size:13.5px; font-weight:600; cursor:pointer; font-family:inherit; min-height:46px;" style-active="transform:scale(0.97)">Done</button>
+                </div>
+              </sc-if>
+            </sc-if>
+          </div>
+        </sc-if>
+
+        <!-- ── JOURNAL ── -->
+        <sc-if value="{{ mt.journal }}" hint-placeholder-val="{{ false }}">
+          <div data-screen-label="iOS · Journal" style="animation:rise 0.35s ease both;">
+            <div style="display:flex; align-items:baseline; justify-content:space-between;">
+              <div style="font-family:'Newsreader',Georgia,serif; font-size:32px; font-weight:500; letter-spacing:-0.015em;">Journal</div>
+              <div style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:10px; color:var(--am,#B87A26); font-weight:600;">{{ jStreak }}</div>
+            </div>
+            <div style="display:flex; gap:5px; margin-top:11px;">
+              <sc-for list="{{ jWeekDots }}" as="d" hint-placeholder-count="7">
+                <div style="flex:1; height:5px; border-radius:99px; background:var(--sf2,#EDE9DD); transition:background 0.4s ease; {{ d.style }}"></div>
+              </sc-for>
+            </div>
+            <div style="background:var(--sf,#FBF9F3); border:1px solid var(--ln,#E3DCCC); border-radius:17px; padding:19px; margin-top:15px;">
+              <div style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:9.5px; letter-spacing:0.14em; text-transform:uppercase; color:var(--ink3,#A79D8C);">{{ jTodayLabel }}</div>
+              <div style="font-family:'Newsreader',Georgia,serif; font-style:italic; font-size:15.5px; color:var(--ink2,#6E6557); margin:10px 0 12px; line-height:1.5;">"{{ jPrompt }}"</div>
+              <div contentEditable="{{ true }}" suppressContentEditableWarning="{{ true }}" data-ph="Start writing…" style="min-height:150px; font-family:'Newsreader',Georgia,serif; font-size:16.5px; line-height:1.75; outline:none;"></div>
+              <button onClick="{{ jSave }}" style="margin-top:13px; background:var(--ink,#211D14); color:var(--bg,#F4F1E9); border:none; border-radius:11px; padding:11px 16px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit; min-height:44px; transition:all 0.2s ease; {{ jSaveStyle }}" style-active="transform:scale(0.97)">{{ jSaveLabel }}</button>
+            </div>
+            <div style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:9.5px; letter-spacing:0.14em; text-transform:uppercase; color:var(--ink3,#A79D8C); margin:19px 0 9px;">Earlier</div>
+            <sc-for list="{{ jEntries }}" as="e" hint-placeholder-count="3">
+              <div style="background:var(--sf,#FBF9F3); border:1px solid var(--ln,#E3DCCC); border-radius:15px; padding:15px 17px; margin-bottom:9px; animation:rise 0.4s ease both; {{ e.delay }}">
+                <div style="display:flex; justify-content:space-between; align-items:baseline;">
+                  <span style="font-family:'Newsreader',Georgia,serif; font-size:16px; font-weight:500;">{{ e.date }}</span>
+                  <span style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:9px; color:var(--ink3,#A79D8C);">{{ e.words }} words</span>
+                </div>
+                <div style="font-size:13px; color:var(--ink2,#6E6557); line-height:1.55; margin-top:5px; font-family:'Newsreader',Georgia,serif; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">{{ e.snippet }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <!-- ── TODOS ── -->
+        <sc-if value="{{ mt.todos }}" hint-placeholder-val="{{ false }}">
+          <div data-screen-label="iOS · Todos" style="animation:rise 0.35s ease both;">
+            <div style="font-family:'Newsreader',Georgia,serif; font-size:32px; font-weight:500; letter-spacing:-0.015em;">Todos</div>
+            <div style="display:flex; background:var(--sf,#FBF9F3); border:1px solid var(--ln,#E3DCCC); border-radius:12px; padding:4px; gap:3px; margin:14px 0; width:fit-content;">
+              <button onClick="{{ tGoToday }}" style="border:none; border-radius:9px; padding:9px 20px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit; background:transparent; color:var(--ink2,#6E6557); transition:all 0.15s ease; min-height:38px; {{ segT }}">Today</button>
+              <button onClick="{{ tGoWeek }}" style="border:none; border-radius:9px; padding:9px 20px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit; background:transparent; color:var(--ink2,#6E6557); transition:all 0.15s ease; min-height:38px; {{ segW }}">Week</button>
+            </div>
+            <sc-if value="{{ tIsToday }}" hint-placeholder-val="{{ true }}">
+              <div style="height:3px; background:var(--sf2,#EDE9DD); border-radius:99px; margin-bottom:10px; overflow:hidden;"><div style="height:100%; background:var(--am,#B87A26); border-radius:99px; transition:width 0.45s cubic-bezier(0.65,0,0.35,1); width:{{ tPct }};"></div></div>
+              <div style="background:var(--sf,#FBF9F3); border:1px solid var(--ln,#E3DCCC); border-radius:17px; padding:5px 18px;">
+                <sc-for list="{{ todosToday }}" as="t" hint-placeholder-count="5">
+                  <div onClick="{{ t.onToggle }}" style="display:flex; align-items:center; gap:13px; padding:13px 0; cursor:pointer; border-bottom:1px solid var(--ln,#E3DCCC); min-height:50px;">
+                    <div style="width:20px; height:20px; border-radius:7px; border:1.5px solid var(--ink3,#A79D8C); flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:background 0.2s ease, border-color 0.2s ease; {{ t.boxStyle }}">
+                      <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="var(--bg,#F4F1E9)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,6.5 4.8,9 10,3.5" style="stroke-dasharray:12; transition:stroke-dashoffset 0.3s cubic-bezier(0.65,0,0.35,1) 0.06s; stroke-dashoffset:{{ t.dash }};"></polyline></svg>
+                    </div>
+                    <span style="flex:1; font-size:15px; line-height:1.4; transition:color 0.35s ease; {{ t.textStyle }}"><span style="position:relative;">{{ t.text }}<span style="position:absolute; left:-2px; top:53%; height:1.5px; background:currentColor; opacity:0.75; border-radius:2px; pointer-events:none; transition:width 0.35s cubic-bezier(0.65,0,0.35,1); width:{{ t.strikeW }};"></span></span></span>
+                    <span style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:9px; color:var(--ink3,#A79D8C);">{{ t.tag }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+            <sc-if value="{{ tIsWeek }}" hint-placeholder-val="{{ false }}">
+              <sc-for list="{{ tWeek }}" as="day" hint-placeholder-count="7">
+                <div style="background:var(--sf,#FBF9F3); border:1px solid var(--ln,#E3DCCC); border-radius:15px; padding:14px 17px; margin-bottom:9px; animation:rise 0.4s ease both; {{ day.delay }} {{ day.style }}">
+                  <div style="display:flex; align-items:baseline; gap:8px; margin-bottom:5px;">
+                    <span style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:9.5px; letter-spacing:0.12em; text-transform:uppercase; color:var(--ink3,#A79D8C);">{{ day.name }}</span>
+                    <span style="font-family:'Newsreader',Georgia,serif; font-size:16px; font-weight:500; {{ day.numStyle }}">{{ day.num }}</span>
+                  </div>
+                  <sc-for list="{{ day.items }}" as="t" hint-placeholder-count="2">
+                    <div onClick="{{ t.onToggle }}" style="display:flex; gap:11px; align-items:center; cursor:pointer; padding:8px 0; min-height:40px;">
+                      <div style="width:16px; height:16px; border-radius:5.5px; border:1.5px solid var(--ink3,#A79D8C); flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:background 0.2s ease, border-color 0.2s ease; {{ t.boxStyle }}">
+                        <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="var(--bg,#F4F1E9)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,6.5 4.8,9 10,3.5" style="stroke-dasharray:12; transition:stroke-dashoffset 0.3s cubic-bezier(0.65,0,0.35,1) 0.06s; stroke-dashoffset:{{ t.dash }};"></polyline></svg>
+                      </div>
+                      <span style="font-size:13.5px; transition:color 0.35s ease; {{ t.textStyle }}"><span style="position:relative;">{{ t.text }}<span style="position:absolute; left:-1px; top:53%; height:1.3px; background:currentColor; opacity:0.75; border-radius:2px; pointer-events:none; transition:width 0.35s cubic-bezier(0.65,0,0.35,1); width:{{ t.strikeW }};"></span></span></span>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-for>
+            </sc-if>
+          </div>
+        </sc-if>
+      </div>
+
+      <!-- grade bar -->
+      <sc-if value="{{ mGradeBar }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute; left:14px; right:14px; bottom:116px; z-index:40; background:color-mix(in srgb, var(--sf,#FBF9F3) 88%, transparent); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); border:1px solid var(--ln,#E3DCCC); border-radius:18px; padding:10px; box-shadow:0 14px 34px rgba(30,24,12,0.16); display:grid; grid-template-columns:repeat(4,1fr); gap:8px; animation:sheet 0.35s cubic-bezier(0.3,0.7,0.3,1) both;">
+        <button onClick="{{ onG1 }}" style="border:1px solid var(--g1,#B0523C); background:transparent; color:var(--g1,#B0523C); border-radius:12px; padding:9px 4px; cursor:pointer; font-family:inherit; display:flex; flex-direction:column; align-items:center; gap:2px; min-height:50px;" style-active="transform:scale(0.93)"><span style="font-size:13px; font-weight:600;">Again</span><span style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:8.5px; opacity:0.75;">{{ g1Hint }}</span></button>
+        <button onClick="{{ onG2 }}" style="border:1px solid var(--g2,#B87A26); background:transparent; color:var(--g2,#B87A26); border-radius:12px; padding:9px 4px; cursor:pointer; font-family:inherit; display:flex; flex-direction:column; align-items:center; gap:2px; min-height:50px;" style-active="transform:scale(0.93)"><span style="font-size:13px; font-weight:600;">Hard</span><span style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:8.5px; opacity:0.75;">{{ g2Hint }}</span></button>
+        <button onClick="{{ onG3 }}" style="border:1px solid var(--ac,#35518E); background:var(--ac,#35518E); color:var(--acI,#F7F5EE); border-radius:12px; padding:9px 4px; cursor:pointer; font-family:inherit; display:flex; flex-direction:column; align-items:center; gap:2px; min-height:50px;" style-active="transform:scale(0.93)"><span style="font-size:13px; font-weight:600;">Good</span><span style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:8.5px; opacity:0.8;">{{ g3Hint }}</span></button>
+        <button onClick="{{ onG4 }}" style="border:1px solid var(--g4,#4A7350); background:transparent; color:var(--g4,#4A7350); border-radius:12px; padding:9px 4px; cursor:pointer; font-family:inherit; display:flex; flex-direction:column; align-items:center; gap:2px; min-height:50px;" style-active="transform:scale(0.93)"><span style="font-size:13px; font-weight:600;">Easy</span><span style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:8.5px; opacity:0.75;">{{ g4Hint }}</span></button>
+        </div>
+      </sc-if>
+
+      <!-- note overlay -->
+      <sc-if value="{{ mNoteOpen }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="iOS · Note view" style="position:absolute; inset:0; z-index:50; background:var(--bg,#F4F1E9); display:flex; flex-direction:column; animation:sheet 0.32s cubic-bezier(0.3,0.7,0.3,1) both;">
+          <div style="display:flex; align-items:center; gap:10px; padding:70px 20px 12px; border-bottom:1px solid var(--ln,#E3DCCC);">
+            <div onClick="{{ mBack }}" style="display:flex; align-items:center; gap:5px; font-size:14.5px; font-weight:500; color:var(--ac,#35518E); cursor:pointer; min-height:44px; padding-right:8px;">
+              <svg width="9" height="15" viewBox="0 0 12 20" fill="none"><path d="M10 2L2 10l8 8" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              Notes
+            </div>
+            <span style="flex:1;"></span>
+            <span style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:9.5px; color:var(--ink3,#A79D8C);">edited {{ eUpdated }}</span>
+          </div>
+          <div style="flex:1; overflow-y:auto; padding:20px 22px 150px;">
+            <span style="font-size:10.5px; font-weight:600; color:var(--ink2,#6E6557); background:var(--sf2,#EDE9DD); border-radius:999px; padding:4px 10px;">{{ eFolderPath }}</span>
+            <h1 style="font-family:'Newsreader',Georgia,serif; font-size:28px; font-weight:500; letter-spacing:-0.01em; margin:13px 0 6px; line-height:1.2;">{{ eTitle }}</h1>
+            <div style="display:flex; gap:7px; margin-bottom:14px;">
+              <sc-for list="{{ eTags }}" as="tg" hint-placeholder-count="2">
+                <span style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:10px; color:var(--am,#B87A26);">#{{ tg.t }}</span>
+              </sc-for>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:3px;">
+              <sc-for list="{{ eBlocks }}" as="b" hint-placeholder-count="5">
+                <div>
+                  <sc-if value="{{ b.isH2 }}" hint-placeholder-val="{{ false }}"><h2 style="font-family:'Newsreader',Georgia,serif; font-size:19.5px; font-weight:500; margin:15px 0 3px;">{{ b.text }}</h2></sc-if>
+                  <sc-if value="{{ b.isP }}" hint-placeholder-val="{{ true }}"><p style="font-size:14.5px; line-height:1.7; margin:5px 0;">{{ b.text }}</p></sc-if>
+                  <sc-if value="{{ b.isList }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex; flex-direction:column; gap:6px; margin:7px 0;">
+                      <sc-for list="{{ b.items }}" as="li" hint-placeholder-count="3">
+                        <div style="display:flex; gap:9px; align-items:baseline;"><div style="width:5px; height:5px; background:var(--am,#B87A26); flex-shrink:0; transform:translateY(-2px) rotate(45deg);"></div><div style="font-size:14.5px; line-height:1.55;">{{ li.text }}</div></div>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ b.isCode }}" hint-placeholder-val="{{ false }}"><div style="background:var(--cd,#221E15); color:#E9E2CF; border-radius:12px; padding:14px 15px; margin:9px 0; font-family:'JetBrains Mono',ui-monospace,monospace; font-size:11.5px; line-height:1.7; overflow-x:auto; white-space:pre;">{{ b.text }}</div></sc-if>
+                  <sc-if value="{{ b.isQuote }}" hint-placeholder-val="{{ false }}"><div style="border-left:2px solid var(--am,#B87A26); padding-left:13px; margin:11px 0; font-family:'Newsreader',Georgia,serif; font-style:italic; font-size:15.5px; line-height:1.5; color:var(--ink2,#6E6557);">{{ b.text }}</div></sc-if>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="position:absolute; left:14px; right:14px; bottom:46px; background:color-mix(in srgb, var(--sf,#FBF9F3) 88%, transparent); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); border:1px solid var(--ln,#E3DCCC); border-radius:16px; padding:13px 17px; box-shadow:0 14px 34px rgba(30,24,12,0.16); display:flex; align-items:center; gap:12px;">
+            <div style="width:8px; height:8px; background:var(--am,#B87A26); transform:rotate(45deg); flex-shrink:0;"></div>
+            <div style="flex:1;">
+              <div style="font-size:13px; font-weight:600;">{{ eSrsState }}</div>
+              <div style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:9.5px; color:var(--ink3,#A79D8C); margin-top:1px;">{{ eSrsSub }}</div>
+            </div>
+            <sc-if value="{{ eIsDue }}" hint-placeholder-val="{{ false }}">
+              <button onClick="{{ mReviewThis }}" style="background:var(--ac,#35518E); color:var(--acI,#F7F5EE); border:none; border-radius:10px; padding:10px 14px; font-size:12.5px; font-weight:600; cursor:pointer; font-family:inherit; min-height:40px;" style-active="transform:scale(0.95)">Review now</button>
+            </sc-if>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- tab bar -->
+      <div style="position:absolute; left:16px; right:16px; bottom:44px; z-index:45; background:color-mix(in srgb, var(--sf,#FBF9F3) 80%, transparent); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border:1px solid var(--ln,#E3DCCC); border-radius:999px; padding:8px 12px; display:flex; justify-content:space-around; box-shadow:0 10px 30px rgba(30,24,12,0.14);">
+        <div onClick="{{ mGoToday }}" style="display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer; padding:6px 10px; border-radius:14px; color:var(--ink3,#A79D8C); min-width:46px; transition:color 0.2s ease, background 0.2s ease; {{ mtab.today }}" style-active="transform:scale(0.92)">
+          <svg width="19" height="19" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4.2 11.6a4.8 4.8 0 019.6 0"></path><line x1="2" y1="14.4" x2="16" y2="14.4"></line><line x1="9" y1="2.2" x2="9" y2="4.4"></line><line x1="3.6" y1="4.8" x2="5.1" y2="6.3"></line><line x1="14.4" y1="4.8" x2="12.9" y2="6.3"></line></svg>
+          <span style="font-size:9px; font-weight:600;">Today</span>
+        </div>
+        <div onClick="{{ mGoNotes }}" style="display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer; padding:6px 10px; border-radius:14px; color:var(--ink3,#A79D8C); min-width:46px; transition:color 0.2s ease, background 0.2s ease; {{ mtab.notes }}" style-active="transform:scale(0.92)">
+          <svg width="19" height="19" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2.4l4.6 4.6-3.2 8.4H7.6L4.4 7z"></path><line x1="9" y1="7.6" x2="9" y2="11"></line></svg>
+          <span style="font-size:9px; font-weight:600;">Notes</span>
+        </div>
+        <div onClick="{{ mGoReview }}" style="display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer; padding:6px 10px; border-radius:14px; color:var(--ink3,#A79D8C); position:relative; min-width:46px; transition:color 0.2s ease, background 0.2s ease; {{ mtab.review }}" style-active="transform:scale(0.92)">
+          <svg width="19" height="19" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M9 2.2L15.8 9L9 15.8L2.2 9L9 2.2z"></path><path d="M9 6.2L11.8 9L9 11.8L6.2 9L9 6.2z" fill="currentColor" stroke="none"></path></svg>
+          <span style="font-size:9px; font-weight:600;">Review</span>
+          <sc-if value="{{ hasDue }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute; top:1px; right:5px; min-width:16px; height:16px; border-radius:99px; background:var(--am,#B87A26); color:var(--bg,#F4F1E9); font-family:'JetBrains Mono',ui-monospace,monospace; font-size:9px; font-weight:600; display:flex; align-items:center; justify-content:center; padding:0 3px;">{{ dueCount }}</div>
+          </sc-if>
+        </div>
+        <div onClick="{{ mGoJournal }}" style="display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer; padding:6px 10px; border-radius:14px; color:var(--ink3,#A79D8C); min-width:46px; transition:color 0.2s ease, background 0.2s ease; {{ mtab.journal }}" style-active="transform:scale(0.92)">
+          <svg width="19" height="19" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4.4C7.5 3.2 5.2 3.1 3.4 3.9V14.4C5.2 13.6 7.5 13.7 9 14.9C10.5 13.7 12.8 13.6 14.6 14.4V3.9C12.8 3.1 10.5 3.2 9 4.4z"></path><line x1="9" y1="4.6" x2="9" y2="14.7"></line></svg>
+          <span style="font-size:9px; font-weight:600;">Journal</span>
+        </div>
+        <div onClick="{{ mGoTodos }}" style="display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer; padding:6px 10px; border-radius:14px; color:var(--ink3,#A79D8C); min-width:46px; transition:color 0.2s ease, background 0.2s ease; {{ mtab.todos }}" style-active="transform:scale(0.92)">
+          <svg width="19" height="19" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="2.5" width="13" height="13" rx="3.5"></rect><polyline points="6,9.2 8.2,11.4 12.2,6.8"></polyline></svg>
+          <span style="font-size:9px; font-weight:600;">Todos</span>
+        </div>
+      </div>
+    </div>
+  </x-import>
+
+  <div style="font-family:'JetBrains Mono',ui-monospace,monospace; font-size:10px; color:var(--ink3,#A79D8C);">iPhone 15 Pro Max · 430 × 932</div>
+
+  <!-- toast -->
+  <sc-if value="{{ hasToast }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed; bottom:74px; left:50%; transform:translateX(-50%); z-index:120; background:var(--ink,#211D14); color:var(--bg,#F4F1E9); border-radius:999px; padding:9px 18px; font-family:'JetBrains Mono',ui-monospace,monospace; font-size:11px; box-shadow:0 12px 30px rgba(20,16,8,0.28); animation:popin 0.25s ease both; white-space:nowrap;">{{ toastMsg }}</div>
+  </sc-if>
+
+  <!-- page switcher (prototype chrome) -->
+  <div style="position:fixed; bottom:18px; left:50%; transform:translateX(-50%); z-index:110; background:color-mix(in srgb, var(--ink,#211D14) 90%, transparent); backdrop-filter:blur(10px); border-radius:999px; padding:4px; display:flex; gap:2px; box-shadow:0 10px 28px rgba(20,16,8,0.3); font-family:'JetBrains Mono',ui-monospace,monospace; font-size:10.5px; font-weight:600; letter-spacing:0.06em;">
+    <a href="Noto.dc.html" style="padding:7px 14px; border-radius:999px; color:rgba(244,241,233,0.6); text-decoration:none; transition:color 0.15s ease;" style-hover="color:#F4F1E9">DESKTOP ↗</a>
+    <div style="padding:7px 14px; border-radius:999px; background:rgba(244,241,233,0.16); color:#F4F1E9;">IPHONE 15 PRO MAX</div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;accent&quot;: { &quot;editor&quot;: &quot;color&quot;, &quot;default&quot;: &quot;#35518E&quot;, &quot;options&quot;: [&quot;#35518E&quot;, &quot;#4A7350&quot;, &quot;#7D4A34&quot;, &quot;#41414B&quot;], &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Style&quot; },
+  &quot;inkFade&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Behavior&quot; }
+}">
+class Component extends DCLogic {
+  state = {
+    dark: false, mTab: 'today', mFolder: 'all', mNoteOpen: false,
+    noteId: 'n2', libQ: '',
+    session: null, doneToday: 0, toast: null, jSaved: false, tSeg: 'today',
+    srs: {
+      n1: { ease: 2.5, ivl: 7,  due: -2, hist: [{ d: -16, g: 3, ivl: 4 }, { d: -9, g: 3, ivl: 7 }] },
+      n2: { ease: 2.35, ivl: 4, due: 0,  hist: [{ d: -12, g: 2, ivl: 2 }, { d: -8, g: 3, ivl: 4 }] },
+      n3: { ease: 2.5, ivl: 6,  due: 5,  hist: [{ d: -7, g: 3, ivl: 6 }] },
+      n4: { ease: 2.2, ivl: 3,  due: -1, hist: [{ d: -10, g: 1, ivl: 1 }, { d: -9, g: 2, ivl: 1 }, { d: -4, g: 3, ivl: 3 }] },
+      n5: { ease: 2.7, ivl: 10, due: 0,  hist: [{ d: -24, g: 3, ivl: 5 }, { d: -10, g: 4, ivl: 10 }] },
+      n6: { ease: 2.6, ivl: 9,  due: 8,  hist: [{ d: -14, g: 3, ivl: 5 }, { d: -1, g: 4, ivl: 9 }] },
+      n7: { ease: 2.5, ivl: 2,  due: 0,  hist: [{ d: -2, g: 2, ivl: 2 }] },
+      n8: { ease: 2.5, ivl: 6,  due: 2,  hist: [{ d: -4, g: 3, ivl: 6 }] },
+      n9: null, n10: null,
+    },
+    todos: [
+      { id: 't1', text: 'Review due notes in the queue', tag: 'noto', done: false },
+      { id: 't2', text: 'OS assignment 3 — paging simulator', tag: 'cs330', done: false },
+      { id: 't3', text: 'LeetCode: 2 graph problems', tag: 'prep', done: true },
+      { id: 't4', text: 'Watch Karpathy GPT lecture', tag: 'watch', done: false },
+      { id: 't5', text: 'Push graph-viz refactor', tag: 'side', done: true },
+      { id: 't6', text: 'Email prof about project topic', tag: 'admin', done: false },
+    ],
+    week: [
+      { id: 'w1', day: 0, text: 'Quiz: networks ch. 5', done: true },
+      { id: 'w2', day: 0, text: 'Gym', done: true },
+      { id: 'w3', day: 1, text: 'Paper club — AIAYN', done: true },
+      { id: 'w4', day: 2, text: 'CS330 PS due 11:59pm', done: false },
+      { id: 'w5', day: 3, text: 'Mock interview w/ Dev', done: false },
+      { id: 'w6', day: 4, text: 'Ship personal site v2', done: false },
+      { id: 'w7', day: 5, text: 'Long review session', done: false },
+      { id: 'w8', day: 5, text: 'Clean desk + backups', done: false },
+      { id: 'w9', day: 6, text: 'Weekly review + plan', done: false },
+    ],
+  };
+
+  FOLDERS = [
+    { id: 'f1', name: 'Computer Science', parent: null },
+    { id: 'f2', name: 'Algorithms', parent: 'f1' },
+    { id: 'f3', name: 'Systems', parent: 'f1' },
+    { id: 'f4', name: 'Distributed', parent: 'f3' },
+    { id: 'f5', name: 'AI / ML', parent: null },
+    { id: 'f6', name: 'Engineering', parent: null },
+    { id: 'f7', name: 'Web', parent: 'f6' },
+    { id: 'f8', name: 'DevOps', parent: 'f6' },
+  ];
+
+  NOTES = [
+    { id: 'n1', title: 'B-Trees & Database Indexes', folderId: 'f3', tags: ['databases', 'storage'], created: -30, updated: -2, blocks: [
+      { t: 'p', text: 'Databases live and die by disk seeks. A B-tree keeps the tree short and fat so any row is a handful of page reads away.' },
+      { t: 'h2', text: 'Why fan-out beats depth' },
+      { t: 'ul', items: ['One node = one disk page (4–16 KB), holding hundreds of keys', 'Height stays 3–4 even for billions of rows', 'Leaves are linked — range scans become sequential reads'] },
+      { t: 'code', lang: 'sql', text: '-- covering index for the hot query\nCREATE INDEX idx_orders_user_created\n  ON orders (user_id, created_at DESC)\n  INCLUDE (status, total);' },
+      { t: 'q', text: 'Index the query you actually run — not the table you happen to have.' },
+    ]},
+    { id: 'n2', title: 'Transformer Self-Attention', folderId: 'f5', tags: ['transformers', 'attention'], created: -21, updated: -1, blocks: [
+      { t: 'p', text: 'Attention lets every token look at every other token and decide what matters. No recurrence, no convolution — just weighted lookups over the whole sequence.' },
+      { t: 'h2', text: 'The soft dictionary intuition' },
+      { t: 'ul', items: ['Query — what this token is looking for', 'Key — what each token offers', 'Value — what each token hands over if matched', 'softmax(QKᵀ/√d) turns match scores into mixing weights'] },
+      { t: 'code', lang: 'python', text: 'def attention(Q, K, V, mask=None):\n    scores = Q @ K.transpose(-2, -1) / math.sqrt(d_k)\n    if mask is not None:\n        scores = scores.masked_fill(mask == 0, -1e9)\n    return softmax(scores, dim=-1) @ V' },
+      { t: 'h2', text: 'Multi-head' },
+      { t: 'p', text: 'Run h attention functions in parallel over projected slices, then concatenate. Each head learns a different relation — syntax, position, coreference.' },
+      { t: 'q', text: 'A lookup table where the match is fuzzy and everything is returned — just in different amounts.' },
+    ]},
+    { id: 'n3', title: 'TCP Congestion Control', folderId: 'f3', tags: ['networking'], created: -18, updated: -7, blocks: [
+      { t: 'p', text: 'TCP probes the network for capacity and backs off when it senses loss. The result is the famous sawtooth.' },
+      { t: 'ul', items: ['Slow start — cwnd doubles every RTT until ssthresh', 'Congestion avoidance — additive increase, +1 MSS per RTT', 'On loss — multiplicative decrease, cwnd halves (AIMD)', 'Fast retransmit on 3 duplicate ACKs, no full timeout'] },
+      { t: 'q', text: 'Be aggressive until the network pushes back; then back off fast and creep up slow.' },
+    ]},
+    { id: 'n4', title: 'Master Theorem, finally', folderId: 'f2', tags: ['complexity', 'recursion'], created: -15, updated: -4, blocks: [
+      { t: 'p', text: 'For divide-and-conquer recurrences T(n) = a·T(n/b) + f(n): compare f(n) against n^log_b(a) — whoever dominates, wins.' },
+      { t: 'code', lang: 'txt', text: 'T(n) = a·T(n/b) + f(n)\n\ncase 1  f slower  → Θ(n^log_b a)        binary search: Θ(log n)\ncase 2  f equal   → Θ(n^log_b a · log n) merge sort: Θ(n log n)\ncase 3  f faster  → Θ(f(n))             (needs regularity)' },
+      { t: 'ul', items: ['a = number of subproblems, n/b = their size', 'Case 2 is where the log factor comes from', 'If f is polynomially close to n^log_b(a), the theorem is silent'] },
+    ]},
+    { id: 'n5', title: 'Dijkstra vs A*', folderId: 'f2', tags: ['graphs', 'search'], created: -40, updated: -10, blocks: [
+      { t: 'p', text: 'Both grow a frontier of cheapest-first paths. A* just gets a hint about where the goal is.' },
+      { t: 'ul', items: ['Dijkstra expands by g(n) — blind but exact', 'A* expands by g(n) + h(n); admissible h keeps it exact', 'h = 0 turns A* back into Dijkstra; h = true distance makes it walk the answer'] },
+      { t: 'code', lang: 'python', text: 'def dijkstra(graph, src):\n    dist, pq = {src: 0}, [(0, src)]\n    while pq:\n        d, u = heapq.heappop(pq)\n        if d > dist.get(u, 1e18): continue\n        for v, w in graph[u]:\n            if d + w < dist.get(v, 1e18):\n                dist[v] = d + w\n                heapq.heappush(pq, (d + w, v))\n    return dist' },
+    ]},
+    { id: 'n6', title: 'CAP Theorem, honestly', folderId: 'f4', tags: ['distributed'], created: -25, updated: -1, blocks: [
+      { t: 'p', text: 'During a partition you must choose: refuse some requests (consistency) or serve possibly-stale data (availability). No partition, no trade-off.' },
+      { t: 'ul', items: ['CP — banks, leader election, etcd/ZooKeeper', 'AP — carts, feeds, DNS; reconcile later', 'PACELC: even without partitions, you trade latency vs consistency'] },
+      { t: 'q', text: 'CAP is not a menu of three — partitions happen, so you are really choosing between C and A.' },
+    ]},
+    { id: 'n7', title: 'Gradient Descent Variants', folderId: 'f5', tags: ['optimization'], created: -9, updated: -2, blocks: [
+      { t: 'ul', items: ['SGD — noisy but cheap; the baseline', 'Momentum — velocity term smooths the noise', 'RMSProp — per-parameter learning rates', 'Adam — momentum + RMSProp; the default'] },
+      { t: 'code', lang: 'python', text: 'm = b1*m + (1-b1)*g        # first moment\nv = b2*v + (1-b2)*g**2     # second moment\ntheta -= lr * m_hat / (v_hat**0.5 + eps)' },
+      { t: 'q', text: 'Start with Adam at 3e-4, then earn anything fancier.' },
+    ]},
+    { id: 'n8', title: 'React Reconciliation & Keys', folderId: 'f7', tags: ['react', 'perf'], created: -12, updated: -3, blocks: [
+      { t: 'p', text: 'React diffs trees level by level. Keys tell it which children are the same entity across renders — identity, not order.' },
+      { t: 'ul', items: ['Index-as-key breaks on reorder: state sticks to positions', 'Different element type = tear down whole subtree', 'Stable keys → moves become cheap patches'] },
+      { t: 'code', lang: 'jsx', text: '{items.map(item => (\n  <Row key={item.id} data={item} />  // identity, not index\n))}' },
+    ]},
+    { id: 'n9', title: 'Virtual Memory & Paging', folderId: 'f3', tags: ['os', 'memory'], created: 0, updated: 0, blocks: [
+      { t: 'p', text: 'Every process gets a flat fake address space; the MMU translates it page-by-page to whatever physical frames are free.' },
+      { t: 'ul', items: ['Page ≈ 4 KB; translation cached in the TLB', 'TLB miss → page-table walk; page fault → disk, five orders slower', 'Working set beats page count — locality is everything'] },
+    ]},
+    { id: 'n10', title: 'Docker Networking Basics', folderId: 'f8', tags: ['docker', 'devops'], created: -6, updated: -5, blocks: [
+      { t: 'p', text: 'Containers get their own network namespace; Docker wires them together with virtual bridges and NAT.' },
+      { t: 'ul', items: ['bridge — default; containers talk via docker0', 'host — no isolation, container shares the host stack', 'Compose services resolve each other by name via embedded DNS'] },
+      { t: 'code', lang: 'bash', text: 'docker network create appnet\ndocker run -d --network appnet --name api api:latest\ndocker run -d --network appnet -p 8080:80 web:latest' },
+    ]},
+  ];
+
+  JOURNAL = [
+    { off: -1, words: 214, text: 'Finally understood why B-tree fan-out matters — fewer levels means fewer disk seeks, and everything else is commentary. Also: do not debug CSS at 1am.' },
+    { off: -2, words: 156, text: 'Attention clicked today. It is just a soft dictionary lookup — Q asks, K matches, V answers. Wrote it from scratch without peeking.' },
+    { off: -3, words: 98, text: 'Slow day. Reviewed congestion control; AIMD finally feels obvious instead of memorized. Sawtooth graphs everywhere I look now.' },
+    { off: -5, words: 187, text: 'Set up Noto and migrated scattered notes from six different apps. The ink-fade idea is going to keep me honest about reviewing.' },
+  ];
+
+  PROMPTS = [
+    'What did you figure out today that yesterday-you did not know?',
+    'What confused you today — and what would unconfuse it?',
+    'What would you tell yourself from this morning?',
+  ];
+
+  folderById(id) { return this.FOLDERS.find(f => f.id === id); }
+  kidsOf(id) { return this.FOLDERS.filter(f => f.parent === id); }
+  notesIn(id) { return this.NOTES.filter(n => n.folderId === id); }
+  countRec(id) { return this.notesIn(id).length + this.kidsOf(id).reduce((a, k) => a + this.countRec(k.id), 0); }
+  pathOf(id) { const p = []; let f = this.folderById(id); while (f) { p.unshift(f); f = f.parent ? this.folderById(f.parent) : null; } return p; }
+  folderName(id) { const f = this.folderById(id); return f ? f.name : ''; }
+
+  addDays(n) { const d = new Date(); d.setDate(d.getDate() + n); return d; }
+  fmtShort(d) { return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
+  dueLabelOf(due) { return due < 0 ? Math.abs(due) + 'd overdue' : due === 0 ? 'due today' : due === 1 ? 'tomorrow' : 'in ' + due + 'd'; }
+  inkOp(srs) {
+    if ((this.props.inkFade ?? true) === false || !srs) return '1';
+    if (srs.due <= 0) return '0.55';
+    return String(Math.min(1, 0.55 + 0.45 * (srs.due / Math.max(srs.ivl, 1))).toFixed(2));
+  }
+  srsPill(srs) {
+    if (!srs) return { label: 'not in review', style: 'color:var(--ink3,#A79D8C);' };
+    if (srs.due <= 0) return { label: '◆ ' + this.dueLabelOf(srs.due), style: 'color:var(--am,#B87A26); font-weight:600;' };
+    return { label: '◇ ' + this.dueLabelOf(srs.due), style: 'color:var(--ink3,#A79D8C);' };
+  }
+  snippet(note) { const p = note.blocks.find(b => b.t === 'p'); return p ? p.text : (note.blocks[0].items || [''])[0]; }
+  ago(off) { return off === 0 ? 'today' : off === -1 ? 'yesterday' : Math.abs(off) + 'd ago'; }
+  mapBlocks(note) {
+    return note.blocks.map(b => ({
+      text: b.text, lang: b.lang || '', items: (b.items || []).map(x => ({ text: x })),
+      isH2: b.t === 'h2', isP: b.t === 'p', isCode: b.t === 'code', isList: b.t === 'ul', isQuote: b.t === 'q',
+    }));
+  }
+  previewIvl(srs, g) {
+    if (g === 1) return '10 min';
+    const e = srs.ease, i = Math.max(srs.ivl, 1);
+    const n = g === 2 ? Math.max(1, Math.round(i * 1.2)) : g === 3 ? Math.max(1, Math.round(i * e)) : Math.max(2, Math.round(i * e * 1.3));
+    return n + 'd';
+  }
+
+  showToast(msg) {
+    clearTimeout(this._tt);
+    this.setState({ toast: msg });
+    this._tt = setTimeout(() => this.setState({ toast: null }), 2400);
+  }
+
+  dueIds() {
+    return this.NOTES.filter(n => this.state.srs[n.id] && this.state.srs[n.id].due <= 0)
+      .sort((a, b) => this.state.srs[a.id].due - this.state.srs[b.id].due).map(n => n.id);
+  }
+
+  startSession(ids) {
+    const queue = ids || this.dueIds();
+    if (!queue.length) { this.showToast('Nothing due — your ink is dark'); return; }
+    this.setState({ session: { queue, idx: 0, log: [] }, mTab: 'review', mNoteOpen: false });
+  }
+
+  grade(g) {
+    const s = this.state.session;
+    if (!s || s.idx >= s.queue.length) return;
+    const id = s.queue[s.idx];
+    const cur = this.state.srs[id];
+    const srs = { ease: cur.ease, ivl: cur.ivl, due: cur.due, hist: cur.hist.slice() };
+    let toast;
+    if (g === 1) { srs.ease = Math.max(1.3, srs.ease - 0.2); srs.ivl = Math.max(1, Math.round(srs.ivl * 0.5)); srs.due = 0; toast = 'Again — queued for later this session'; }
+    else {
+      if (g === 2) { srs.ease = Math.max(1.3, srs.ease - 0.15); srs.ivl = Math.max(1, Math.round(srs.ivl * 1.2)); }
+      if (g === 3) { srs.ivl = Math.max(1, Math.round(Math.max(srs.ivl, 1) * srs.ease)); }
+      if (g === 4) { srs.ease = srs.ease + 0.1; srs.ivl = Math.max(2, Math.round(Math.max(srs.ivl, 1) * srs.ease * 1.3)); }
+      srs.due = srs.ivl;
+      toast = 'Re-inked · next review in ' + srs.ivl + 'd';
+    }
+    srs.hist = srs.hist.concat([{ d: 0, g, ivl: srs.ivl }]);
+    const queue = g === 1 ? s.queue.concat([id]) : s.queue;
+    this.setState({
+      srs: Object.assign({}, this.state.srs, { [id]: srs }),
+      session: { queue, idx: s.idx + 1, log: s.log.concat([g]) },
+      doneToday: this.state.doneToday + 1,
+    });
+    this.showToast(toast);
+  }
+
+  componentWillUnmount() { clearTimeout(this._tt); }
+
+  renderVals() {
+    const st = this.state;
+    const accent = this.props.accent ?? '#35518E';
+    const dk = st.dark;
+    const themeVars = (dk
+      ? '--bg:#14110C; --sf:#1D1912; --sf2:#282218; --ink:#ECE6D8; --ink2:#A69C89; --ink3:#6E6557; --ln:#2E2820; --cd:#0E0C08; --am:#D9A45C; --g1:#D98D77; --g2:#D9A45C; --g4:#93BB98;'
+        + '--ac:color-mix(in oklab, ' + accent + ' 45%, #E8E4D8); --acI:#14110C;'
+      : '--bg:#F4F1E9; --sf:#FBF9F3; --sf2:#EDE9DD; --ink:#211D14; --ink2:#6E6557; --ink3:#A79D8C; --ln:#E3DCCC; --cd:#221E15; --am:#B87A26; --g1:#B0523C; --g2:#B87A26; --g4:#4A7350;'
+        + '--ac:' + accent + '; --acI:#F7F5EE;');
+
+    const now = new Date();
+    const hour = now.getHours();
+    const greeting = hour < 12 ? 'Good morning.' : hour < 18 ? 'Good afternoon.' : 'Good evening.';
+    const dateLine = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    const stagger = (i) => 'animation-delay:' + Math.min(i * 0.045, 0.4) + 's;';
+
+    const deco = (n, i) => {
+      const srs = st.srs[n.id];
+      const pill = this.srsPill(srs);
+      return {
+        id: n.id, title: n.title, folder: this.folderName(n.folderId), snippet: this.snippet(n),
+        updated: this.ago(n.updated), inkOp: this.inkOp(srs),
+        srsPill: pill.label, pillStyle: pill.style,
+        tags: n.tags.map(t => ({ t })), delay: stagger(i || 0),
+        onOpenM: () => this.setState({ noteId: n.id, mNoteOpen: true }),
+      };
+    };
+
+    const dueIdList = this.dueIds();
+    const dueCount = dueIdList.length;
+
+    const counts = [0, 0, 0, 0, 0, 0, 0];
+    this.NOTES.forEach(n => { const s = st.srs[n.id]; if (!s) return; const k = Math.max(0, s.due); if (k < 7) counts[k]++; });
+    const maxC = Math.max(1, ...counts);
+    const forecast = counts.map((c, i) => ({
+      h2: (5 + Math.round(38 * c / maxC)) + 'px',
+      op: c === 0 ? '0.25' : String(0.5 + 0.5 * c / maxC),
+    }));
+
+    // folder drill-down
+    const q = st.libQ.toLowerCase();
+    const isSearching = q.length > 0;
+    const searchResults = this.NOTES.filter(n =>
+      n.title.toLowerCase().includes(q) || this.snippet(n).toLowerCase().includes(q) || n.tags.join(' ').includes(q));
+    const sel = st.mFolder;
+    const atRoot = sel === 'all';
+    const curFolder = atRoot ? null : this.folderById(sel);
+    const parentId = curFolder ? (curFolder.parent || 'all') : 'all';
+    const mSubs = isSearching ? [] : this.kidsOf(atRoot ? null : sel).map(f => ({
+      name: f.name, count: this.countRec(f.id),
+      onPick: () => this.setState({ mFolder: f.id }),
+    }));
+    const dirNotes = atRoot ? this.NOTES : this.notesIn(sel);
+    const mNotesSrc = isSearching ? searchResults : dirNotes;
+
+    const eN = this.NOTES.find(n => n.id === st.noteId) || this.NOTES[0];
+    const eS = st.srs[eN.id];
+
+    const s = st.session;
+    const sCurId = s && s.idx < s.queue.length ? s.queue[s.idx] : null;
+    const sCur = sCurId ? this.NOTES.find(n => n.id === sCurId) : null;
+    const sSrs = sCurId ? st.srs[sCurId] : null;
+    const sDone = !!s && s.idx >= s.queue.length;
+    const gN = (k) => s ? s.log.filter(g => g === k).length : 0;
+
+    const doneN = st.todos.filter(t => t.done).length;
+    const todoDeco = (t, arr, key) => ({
+      text: t.text, tag: t.tag || '',
+      onToggle: () => this.setState({ [key]: arr.map(x => x.id === t.id ? Object.assign({}, x, { done: !x.done }) : x) }),
+      boxStyle: t.done ? 'background:var(--ac,#35518E); border-color:var(--ac,#35518E);' : '',
+      dash: t.done ? '0' : '12',
+      strikeW: t.done ? '100%' : '0%',
+      textStyle: t.done ? 'color:var(--ink3,#A79D8C);' : '',
+    });
+    const todosToday = st.todos.map(t => todoDeco(t, st.todos, 'todos'));
+
+    const monOff = -((now.getDay() + 6) % 7);
+    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const tWeek = dayNames.map((name, i) => {
+      const d = this.addDays(monOff + i);
+      const isToday = monOff + i === 0;
+      return {
+        name, num: d.getDate(), delay: stagger(i),
+        style: isToday ? 'border-color:var(--am,#B87A26); box-shadow:0 0 0 1px var(--am,#B87A26);' : '',
+        numStyle: isToday ? 'color:var(--am,#B87A26);' : '',
+        items: st.week.filter(w => w.day === i).map(t => todoDeco(t, st.week, 'week')),
+      };
+    });
+
+    const jEntries = this.JOURNAL.map((e, i) => ({
+      date: this.addDays(e.off).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+      words: e.words, snippet: e.text, delay: stagger(i),
+    }));
+    const jWeekDots = [6, 5, 4, 3, 2, 1, 0].map(k => ({
+      style: (k === 0 && st.jSaved) || this.JOURNAL.some(e => e.off === -k) ? 'background:var(--am,#B87A26);' : (k === 0 ? 'background:transparent; border:1px dashed var(--ink3,#A79D8C);' : ''),
+    }));
+
+    const inReviewCount = this.NOTES.filter(n => st.srs[n.id]).length;
+    const qDue = dueIdList.map((id, i) => {
+      const n = this.NOTES.find(x => x.id === id); const sr = st.srs[id];
+      return Object.assign(deco(n, i), {
+        dueLabel: this.dueLabelOf(sr.due), ivl: sr.ivl + 'd',
+        dueStyle: sr.due < 0 ? 'color:var(--g1,#B0523C);' : 'color:var(--am,#B87A26);',
+      });
+    });
+    const qUpcoming = this.NOTES
+      .filter(n => st.srs[n.id] && st.srs[n.id].due > 0)
+      .sort((a, b) => st.srs[a.id].due - st.srs[b.id].due)
+      .slice(0, 4)
+      .map((n, i) => Object.assign(deco(n, i), { dueLabel: this.dueLabelOf(st.srs[n.id].due) }));
+
+    const recent = this.NOTES.slice().sort((a, b) => b.updated - a.updated).slice(0, 2).map((n, i) => deco(n, i));
+    const setTab = (mTab) => () => this.setState({ mTab, mNoteOpen: false });
+    const mtabStyle = (id) => st.mTab === id ? 'color:var(--ac,#35518E); background:color-mix(in srgb, var(--ac,#35518E) 10%, transparent);' : '';
+
+    return {
+      themeVars, isDark: dk, ipW: 430, ipH: 932,
+      toggleTheme: () => this.setState({ dark: !dk }),
+      hasToast: !!st.toast, toastMsg: st.toast || '',
+      dateLine, greeting,
+
+      dueCount, hasDue: dueCount > 0,
+      dueHeadline: dueCount > 0 ? dueCount + (dueCount === 1 ? ' note is fading.' : ' notes are fading.') : 'All ink is dark.',
+      forecast, inReviewCount, doneToday: st.doneToday,
+      recentTop: recent,
+
+      mt: { today: st.mTab === 'today', notes: st.mTab === 'notes', review: st.mTab === 'review', journal: st.mTab === 'journal', todos: st.mTab === 'todos' },
+      mtab: { today: mtabStyle('today'), notes: mtabStyle('notes'), review: mtabStyle('review'), journal: mtabStyle('journal'), todos: mtabStyle('todos') },
+      mGoToday: setTab('today'), mGoNotes: setTab('notes'), mGoReview: setTab('review'),
+      mGoJournal: setTab('journal'), mGoTodos: setTab('todos'),
+
+      libQ: st.libQ, onSearch: (e) => this.setState({ libQ: e.target.value }),
+      isSearching, resultCount: searchResults.length + (searchResults.length === 1 ? ' note' : ' notes'),
+      mFolderTitle: isSearching ? 'Search' : (atRoot ? 'Notes' : curFolder.name),
+      mFolderCount: (isSearching ? searchResults.length : this.countRec ? (atRoot ? this.NOTES.length : this.countRec(sel)) : 0) + ' notes',
+      mHasBack: !atRoot && !isSearching,
+      mParentName: curFolder ? (curFolder.parent ? this.folderName(curFolder.parent) : 'Notes') : 'Notes',
+      mFolderBack: () => this.setState({ mFolder: parentId === 'all' ? 'all' : parentId }),
+      mSubs, mShowSubs: mSubs.length > 0,
+      mNotes: mNotesSrc.map((n, i) => deco(n, i)),
+      mFolderEmpty: !isSearching && mNotesSrc.length === 0 && mSubs.length === 0,
+
+      eTitle: eN.title, eFolderPath: this.pathOf(eN.folderId).map(f => f.name).join(' / '),
+      eBlocks: this.mapBlocks(eN), eTags: eN.tags.map(t => ({ t })),
+      eUpdated: this.ago(eN.updated),
+      eSrsState: eS ? (eS.due <= 0 ? 'In review — due now' : 'In review') : 'Not in review',
+      eSrsSub: eS ? ('next · ' + this.fmtShort(this.addDays(Math.max(0, eS.due))) + ' · interval ' + eS.ivl + 'd · ' + eS.hist.length + ' reviews') : 'add from desktop editor',
+      eIsDue: !!eS && eS.due <= 0,
+      mReviewThis: () => this.startSession([eN.id]),
+      mNoteOpen: st.mNoteOpen, mBack: () => this.setState({ mNoteOpen: false }),
+
+      mStart: () => this.startSession(),
+      mSessionOn: !!s, mSessionOff: !s,
+      mGradeBar: st.mTab === 'review' && !!s && !sDone && !st.mNoteOpen,
+      sShowCard: !!s && !sDone && !!sCur, sDone,
+      sKey: s ? 'k' + s.idx : 'k',
+      sTitle: sCur ? sCur.title : '', sFolder: sCur ? this.folderName(sCur.folderId) : '',
+      sBlocks: sCur ? this.mapBlocks(sCur) : [],
+      sProg: s ? Math.min(s.idx + 1, s.queue.length) + ' / ' + s.queue.length : '',
+      sPct: s ? Math.round(100 * s.idx / s.queue.length) + '%' : '0%',
+      sExit: () => this.setState({ session: null }),
+      g1Hint: sSrs ? this.previewIvl(sSrs, 1) : '', g2Hint: sSrs ? this.previewIvl(sSrs, 2) : '',
+      g3Hint: sSrs ? this.previewIvl(sSrs, 3) : '', g4Hint: sSrs ? this.previewIvl(sSrs, 4) : '',
+      onG1: () => this.grade(1), onG2: () => this.grade(2), onG3: () => this.grade(3), onG4: () => this.grade(4),
+      sAgainN: gN(1), sHardN: gN(2), sGoodN: gN(3), sEasyN: gN(4),
+      sSummary: s ? (s.log.length + ' reviews · ' + (this.dueIds().length === 0 ? 'queue is clear' : this.dueIds().length + ' still due')) : '',
+
+      jStreak: '◆ ' + (st.jSaved ? 7 : 6) + '-day streak', jWeekDots, jEntries,
+      jTodayLabel: 'Today · ' + this.fmtShort(now),
+      jPrompt: this.PROMPTS[now.getDate() % this.PROMPTS.length],
+      jSave: () => { if (st.jSaved) { this.showToast('Already saved — see you tomorrow'); return; } this.setState({ jSaved: true }); this.showToast('Saved · streak extended to 7 days'); },
+      jSaveLabel: st.jSaved ? '✓ Saved' : 'Save entry',
+      jSaveStyle: st.jSaved ? 'background:var(--g4,#4A7350);' : '',
+
+      todosToday, todosTop: todosToday.slice(0, 3), tWeek,
+      tProgress: doneN + ' of ' + st.todos.length + ' done',
+      tPct: Math.round(100 * doneN / st.todos.length) + '%',
+      tIsToday: st.tSeg === 'today', tIsWeek: st.tSeg === 'week',
+      tGoToday: () => this.setState({ tSeg: 'today' }), tGoWeek: () => this.setState({ tSeg: 'week' }),
+      segT: st.tSeg === 'today' ? 'background:var(--sf2,#EDE9DD); color:var(--ink,#211D14);' : '',
+      segW: st.tSeg === 'week' ? 'background:var(--sf2,#EDE9DD); color:var(--ink,#211D14);' : '',
+    };
+  }
+}
+</script>
+</body>
+</html>
