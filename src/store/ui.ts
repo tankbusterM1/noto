@@ -52,6 +52,8 @@ interface UIState {
   jMode: JournalMode
   jSaved: boolean
   thread: string | null
+  pal: string | null
+  palIdx: number
   toast: string | null
 
   // preference actions
@@ -73,6 +75,12 @@ interface UIState {
   setWFilter: (f: WatchFilter) => void
   setWTagF: (t: string) => void
   setThread: (tag: string | null) => void
+
+  // command palette
+  openPalette: () => void
+  closePalette: () => void
+  setPalQ: (q: string) => void
+  movePalette: (dir: number) => void
 
   // journal actions
   unlockJournal: () => void
@@ -107,6 +115,8 @@ export const useUI = create<UIState>()(
       jMode: 'prompt',
       jSaved: false,
       thread: null,
+      pal: null,
+      palIdx: 0,
       toast: null,
 
       toggleTheme: () => set((s) => ({ dark: !s.dark })),
@@ -127,6 +137,11 @@ export const useUI = create<UIState>()(
       setWFilter: (wFilter) => set({ wFilter }),
       setWTagF: (wTagF) => set({ wTagF }),
       setThread: (thread) => set({ thread }),
+
+      openPalette: () => set({ pal: '', palIdx: 0 }),
+      closePalette: () => set({ pal: null }),
+      setPalQ: (pal) => set({ pal, palIdx: 0 }),
+      movePalette: (dir) => set((s) => ({ palIdx: s.palIdx + dir })),
 
       unlockJournal: () => {
         set({ jLocked: false })

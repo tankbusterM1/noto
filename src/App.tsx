@@ -5,6 +5,8 @@ import { Sidebar } from './shell/Sidebar'
 import { Router } from './screens/Router'
 import { Toast } from './components/Toast'
 import { WatchDrawer } from './components/WatchDrawer'
+import { ThreadDrawer } from './components/ThreadDrawer'
+import { CommandPalette } from './components/CommandPalette'
 import { useKeyboard } from './shell/useKeyboard'
 
 export default function App() {
@@ -51,6 +53,8 @@ export default function App() {
             </main>
           </div>
           <WatchDrawer />
+          <ThreadDrawer />
+          <CommandPalette />
           <Toast />
         </>
       ) : (

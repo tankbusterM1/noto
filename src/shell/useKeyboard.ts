@@ -17,6 +17,19 @@ export function useKeyboard() {
       const target = e.target as HTMLElement | null
       const typing = !!target && (target.tagName === 'INPUT' || target.isContentEditable)
 
+      // ⌘/Ctrl-K toggles the palette from anywhere.
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault()
+        if (ui.pal === null) ui.openPalette()
+        else ui.closePalette()
+        return
+      }
+      // While the palette is open, its input owns ↑/↓/↵; esc closes globally.
+      if (ui.pal !== null) {
+        if (e.key === 'Escape') ui.closePalette()
+        return
+      }
+
       const s = data.session
       if (s && ui.screen === 'session' && s.idx < s.queue.length) {
         if (!data.sRevealed) {

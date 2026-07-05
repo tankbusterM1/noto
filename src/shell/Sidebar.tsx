@@ -50,6 +50,7 @@ export function Sidebar() {
   const setScreen = useUI((st) => st.setScreen)
   const toggleSlim = useUI((st) => st.toggleSlim)
   const toggleTheme = useUI((st) => st.toggleTheme)
+  const openPalette = useUI((st) => st.openPalette)
 
   const notes = useData((st) => st.notes)
   const srs = useData((st) => st.srs)
@@ -173,10 +174,11 @@ export function Sidebar() {
           {vaultFiles} files
         </div>
 
-        {/* Search opens the ⌘K palette — wired in step 5. */}
+        {/* Search opens the ⌘K palette. */}
         <button
           type="button"
           className={s.footBtn}
+          onClick={openPalette}
           title="Search everything · ⌘K"
         >
           <span className={s.footIcon}>
