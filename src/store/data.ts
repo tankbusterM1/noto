@@ -5,6 +5,7 @@ import { todayEpochDay } from '../lib/dates'
 import { domainOf } from '../lib/format'
 import { applyGrade, dueNotes } from '../lib/srs'
 import { notesIn, kidsOf } from '../lib/tree'
+import { blockId } from '../lib/types'
 import { useUI } from './ui'
 import type {
   Block,
@@ -179,7 +180,7 @@ async function hydrateImpl(set: (partial: Partial<DataState>) => void): Promise<
       tags: r.tags,
       created: r.createdDay - today,
       updated: r.updatedDay - today,
-      blocks: r.blocks,
+      blocks: r.blocks.map((b, i) => (b.id ? b : { ...b, id: `${r.id}-b${i}` })),
     }))
     .sort((a, b) => numId(a.id) - numId(b.id))
 
@@ -413,7 +414,7 @@ export const useData = create<DataState>()((set, get) => ({
       tags: [],
       created: 0,
       updated: 0,
-      blocks: [{ t: 'p', text: '' }],
+      blocks: [{ id: blockId(), t: 'p', text: '' }],
     }
     set({ notes: [...get().notes, note] })
     const today = todayEpochDay()
@@ -437,7 +438,7 @@ export const useData = create<DataState>()((set, get) => ({
   },
   appendBlock: (noteId, block) => {
     const n = get().notes.find((x) => x.id === noteId)
-    if (n) get().updateNote(noteId, { blocks: [...n.blocks, block] })
+    if (n) get().updateNote(noteId, { blocks: [...n.blocks, { ...block, id: block.id ?? blockId() }] })
   },
   deleteNote: (id) => {
     const srs = { ...get().srs }

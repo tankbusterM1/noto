@@ -22,6 +22,8 @@ export type BlockType =
   | 'call'
 
 export interface Block {
+  /** Stable id so the editor can keep uncontrolled DOM across inserts/merges. */
+  id?: string
   t: BlockType
   text?: string
   items?: string[]
@@ -29,6 +31,11 @@ export interface Block {
   domain?: string
   /** Image blocks: an uploaded data-URL (local-first). */
   src?: string
+}
+
+/** Fresh block id. */
+export function blockId(): string {
+  return 'b' + Math.random().toString(36).slice(2, 10)
 }
 
 export interface Folder {

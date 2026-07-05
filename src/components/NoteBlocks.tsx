@@ -141,7 +141,7 @@ export function NoteBlocks({ note, readOnly = false }: { note: Note; readOnly?: 
 }
 
 /** Editable image block: click / drop to upload; stored as a data-URL. */
-function ImgBlock({
+export function ImgBlock({
   src,
   caption,
   onSrc,

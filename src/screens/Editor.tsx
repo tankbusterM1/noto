@@ -6,7 +6,7 @@ import { folderPath } from '../lib/tree'
 import { words } from '../lib/format'
 import { ago, addDays, fmtShort } from '../lib/dates'
 import { MONO, SERIF, rise } from '../lib/ui'
-import { NoteBlocks } from '../components/NoteBlocks'
+import { NoteEditor } from '../components/NoteEditor'
 import { ImageIcon, LinkIcon, TrashIcon } from '../components/icons'
 
 const railLabel: CSSProperties = {
@@ -70,7 +70,6 @@ export function Editor() {
     armTimer.current = setTimeout(() => setArmed(false), 3000)
   }
 
-  const exec = (cmd: string, arg?: string) => () => document.execCommand(cmd, false, arg)
   const append = (block: Parameters<typeof appendBlock>[1], msg: string) => () => {
     appendBlock(note.id, block)
     showToast(msg)
@@ -112,21 +111,18 @@ export function Editor() {
               boxShadow: '0 4px 14px rgba(38,30,14,0.06)',
             }}
           >
-            <button className="tbtn" style={tbtn} onClick={exec('formatBlock', 'h2')}>H1</button>
-            <button className="tbtn" style={tbtn} onClick={exec('formatBlock', 'h3')}>H2</button>
+            <button className="tbtn" title="Heading  ( # )" style={tbtn} onClick={append({ t: 'h2', text: '' }, 'Heading added')}>H</button>
+            <button className="tbtn" title="Bulleted list  ( - )" style={{ ...tbtn, fontFamily: 'inherit', fontSize: 12, fontWeight: 400, padding: '6px 10px' }} onClick={append({ t: 'ul', items: [''] }, 'List added')}>• list</button>
+            <button className="tbtn" title="Quote  ( > )" style={{ ...tbtn, fontFamily: SERIF, fontSize: 14, fontWeight: 400 }} onClick={append({ t: 'q', text: '' }, 'Quote added')}>❝</button>
+            <button className="tbtn" title="Code block  ( ``` )" style={tbtn} onClick={append({ t: 'code', lang: 'python', text: '' }, 'Code block added')}>&lt;/&gt;</button>
             <div style={{ width: 1, background: 'var(--ln)', margin: '4px 3px' }} />
-            <button className="tbtn" style={{ ...tbtn, color: 'var(--ink)', fontFamily: 'inherit', fontSize: 12.5, fontWeight: 700, padding: '6px 10px' }} onClick={exec('bold')}>B</button>
-            <button className="tbtn" style={{ ...tbtn, color: 'var(--ink)', fontFamily: SERIF, fontStyle: 'italic', fontSize: 13.5, fontWeight: 400, padding: '6px 10px' }} onClick={exec('italic')}>I</button>
-            <button className="tbtn" style={{ ...tbtn, fontFamily: 'inherit', fontSize: 12, fontWeight: 400, padding: '6px 10px' }} onClick={exec('insertUnorderedList')}>• list</button>
-            <button className="tbtn" title="Code block — any language" style={tbtn} onClick={append({ t: 'code', lang: 'python', text: '# new code block — click the language chip to switch\n' }, 'Code block added · any language')}>&lt;/&gt;</button>
-            <button className="tbtn" title="Image block" style={{ ...tbtn, display: 'flex', alignItems: 'center', color: 'var(--ink2)' }} onClick={append({ t: 'img', text: 'caption…' }, 'Image block added at the end')}>
+            <button className="tbtn" title="Callout" style={{ ...tbtn, display: 'flex', alignItems: 'center', padding: '6px 8px' }} onClick={append({ t: 'call', text: '' }, 'Callout added')}>💡</button>
+            <button className="tbtn" title="Image" style={{ ...tbtn, display: 'flex', alignItems: 'center', color: 'var(--ink2)' }} onClick={append({ t: 'img', text: 'caption…' }, 'Image block added')}>
               <ImageIcon />
             </button>
-            <button className="tbtn" title="Link card" style={{ ...tbtn, display: 'flex', alignItems: 'center', color: 'var(--ink2)' }} onClick={append({ t: 'link', text: 'New link — rename me', domain: 'example.com' }, 'Link card added at the end')}>
+            <button className="tbtn" title="Link card" style={{ ...tbtn, display: 'flex', alignItems: 'center', color: 'var(--ink2)' }} onClick={append({ t: 'link', text: 'New link — rename me', domain: 'example.com' }, 'Link card added')}>
               <LinkIcon />
             </button>
-            <button className="tbtn" style={{ ...tbtn, fontFamily: SERIF, fontSize: 14, fontWeight: 400 }} onClick={append({ t: 'q', text: 'A line worth keeping…' }, 'Quote added at the end')}>❝</button>
-            <button className="tbtn" style={{ ...tbtn, fontFamily: 'inherit', fontSize: 12, fontWeight: 400, padding: '6px 10px' }} onClick={exec('insertHorizontalRule')}>—</button>
           </div>
 
           <h1
@@ -163,7 +159,7 @@ export function Editor() {
             />
           </div>
 
-          <NoteBlocks note={note} />
+          <NoteEditor note={note} />
         </div>
       </div>
 

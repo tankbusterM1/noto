@@ -1,15 +1,16 @@
 import { db, type FolderRow, type NoteRow, type SrsRow, type LedgerRow, type WatchRow } from './db'
 import { todayEpochDay } from '../lib/dates'
-import type {
-  Block,
-  Goal,
-  Grade,
-  JournalEntry,
-  Ranged,
-  Ritual,
-  Todo,
-  Watch,
-  WeekItem,
+import {
+  blockId,
+  type Block,
+  type Goal,
+  type Grade,
+  type JournalEntry,
+  type Ranged,
+  type Ritual,
+  type Todo,
+  type Watch,
+  type WeekItem,
 } from '../lib/types'
 
 /*
@@ -191,7 +192,7 @@ export async function seedDatabase(): Promise<void> {
     tags: n.tags,
     createdDay: T + n.created,
     updatedDay: T + n.updated,
-    blocks: n.blocks,
+    blocks: n.blocks.map((b) => ({ ...b, id: blockId() })),
   }))
 
   const srsRows: SrsRow[] = []
