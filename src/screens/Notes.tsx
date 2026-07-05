@@ -4,7 +4,7 @@ import { kidsOf, notesIn, countRec, pathOf } from '../lib/tree'
 import { snippet } from '../lib/format'
 import { MONO, SERIF, kicker, rise } from '../lib/ui'
 import { NoteCard } from '../components/NoteCard'
-import { GridIcon, FolderIcon, TreeCaret, SearchIcon, PlusIcon } from '../components/icons'
+import { GridIcon, FolderIcon, TreeCaret, SearchIcon, PlusIcon, CloseIcon } from '../components/icons'
 import type { Folder } from '../lib/types'
 
 interface Row {
@@ -20,14 +20,19 @@ export function Notes() {
   const notes = useData((s) => s.notes)
   const folders = useData((s) => s.folders)
   const newNote = useData((s) => s.newNote)
-  const showToast = useUI((s) => s.showToast)
+  const newFolder = useData((s) => s.newFolder)
+  const renameFolder = useData((s) => s.renameFolder)
+  const deleteFolder = useData((s) => s.deleteFolder)
   const selFolder = useUI((s) => s.selFolder)
   const libQ = useUI((s) => s.libQ)
   const expanded = useUI((s) => s.expanded)
+  const renamingFolder = useUI((s) => s.renamingFolder)
   const setSelFolder = useUI((s) => s.setSelFolder)
   const setLibQ = useUI((s) => s.setLibQ)
   const setExpanded = useUI((s) => s.setExpanded)
   const toggleExpand = useUI((s) => s.toggleExpand)
+  const startRenameFolder = useUI((s) => s.startRenameFolder)
+  const stopRenameFolder = useUI((s) => s.stopRenameFolder)
 
   const q = libQ.toLowerCase()
   const isSearching = q.length > 0
@@ -139,43 +144,85 @@ export function Notes() {
           </div>
           <div style={{ height: 1, background: 'var(--ln)', margin: '8px 2px' }} />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            {rows.map((r) => (
-              <div
-                key={r.folder.id}
-                className="tint"
-                onClick={() => pickFolder(r.folder.id)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 7,
-                  padding: '6px 8px 6px 0',
-                  paddingLeft: 4 + r.depth * 16,
-                  borderRadius: 8,
-                  cursor: 'pointer',
-                  fontSize: 13,
-                  fontWeight: r.active ? 600 : 500,
-                  color: r.active ? 'var(--ink)' : 'var(--ink2)',
-                  background: r.active ? 'var(--sf2)' : undefined,
-                }}
-              >
+            {rows.map((r) => {
+              const renaming = renamingFolder === r.folder.id
+              return (
                 <div
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    toggleExpand(r.folder.id)
+                  key={r.folder.id}
+                  className="frow tint"
+                  onClick={() => {
+                    if (!renaming) pickFolder(r.folder.id)
                   }}
-                  style={{ width: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, borderRadius: 4, opacity: r.hasKids ? 1 : 0 }}
+                  onDoubleClick={(e) => {
+                    e.stopPropagation()
+                    startRenameFolder(r.folder.id)
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 7,
+                    padding: '6px 8px 6px 0',
+                    paddingLeft: 4 + r.depth * 16,
+                    borderRadius: 8,
+                    cursor: 'pointer',
+                    fontSize: 13,
+                    fontWeight: r.active ? 600 : 500,
+                    color: r.active ? 'var(--ink)' : 'var(--ink2)',
+                    background: r.active ? 'var(--sf2)' : undefined,
+                  }}
                 >
-                  <TreeCaret style={{ transition: 'transform 0.18s ease', transform: r.open ? 'rotate(90deg)' : undefined }} />
+                  <div
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      toggleExpand(r.folder.id)
+                    }}
+                    style={{ width: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, borderRadius: 4, opacity: r.hasKids ? 1 : 0 }}
+                  >
+                    <TreeCaret style={{ transition: 'transform 0.18s ease', transform: r.open ? 'rotate(90deg)' : undefined }} />
+                  </div>
+                  <FolderIcon style={{ flexShrink: 0 }} />
+                  {renaming ? (
+                    <input
+                      autoFocus
+                      defaultValue={r.folder.name}
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') e.currentTarget.blur()
+                        else if (e.key === 'Escape') stopRenameFolder()
+                      }}
+                      onBlur={(e) => {
+                        renameFolder(r.folder.id, e.target.value)
+                        stopRenameFolder()
+                      }}
+                      style={{ flex: 1, minWidth: 0, border: '1px solid var(--am)', borderRadius: 5, background: 'var(--bg)', color: 'var(--ink)', fontSize: 13, fontFamily: 'inherit', padding: '1px 5px', outline: 'none' }}
+                    />
+                  ) : (
+                    <>
+                      <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title="Double-click to rename">
+                        {r.folder.name}
+                      </span>
+                      <span
+                        className="frow-del"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          deleteFolder(r.folder.id)
+                        }}
+                        title="Delete folder"
+                        style={{ display: 'flex', alignItems: 'center', color: 'var(--ink3)', cursor: 'pointer', paddingRight: 2 }}
+                      >
+                        <CloseIcon size={9} />
+                      </span>
+                      <span style={{ fontFamily: MONO, fontSize: 10, color: 'var(--ink3)', paddingRight: 6 }}>{r.count}</span>
+                    </>
+                  )}
                 </div>
-                <FolderIcon style={{ flexShrink: 0 }} />
-                <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.folder.name}</span>
-                <span style={{ fontFamily: MONO, fontSize: 10, color: 'var(--ink3)', paddingRight: 6 }}>{r.count}</span>
-              </div>
-            ))}
+              )
+            })}
           </div>
           <div
-            onClick={() => showToast('New folder — not wired in this prototype')}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', marginTop: 8, borderRadius: 8, cursor: 'pointer', fontSize: 12, color: 'var(--ink3)' }}
+            className="crumb"
+            onClick={() => newFolder(selFolder === 'all' ? null : selFolder)}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', marginTop: 8, borderRadius: 8, cursor: 'pointer', fontSize: 12, color: 'var(--ink3)', transition: 'color 0.15s ease' }}
           >
             <PlusIcon size={11} />
             New folder

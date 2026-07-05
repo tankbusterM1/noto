@@ -121,6 +121,21 @@
   color: var(--ink) !important;
 }
 
+/* folder-tree row: reveal the delete affordance on hover */
+.frow-del {
+  opacity: 0;
+  transition:
+    opacity 0.12s ease,
+    color 0.12s ease;
+}
+.frow:hover .frow-del {
+  opacity: 0.65;
+}
+.frow-del:hover {
+  opacity: 1 !important;
+  color: var(--g1);
+}
+
 /* editor formatting-toolbar buttons */
 .tbtn {
   transition: background 0.15s ease;

@@ -1,14 +1,13 @@
-import type { CSSProperties } from 'react'
+import { useRef, useState, type CSSProperties } from 'react'
 import { useData } from '../store/data'
 import { useUI } from '../store/ui'
 import { dueLabel, gradeColor, gradeName } from '../lib/srs'
-import { folderName, folderPath } from '../lib/tree'
+import { folderPath } from '../lib/tree'
 import { words } from '../lib/format'
 import { ago, addDays, fmtShort } from '../lib/dates'
 import { MONO, SERIF, rise } from '../lib/ui'
 import { NoteBlocks } from '../components/NoteBlocks'
-import { TagLink } from '../components/TagLink'
-import { ImageIcon, LinkIcon } from '../components/icons'
+import { ImageIcon, LinkIcon, TrashIcon } from '../components/icons'
 
 const railLabel: CSSProperties = {
   fontFamily: MONO,
@@ -42,15 +41,34 @@ export function Editor() {
   const srs = useData((s) => s.srs)
   const appendBlock = useData((s) => s.appendBlock)
   const updateNote = useData((s) => s.updateNote)
+  const moveNote = useData((s) => s.moveNote)
+  const deleteNote = useData((s) => s.deleteNote)
+  const noteAddTag = useData((s) => s.noteAddTag)
+  const noteRemoveTag = useData((s) => s.noteRemoveTag)
   const addToReview = useData((s) => s.addToReview)
   const startSession = useData((s) => s.startSession)
   const noteId = useUI((s) => s.noteId)
   const openNote = useUI((s) => s.openNote)
   const setScreen = useUI((s) => s.setScreen)
+  const setThread = useUI((s) => s.setThread)
   const showToast = useUI((s) => s.showToast)
+
+  const [tagInput, setTagInput] = useState('')
+  const [armed, setArmed] = useState(false)
+  const armTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   const note = notes.find((n) => n.id === noteId) ?? notes[0]
   const sr = srs[note.id]
+
+  const armDelete = () => {
+    if (armed) {
+      deleteNote(note.id)
+      return
+    }
+    setArmed(true)
+    clearTimeout(armTimer.current)
+    armTimer.current = setTimeout(() => setArmed(false), 3000)
+  }
 
   const exec = (cmd: string, arg?: string) => () => document.execCommand(cmd, false, arg)
   const append = (block: Parameters<typeof appendBlock>[1], msg: string) => () => {
@@ -121,10 +139,28 @@ export function Editor() {
           >
             {note.title}
           </h1>
-          <div style={{ display: 'flex', gap: 7, marginBottom: 26 }}>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 26, flexWrap: 'wrap', alignItems: 'center' }}>
             {note.tags.map((t) => (
-              <TagLink key={t} tag={t} variant="amber" size={11} />
+              <span key={t} className="tag-lift" onClick={() => setThread(t)} title="Pull this thread" style={{ display: 'flex', alignItems: 'center', gap: 3, fontFamily: MONO, fontSize: 11, color: 'var(--am)', cursor: 'pointer' }}>
+                #{t}
+                <span className="tag-x" onClick={(e) => { e.stopPropagation(); noteRemoveTag(note.id, t) }} style={{ width: 14, height: 14, borderRadius: 99, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink3)' }}>
+                  ×
+                </span>
+              </span>
             ))}
+            <input
+              value={tagInput}
+              onChange={(e) => setTagInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && tagInput.trim()) {
+                  const t = noteAddTag(note.id, tagInput)
+                  setTagInput('')
+                  if (t) showToast('Tagged #' + t)
+                }
+              }}
+              placeholder="+ tag"
+              style={{ border: '1px dashed var(--ln)', outline: 'none', background: 'transparent', fontFamily: MONO, fontSize: 11, color: 'var(--ink)', borderRadius: 999, padding: '3px 9px', width: 64 }}
+            />
           </div>
 
           <NoteBlocks note={note} />
@@ -210,7 +246,21 @@ export function Editor() {
         <div>
           <div style={{ ...railLabel, marginBottom: 10 }}>Details</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 9, fontSize: 12.5 }}>
-            <Row k="Folder" v={folderName(folders, note.folderId)} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: 'var(--ink3)' }}>Folder</span>
+              <select
+                value={note.folderId}
+                onChange={(e) => moveNote(note.id, e.target.value)}
+                title="Move to folder"
+                style={{ border: '1px solid var(--ln)', background: 'var(--sf)', color: 'var(--ink)', fontFamily: 'inherit', fontSize: 12, fontWeight: 500, borderRadius: 7, padding: '3px 6px', maxWidth: 165, cursor: 'pointer', outline: 'none' }}
+              >
+                {folders.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {folderPath(folders, f.id)}
+                  </option>
+                ))}
+              </select>
+            </div>
             <Row k="Created" v={fmtShort(addDays(note.created))} />
             <Row k="Words" v={String(words(note))} />
             <div style={{ height: 1, background: 'var(--ln)', margin: '8px 0 4px' }} />
@@ -234,6 +284,15 @@ export function Editor() {
               </div>
             )}
           </div>
+          <div style={{ height: 1, background: 'var(--ln)', margin: '18px 0 12px' }} />
+          <button
+            onClick={armDelete}
+            className="del-btn"
+            style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, border: `1px solid ${armed ? 'var(--g1)' : 'var(--ln)'}`, background: 'transparent', color: armed ? 'var(--g1)' : 'var(--ink2)', borderRadius: 9, padding: '8px 0', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+          >
+            <TrashIcon size={12} />
+            {armed ? 'Click again to delete' : 'Delete note'}
+          </button>
         </div>
       </div>
     </div>

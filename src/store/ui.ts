@@ -44,6 +44,7 @@ interface UIState {
   selFolder: string
   libQ: string
   expanded: Record<string, boolean>
+  renamingFolder: string | null
   tSeg: TodoSeg
   wFilter: WatchFilter
   wTagF: string
@@ -71,6 +72,8 @@ interface UIState {
   setLibQ: (q: string) => void
   setExpanded: (map: Record<string, boolean>) => void
   toggleExpand: (id: string) => void
+  startRenameFolder: (id: string) => void
+  stopRenameFolder: () => void
   setTSeg: (seg: TodoSeg) => void
   setWFilter: (f: WatchFilter) => void
   setWTagF: (t: string) => void
@@ -107,6 +110,7 @@ export const useUI = create<UIState>()(
       selFolder: 'all',
       libQ: '',
       expanded: { f1: true, f6: true },
+      renamingFolder: null,
       tSeg: 'today',
       wFilter: 'All',
       wTagF: 'All',
@@ -133,6 +137,8 @@ export const useUI = create<UIState>()(
       setExpanded: (expanded) => set({ expanded }),
       toggleExpand: (id) =>
         set((s) => ({ expanded: { ...s.expanded, [id]: !s.expanded[id] } })),
+      startRenameFolder: (id) => set({ renamingFolder: id }),
+      stopRenameFolder: () => set({ renamingFolder: null }),
       setTSeg: (tSeg) => set({ tSeg }),
       setWFilter: (wFilter) => set({ wFilter }),
       setWTagF: (wTagF) => set({ wTagF }),

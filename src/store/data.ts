@@ -4,6 +4,7 @@ import { seedDatabase } from '../data/seed'
 import { todayEpochDay } from '../lib/dates'
 import { domainOf } from '../lib/format'
 import { applyGrade, dueNotes } from '../lib/srs'
+import { notesIn, kidsOf } from '../lib/tree'
 import { useUI } from './ui'
 import type {
   Block,
@@ -73,7 +74,17 @@ interface DataState {
   newNote: () => void
   updateNote: (id: string, patch: Partial<Note>) => void
   appendBlock: (noteId: string, block: Block) => void
+  deleteNote: (id: string) => void
+  moveNote: (id: string, folderId: string) => void
+  noteAddTag: (id: string, rawTag: string) => string
+  noteRemoveTag: (id: string, tag: string) => void
+  newFolder: (parentId: string | null) => void
+  renameFolder: (id: string, name: string) => void
+  deleteFolder: (id: string) => void
 }
+
+/** Shared tag normalizer: lowercase, spaces → hyphens. */
+const normalizeTag = (raw: string) => raw.trim().toLowerCase().replace(/\s+/g, '-')
 
 const numId = (id: string) => parseInt(id.replace(/\D/g, ''), 10) || 0
 const WATCH_HUES = [358, 215, 165, 262, 32, 205]
@@ -371,5 +382,80 @@ export const useData = create<DataState>()((set, get) => ({
   appendBlock: (noteId, block) => {
     const n = get().notes.find((x) => x.id === noteId)
     if (n) get().updateNote(noteId, { blocks: [...n.blocks, block] })
+  },
+  deleteNote: (id) => {
+    const srs = { ...get().srs }
+    delete srs[id]
+    set({
+      notes: get().notes.filter((n) => n.id !== id),
+      srs,
+      todos: get().todos.map((t) => (t.ref?.type === 'note' && t.ref.id === id ? { ...t, ref: undefined } : t)),
+    })
+    void db.notes.delete(id)
+    void db.srs.delete(id)
+    void db.ledger.where('noteId').equals(id).delete()
+    get().todos.forEach((t) => {
+      if (t.ref?.type === 'note' && t.ref.id === id) void db.todos.update(t.id, { ref: undefined })
+    })
+    const ui = useUI.getState()
+    if (ui.noteId === id) ui.setScreen('notes')
+    ui.showToast('Note deleted')
+  },
+  moveNote: (id, folderId) => {
+    get().updateNote(id, { folderId })
+  },
+  noteAddTag: (id, rawTag) => {
+    const t = normalizeTag(rawTag)
+    if (!t) return ''
+    if (!get().tagsPool.includes(t)) {
+      const pool = [...get().tagsPool, t]
+      set({ tagsPool: pool })
+      void db.meta.put({ key: 'tagsPool', value: pool })
+    }
+    const n = get().notes.find((x) => x.id === id)
+    if (n && !n.tags.includes(t)) get().updateNote(id, { tags: [...n.tags, t] })
+    return t
+  },
+  noteRemoveTag: (id, tag) => {
+    const n = get().notes.find((x) => x.id === id)
+    if (n) get().updateNote(id, { tags: n.tags.filter((x) => x !== tag) })
+  },
+  newFolder: (parentId) => {
+    const id = 'f' + Date.now()
+    set({ folders: [...get().folders, { id, name: 'New folder', parentId }] })
+    void db.folders.add({ id, name: 'New folder', parentId })
+    const ui = useUI.getState()
+    if (parentId) ui.setExpanded({ ...ui.expanded, [parentId]: true })
+    ui.setSelFolder(id)
+    ui.startRenameFolder(id)
+  },
+  renameFolder: (id, name) => {
+    const nm = name.trim() || 'Untitled folder'
+    set({ folders: get().folders.map((f) => (f.id === id ? { ...f, name: nm } : f)) })
+    void db.folders.update(id, { name: nm })
+  },
+  deleteFolder: (id) => {
+    const folders = get().folders
+    const folder = folders.find((f) => f.id === id)
+    if (!folder) return
+    const parent = folder.parentId
+    const directNotes = notesIn(get().notes, id)
+    if (parent === null && directNotes.length > 0) {
+      useUI.getState().showToast("Move this folder's notes before deleting a top-level folder")
+      return
+    }
+    const childFolders = kidsOf(folders, id)
+    set({
+      folders: folders
+        .map((f) => (f.parentId === id ? { ...f, parentId: parent } : f))
+        .filter((f) => f.id !== id),
+      notes: get().notes.map((n) => (n.folderId === id ? { ...n, folderId: parent as string } : n)),
+    })
+    childFolders.forEach((f) => void db.folders.update(f.id, { parentId: parent }))
+    directNotes.forEach((n) => void db.notes.update(n.id, { folderId: parent as string }))
+    void db.folders.delete(id)
+    const ui = useUI.getState()
+    if (ui.selFolder === id) ui.setSelFolder('all')
+    ui.showToast('Folder deleted')
   },
 }))
