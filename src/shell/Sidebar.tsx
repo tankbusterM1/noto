@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react'
 import { useUI, type Screen } from '../store/ui'
 import { useData } from '../store/data'
+import { reviewsLastWeek } from '../lib/srs'
+import { todayEpochDay } from '../lib/dates'
 import {
   Caret,
   TodayIcon,
@@ -57,7 +59,7 @@ export function Sidebar() {
   const todos = useData((st) => st.todos)
   const watch = useData((st) => st.watch)
   const journal = useData((st) => st.journal)
-  const doneToday = useData((st) => st.doneToday)
+  const ledgerByDay = useData((st) => st.ledgerByDay)
 
   const notesCount = notes.length
   const todosLeft = todos.filter((t) => !t.done).length
@@ -66,7 +68,7 @@ export function Sidebar() {
     return sr && sr.due <= 0
   }).length
   const inReview = notes.filter((n) => srs[n.id]).length
-  const reviewsWeek = 23 + doneToday
+  const reviewsWeek = reviewsLastWeek(ledgerByDay, todayEpochDay())
   const vaultFiles = notes.length + watch.length + journal.length + todos.length
 
   const width = screen === 'session' ? 0 : slim ? 64 : 236

@@ -150,6 +150,35 @@ export function forecastCounts(
   return counts
 }
 
+/** Total reviews recorded across the ledger. */
+export function reviewTotal(byDay: Record<number, number>): number {
+  return Object.values(byDay).reduce((a, b) => a + b, 0)
+}
+
+/** Longest run of consecutive days that had at least one review. */
+export function longestReviewStreak(byDay: Record<number, number>): number {
+  const days = Object.keys(byDay)
+    .map(Number)
+    .filter((d) => byDay[d] > 0)
+    .sort((a, b) => a - b)
+  let longest = 0
+  let cur = 0
+  let prev: number | null = null
+  for (const d of days) {
+    cur = prev !== null && d === prev + 1 ? cur + 1 : 1
+    longest = Math.max(longest, cur)
+    prev = d
+  }
+  return longest
+}
+
+/** Reviews over the last 7 days (today + 6 back). */
+export function reviewsLastWeek(byDay: Record<number, number>, todayEpochDay: number): number {
+  let sum = 0
+  for (let k = 0; k < 7; k++) sum += byDay[todayEpochDay - k] ?? 0
+  return sum
+}
+
 export interface Band {
   name: string
   color: string

@@ -54,6 +54,8 @@ interface DataState {
   scratchpad: string
   tagsPool: string[]
   doneToday: number
+  /** Review counts keyed by absolute epoch-day (from the ledger). */
+  ledgerByDay: Record<number, number>
   session: Session | null
 
   hydrate: () => Promise<void>
@@ -193,6 +195,10 @@ async function hydrateImpl(set: (partial: Partial<DataState>) => void): Promise<
   const scratchpad =
     (metaRows.find((m) => m.key === 'scratchpad')?.value as string | undefined) ?? ''
 
+  const ledgerByDay: Record<number, number> = {}
+  for (const l of ledgerRows) ledgerByDay[l.day] = (ledgerByDay[l.day] ?? 0) + 1
+  const doneToday = ledgerByDay[today] ?? 0
+
   set({
     hydrated: true,
     folders,
@@ -207,6 +213,8 @@ async function hydrateImpl(set: (partial: Partial<DataState>) => void): Promise<
     journal,
     tagsPool,
     scratchpad,
+    ledgerByDay,
+    doneToday,
   })
 }
 
@@ -225,6 +233,7 @@ export const useData = create<DataState>()((set, get) => ({
   scratchpad: '',
   tagsPool: [],
   doneToday: 0,
+  ledgerByDay: {},
   session: null,
 
   hydrate: () => {
@@ -262,6 +271,7 @@ export const useData = create<DataState>()((set, get) => ({
         log: [...s.log, g],
       },
       doneToday: get().doneToday + 1,
+      ledgerByDay: { ...get().ledgerByDay, [today]: (get().ledgerByDay[today] ?? 0) + 1 },
     })
     useUI.getState().showToast(toast)
   },

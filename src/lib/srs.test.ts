@@ -10,6 +10,9 @@ import {
   dueNotes,
   forecastCounts,
   memoryBands,
+  reviewTotal,
+  longestReviewStreak,
+  reviewsLastWeek,
   EASE_FLOOR,
 } from './srs'
 import type { Note, SrsState } from './types'
@@ -162,5 +165,21 @@ describe('collection derivations', () => {
   })
   it('memoryBands: overdue / due now / this week / settled', () => {
     expect(memoryBands(notes, srs).map((b) => b.n)).toEqual([1, 1, 1, 1])
+  })
+})
+
+describe('review stats from the ledger', () => {
+  it('reviewTotal sums all days', () => {
+    expect(reviewTotal({ 100: 2, 101: 3, 105: 1 })).toBe(6)
+    expect(reviewTotal({})).toBe(0)
+  })
+  it('longestReviewStreak finds the longest consecutive run', () => {
+    expect(longestReviewStreak({ 10: 1, 11: 2, 12: 1, 20: 1, 21: 1 })).toBe(3)
+    expect(longestReviewStreak({ 5: 1 })).toBe(1)
+    expect(longestReviewStreak({})).toBe(0)
+  })
+  it('reviewsLastWeek sums today..today-6 (inclusive)', () => {
+    // today = 100: days 100, 99, 94 are in range; 93 (=100-7) is not.
+    expect(reviewsLastWeek({ 100: 1, 99: 2, 94: 5, 93: 9 }, 100)).toBe(8)
   })
 })

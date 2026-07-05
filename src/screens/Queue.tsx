@@ -9,9 +9,11 @@ import {
   gradeName,
   gradeColor,
   inkOpacity,
+  reviewTotal,
+  longestReviewStreak,
 } from '../lib/srs'
 import { folderPath } from '../lib/tree'
-import { addDays, fmtShort } from '../lib/dates'
+import { addDays, fmtShort, todayEpochDay, dateFromEpochDay } from '../lib/dates'
 import { MONO, SERIF, kicker, rise } from '../lib/ui'
 import { useMounted } from '../lib/useMounted'
 import type { Note } from '../lib/types'
@@ -37,6 +39,7 @@ export function Queue() {
   const notes = useData((s) => s.notes)
   const srs = useData((s) => s.srs)
   const doneToday = useData((s) => s.doneToday)
+  const ledgerByDay = useData((s) => s.ledgerByDay)
   const startSession = useData((s) => s.startSession)
   const inkFade = useUI((s) => s.inkFade)
   const openNote = useUI((s) => s.openNote)
@@ -55,31 +58,33 @@ export function Queue() {
     op: c === 0 ? 0.22 : 0.45 + (0.55 * c) / maxC,
   }))
 
-  // Year-in-ink heatmap (deterministic pseudo-data, ported verbatim).
+  // Year-in-ink heatmap — real reviews per day from the SRS ledger.
   const now = new Date()
-  const inkDow = (now.getDay() + 6) % 7
+  const today = todayEpochDay()
+  const inkDow = (now.getDay() + 6) % 7 // today's column position (0=Mon … 6=Sun)
+  const ramp = [0, 0.3, 0.55, 0.8, 1]
   const weeks: { tip: string; bg: string; opacity?: number }[][] = []
-  let inkTotal = 0
   for (let w = 0; w < 26; w++) {
     const days: { tip: string; bg: string; opacity?: number }[] = []
     for (let d = 0; d < 7; d++) {
-      const idx = w * 7 + d
-      const isLast = w === 25
-      const isToday = isLast && d === inkDow
-      const isFuture = isLast && d > inkDow
-      let lvl = Math.floor(Math.abs(Math.sin(idx * 12.9898) * 43758.5453)) % 5
-      if (idx % 11 === 3) lvl = 0
-      const cnt = isFuture ? 0 : lvl * 3 + (lvl ? 1 : 0)
-      inkTotal += cnt
+      const daysAgo = (25 - w) * 7 + (inkDow - d)
+      const isFuture = daysAgo < 0
+      const epochDay = today - daysAgo
+      const isToday = daysAgo === 0
+      const cnt = isFuture ? 0 : ledgerByDay[epochDay] ?? 0
+      const lvl = cnt === 0 ? 0 : cnt <= 1 ? 1 : cnt <= 3 ? 2 : cnt <= 6 ? 3 : 4
       days.push({
-        tip: isToday ? `${doneToday + cnt} reviews · today` : `${cnt} reviews`,
+        tip: isFuture
+          ? ''
+          : `${cnt} ${cnt === 1 ? 'review' : 'reviews'} · ${isToday ? 'today' : fmtShort(dateFromEpochDay(epochDay))}`,
         bg: isToday ? 'var(--am)' : isFuture || lvl === 0 ? 'var(--sf2)' : 'var(--ac)',
-        opacity: !isToday && !isFuture && lvl > 0 ? Number((0.22 + lvl * 0.2).toFixed(2)) : undefined,
+        opacity: !isToday && !isFuture && lvl > 0 ? ramp[lvl] : undefined,
       })
     }
     weeks.push(days)
   }
-  const inkTotalLabel = (inkTotal + doneToday).toLocaleString('en-US')
+  const inkTotalLabel = reviewTotal(ledgerByDay).toLocaleString('en-US')
+  const inkStreak = longestReviewStreak(ledgerByDay)
 
   const upcoming = notes
     .filter((n) => srs[n.id] && srs[n.id].due > 0)
@@ -152,7 +157,7 @@ export function Queue() {
       <div style={{ background: 'var(--sf)', border: '1px solid var(--ln)', borderRadius: 16, padding: '18px 22px', marginBottom: 28 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 13, flexWrap: 'wrap', gap: 6 }}>
           <span style={microLabel}>year in ink · last 26 weeks</span>
-          <span style={{ fontFamily: MONO, fontSize: 10, color: 'var(--ink3)' }}>{inkTotalLabel} reviews inked · longest streak 21d</span>
+          <span style={{ fontFamily: MONO, fontSize: 10, color: 'var(--ink3)' }}>{inkTotalLabel} reviews inked · longest streak {inkStreak}d</span>
         </div>
         <div style={{ display: 'flex', gap: 3 }}>
           {weeks.map((days, wi) => (

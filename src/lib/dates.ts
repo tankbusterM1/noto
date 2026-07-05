@@ -20,6 +20,12 @@ export function todayEpochDay(): number {
   return epochDayOf(new Date())
 }
 
+/** Epoch-day integer → local Date at that calendar date. */
+export function dateFromEpochDay(n: number): Date {
+  const utc = new Date(n * MS_PER_DAY)
+  return new Date(utc.getUTCFullYear(), utc.getUTCMonth(), utc.getUTCDate())
+}
+
 /** Today + n days as a Date (matches the prototype's addDays). */
 export function addDays(n: number): Date {
   const d = new Date()
