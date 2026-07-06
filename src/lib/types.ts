@@ -31,6 +31,8 @@ export interface Block {
   items?: string[]
   lang?: string
   domain?: string
+  /** Link blocks: the full href (path/query/fragment preserved for round-trips). */
+  url?: string
   /** Image blocks: an uploaded data-URL (local-first). */
   src?: string
 }
@@ -70,6 +72,11 @@ export interface SrsState {
   ivl: number
   due: number
   hist: HistEntry[]
+  /** FSRS memory model (lib/adaptive.ts): stability in days. Derived from
+   * history on hydrate; undefined until the note's first review. */
+  stab?: number
+  /** FSRS difficulty 1–10. */
+  diff?: number
 }
 
 export interface Todo {

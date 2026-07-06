@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react'
 import { useData } from '../store/data'
-import { previewInterval, dueNotes } from '../lib/srs'
+import { dueNotes } from '../lib/srs'
+import { allHistory, calibration, previewNext, recallNow } from '../lib/adaptive'
 import { folderName } from '../lib/tree'
 import { MONO, SERIF } from '../lib/ui'
 import { NoteBlocks } from '../components/NoteBlocks'
@@ -34,6 +35,9 @@ export function Session() {
   const cur = curId ? notes.find((n) => n.id === curId) ?? null : null
   const cSrs = curId ? srs[curId] : null
   const pct = Math.round((100 * idx) / total)
+  // Personal calibration for the grade-button interval hints (adaptive model).
+  const factor = calibration(allHistory(srs)).factor
+  const recall = cSrs ? recallNow(cSrs) : null
 
   return (
     <div style={{ minHeight: '100%', display: 'flex', flexDirection: 'column', animation: 'fadein 0.3s ease both' }}>
@@ -61,6 +65,7 @@ export function Session() {
                 </span>
                 <span style={{ fontFamily: MONO, fontSize: 10, color: 'var(--ink3)' }}>
                   interval {cSrs.ivl}d · {cSrs.hist.length} past reviews
+                  {recall !== null ? ` · recall ~${Math.round(recall * 100)}%` : ''}
                 </span>
               </div>
               <h1 style={{ fontFamily: SERIF, fontSize: 34, fontWeight: 500, letterSpacing: '-0.015em', margin: '0 0 22px', lineHeight: 1.15 }}>{cur.title}</h1>
@@ -83,7 +88,7 @@ export function Session() {
                     style={{ border: `1px solid ${gr.color}`, background: 'transparent', color: gr.color, borderRadius: 12, padding: '11px 8px 9px', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 } as CSSProperties}
                   >
                     <span style={{ fontSize: 13.5, fontWeight: 600 }}>{gr.label}</span>
-                    <span style={{ fontFamily: MONO, fontSize: 9.5, opacity: 0.75 }}>{previewInterval(cSrs, gr.g)}</span>
+                    <span style={{ fontFamily: MONO, fontSize: 9.5, opacity: 0.75 }}>{previewNext(cSrs, gr.g, factor)}</span>
                   </button>
                 ))}
               </div>

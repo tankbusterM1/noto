@@ -5,6 +5,15 @@ import { todayEpochDay } from '../lib/dates'
 import { domainOf } from '../lib/format'
 import { scrapeLink, type Scraped } from '../lib/scrape'
 import { applyGrade, dueNotes } from '../lib/srs'
+import {
+  allHistory,
+  calibration,
+  initMemory,
+  memoryOf,
+  replayMemory,
+  reviewMemory,
+  scheduleInterval,
+} from '../lib/adaptive'
 import { notesIn, kidsOf } from '../lib/tree'
 import { blockId } from '../lib/types'
 import {
@@ -14,6 +23,8 @@ import {
   encryptJSON,
   decryptJSON,
   randomSalt,
+  DEFAULT_ITERATIONS,
+  CURRENT_ITERATIONS,
   type Cipher,
 } from '../lib/crypto'
 import { useUI } from './ui'
@@ -21,6 +32,8 @@ import { useUI } from './ui'
 interface JournalCrypto {
   salt: string
   verifier: Cipher
+  /** PBKDF2 iterations used for this vault (absent = legacy DEFAULT_ITERATIONS). */
+  iterations?: number
 }
 import type {
   Block,
@@ -77,6 +90,8 @@ interface DataState {
   /** Review counts keyed by absolute epoch-day (from the ledger). */
   ledgerByDay: Record<number, number>
   session: Session | null
+  /** Non-null if the last hydrate attempt failed (App shows a retry screen). */
+  hydrateError: string | null
 
   hydrate: () => Promise<void>
   startSession: (ids?: string[]) => void
@@ -94,7 +109,8 @@ interface DataState {
   /** Normalize + register a tag, attach it to a watch item. Returns the tag. */
   watchAddTag: (id: string, rawTag: string) => string
   watchRemoveTag: (id: string, tag: string) => void
-  newNote: () => void
+  /** Create + open a note (optionally pre-titled, e.g. ⌘K or a [[wikilink]]). */
+  newNote: (title?: string) => void
   updateNote: (id: string, patch: Partial<Note>) => void
   appendBlock: (noteId: string, block: Block) => void
   deleteNote: (id: string) => void
@@ -153,6 +169,12 @@ const extractTag = (raw: string): { text: string; tag?: string } => {
 
 const numId = (id: string) => parseInt(id.replace(/\D/g, ''), 10) || 0
 const WATCH_HUES = [358, 215, 165, 262, 32, 205]
+
+// Collision-proof entity id: Date.now() keeps ids roughly chronological (so
+// `numId` still sorts by creation) while a per-session counter breaks ties for
+// items created within the same millisecond. Purely numeric so numId parses it.
+let idSeq = 0
+const uid = (prefix: string) => prefix + (Date.now() * 1000 + (idSeq++ % 1000))
 
 // Single-flight guard so React StrictMode's double mount can't seed twice.
 let hydrating: Promise<void> | null = null
@@ -219,7 +241,17 @@ async function hydrateImpl(set: (partial: Partial<DataState>) => void): Promise<
       .slice()
       .sort((a, b) => a.day - b.day)
       .map((l) => ({ d: l.day - today, g: l.grade, ivl: l.ivl }))
-    srs[s.noteId] = { ease: s.ease, ivl: s.ivl, due: s.dueDay - today, hist }
+    // Replay the full review history through the FSRS memory model so the
+    // adaptive scheduler "understands" each note from day one (also makes
+    // stability/difficulty survive vault imports, which carry only the ledger).
+    const mem = replayMemory(hist)
+    srs[s.noteId] = {
+      ease: s.ease,
+      ivl: s.ivl,
+      due: s.dueDay - today,
+      hist,
+      ...(mem ? { stab: mem.stab, diff: mem.diff } : {}),
+    }
   }
 
   const watch: Watch[] = watchRows.slice().sort((a, b) => b.addedAt - a.addedAt)
@@ -286,10 +318,19 @@ export const useData = create<DataState>()((set, get) => ({
   doneToday: 0,
   ledgerByDay: {},
   session: null,
+  hydrateError: null,
 
   hydrate: () => {
     if (get().hydrated) return Promise.resolve()
-    if (!hydrating) hydrating = hydrateImpl(set)
+    if (!hydrating) {
+      set({ hydrateError: null })
+      hydrating = hydrateImpl(set).catch((err) => {
+        // Reset the single-flight guard so a retry can re-run, and surface the
+        // error instead of leaving the app stuck on the loading screen forever.
+        hydrating = null
+        set({ hydrateError: err instanceof Error ? err.message : 'Failed to open the vault' })
+      })
+    }
     return hydrating
   },
 
@@ -310,12 +351,31 @@ export const useData = create<DataState>()((set, get) => ({
     if (!cur) return
     const { state: next, requeue, toast } = applyGrade(cur, g)
 
+    // Adaptive layer (lib/adaptive.ts): fold this review into the FSRS memory
+    // model, then let it — calibrated against the user's own recall history —
+    // pick the actual next review date. The classic engine above still drives
+    // ease stats and the Again requeue.
+    const last = cur.hist[cur.hist.length - 1]
+    const elapsed = last ? Math.max(0, -last.d) : 0
+    const mem0 = memoryOf(cur)
+    const mem = mem0 ? reviewMemory(mem0, g, elapsed) : initMemory(g)
+    let final: SrsState = { ...next, stab: mem.stab, diff: mem.diff }
+    let msg = toast
+    if (g !== 1) {
+      const { factor } = calibration(allHistory(get().srs))
+      const ivl = scheduleInterval(mem.stab, factor)
+      const hist = final.hist.slice()
+      hist[hist.length - 1] = { ...hist[hist.length - 1], ivl }
+      final = { ...final, ivl, due: ivl, hist }
+      msg = 'Re-inked · next review in ' + ivl + 'd'
+    }
+
     const today = todayEpochDay()
-    void db.srs.put({ noteId: id, ease: next.ease, ivl: next.ivl, dueDay: today + next.due })
-    void db.ledger.add({ noteId: id, day: today, grade: g, ivl: next.ivl })
+    void db.srs.put({ noteId: id, ease: final.ease, ivl: final.ivl, dueDay: today + final.due })
+    void db.ledger.add({ noteId: id, day: today, grade: g, ivl: final.ivl })
 
     set({
-      srs: { ...get().srs, [id]: next },
+      srs: { ...get().srs, [id]: final },
       session: {
         queue: requeue ? [...s.queue, id] : s.queue,
         idx: s.idx + 1,
@@ -324,7 +384,7 @@ export const useData = create<DataState>()((set, get) => ({
       doneToday: get().doneToday + 1,
       ledgerByDay: { ...get().ledgerByDay, [today]: (get().ledgerByDay[today] ?? 0) + 1 },
     })
-    useUI.getState().showToast(toast)
+    useUI.getState().showToast(msg)
   },
   endSession: () => {
     set({ session: null })
@@ -373,7 +433,7 @@ export const useData = create<DataState>()((set, get) => ({
       : /arxiv|acm|ieee|semantic/.test(domain)
         ? 'paper'
         : 'article'
-    const id = 'v' + Date.now()
+    const id = uid('v')
     const item: Watch = {
       id,
       kind,
@@ -436,15 +496,15 @@ export const useData = create<DataState>()((set, get) => ({
     if (w) get().watchPatch(id, { tags: w.tags.filter((x) => x !== tag) })
   },
 
-  newNote: () => {
+  newNote: (title) => {
     const ui = useUI.getState()
     const folders = get().folders
     const sel = ui.selFolder
     const folderId = sel !== 'all' && folders.some((f) => f.id === sel) ? sel : folders[0]?.id ?? ''
-    const id = 'n' + Date.now()
+    const id = uid('n')
     const note: Note = {
       id,
-      title: 'Untitled note',
+      title: title?.trim() || 'Untitled note',
       folderId,
       tags: [],
       created: 0,
@@ -513,7 +573,7 @@ export const useData = create<DataState>()((set, get) => ({
     if (n) get().updateNote(id, { tags: n.tags.filter((x) => x !== tag) })
   },
   newFolder: (parentId) => {
-    const id = 'f' + Date.now()
+    const id = uid('f')
     set({ folders: [...get().folders, { id, name: 'New folder', parentId }] })
     void db.folders.add({ id, name: 'New folder', parentId })
     const ui = useUI.getState()
@@ -559,7 +619,7 @@ export const useData = create<DataState>()((set, get) => ({
       set({ tagsPool: pool })
       void db.meta.put({ key: 'tagsPool', value: pool })
     }
-    const todo: Todo = { id: 't' + Date.now(), text, done: false, ...(tag ? { tag } : {}) }
+    const todo: Todo = { id: uid('t'), text, done: false, ...(tag ? { tag } : {}) }
     set({ todos: [...get().todos, todo] })
     void db.todos.add(todo)
   },
@@ -570,7 +630,7 @@ export const useData = create<DataState>()((set, get) => ({
   addGoal: (text) => {
     const t = text.trim()
     if (!t) return
-    const g: Goal = { id: 'g' + Date.now(), text: t, done: false }
+    const g: Goal = { id: uid('g'), text: t, done: false }
     set({ goals: [...get().goals, g] })
     void db.goals.add(g)
   },
@@ -581,7 +641,7 @@ export const useData = create<DataState>()((set, get) => ({
   addRitual: (text) => {
     const t = text.trim()
     if (!t) return
-    const r: Ritual = { id: 'r' + Date.now(), text: t, streak: 0, done: false }
+    const r: Ritual = { id: uid('r'), text: t, streak: 0, done: false }
     set({ rituals: [...get().rituals, r] })
     void db.rituals.add(r)
   },
@@ -592,7 +652,7 @@ export const useData = create<DataState>()((set, get) => ({
   addWeekItem: (day, text) => {
     const t = text.trim()
     if (!t) return
-    const w: WeekItem = { id: 'w' + Date.now(), day, text: t, done: false }
+    const w: WeekItem = { id: uid('w'), day, text: t, done: false }
     set({ week: [...get().week, w] })
     void db.week.add(w)
   },
@@ -606,7 +666,7 @@ export const useData = create<DataState>()((set, get) => ({
     const lo = Math.max(1, Math.min(31, Math.min(from, to)))
     const hi = Math.max(1, Math.min(31, Math.max(from, to)))
     const hue = [215, 28, 262, 165, 320][get().ranged.length % 5]
-    const r: Ranged = { id: 'rg' + Date.now(), text: t, from: lo, to: hi, hue }
+    const r: Ranged = { id: uid('rg'), text: t, from: lo, to: hi, hue }
     set({ ranged: [...get().ranged, r] })
     void db.ranged.add(r)
   },
@@ -618,6 +678,13 @@ export const useData = create<DataState>()((set, get) => ({
   saveJournalEntry: async (text) => {
     const clean = text.trim()
     const toast = useUI.getState().showToast
+    const key = get().journalKey
+    // Never persist plaintext into an encrypted journal that's currently locked
+    // (the data-layer guard, not just the UI's pointer-events blur).
+    if (get().journalCrypto && !key) {
+      toast('Unlock the journal to save')
+      return
+    }
     const existing = get().journal.find((e) => e.off === 0)
     if (!clean && !existing) {
       toast('Write something first')
@@ -625,7 +692,6 @@ export const useData = create<DataState>()((set, get) => ({
     }
     const words = clean ? clean.split(/\s+/).filter(Boolean).length : 0
     const today = todayEpochDay()
-    const key = get().journalKey
     if (existing) {
       set({ journal: get().journal.map((e) => (e.off === 0 ? { ...e, words, text: clean } : e)) })
       if (existing.id !== undefined) {
@@ -643,8 +709,10 @@ export const useData = create<DataState>()((set, get) => ({
     toast("Saved · today's entry kept")
   },
   saveScratchpad: async (text) => {
-    set({ scratchpad: text })
     const key = get().journalKey
+    // Same guard as saveJournalEntry: don't leak plaintext while locked.
+    if (get().journalCrypto && !key) return
+    set({ scratchpad: text })
     if (key) await db.meta.put({ key: 'scratchpadEnc', value: await encryptJSON(key, text) })
     else await db.meta.put({ key: 'scratchpad', value: text })
   },
@@ -654,32 +722,44 @@ export const useData = create<DataState>()((set, get) => ({
       toast('Passphrase already set')
       return
     }
-    if (pass.trim().length < 4) {
-      toast('Use at least 4 characters')
+    if (pass.trim().length < 8) {
+      toast('Use at least 8 characters')
       return
     }
     const salt = randomSalt()
-    const key = await deriveKey(pass, salt)
+    const iterations = CURRENT_ITERATIONS
+    const key = await deriveKey(pass, salt, iterations)
     const verifier = await makeVerifier(key)
+    const cryptoMeta: JournalCrypto = { salt, verifier, iterations }
     const today = todayEpochDay()
     const entries = get().journal
     const scratch = get().scratchpad
+    // Migrate every plaintext entry to ciphertext, capturing the auto-assigned
+    // id for entries not yet persisted so the in-memory list stays in sync
+    // (otherwise a later save takes the "new entry" path and duplicates it).
+    const migrated: JournalEntry[] = []
     await db.transaction('rw', db.journal, db.meta, async () => {
       for (const e of entries) {
         const enc = await encryptJSON(key, { text: e.text, words: e.words })
-        await db.journal.put(e.id !== undefined ? { id: e.id, day: today + e.off, enc } : { day: today + e.off, enc })
+        if (e.id !== undefined) {
+          await db.journal.put({ id: e.id, day: today + e.off, enc })
+          migrated.push(e)
+        } else {
+          const newId = await db.journal.add({ day: today + e.off, enc })
+          migrated.push({ ...e, id: newId as number })
+        }
       }
-      await db.meta.put({ key: 'journalCrypto', value: { salt, verifier } })
+      await db.meta.put({ key: 'journalCrypto', value: cryptoMeta })
       await db.meta.put({ key: 'scratchpadEnc', value: await encryptJSON(key, scratch) })
       await db.meta.delete('scratchpad')
     })
-    set({ journalKey: key, journalCrypto: { salt, verifier } })
+    set({ journalKey: key, journalCrypto: cryptoMeta, journal: migrated })
     toast('Journal encrypted — keep your passphrase safe')
   },
   unlockJournalCrypto: async (pass) => {
     const jc = get().journalCrypto
     if (!jc) return false
-    const key = await deriveKey(pass, jc.salt)
+    const key = await deriveKey(pass, jc.salt, jc.iterations ?? DEFAULT_ITERATIONS)
     if (!(await checkVerifier(key, jc.verifier))) {
       useUI.getState().showToast('Wrong passphrase')
       return false
@@ -687,13 +767,14 @@ export const useData = create<DataState>()((set, get) => ({
     const today = todayEpochDay()
     const rows = await db.journal.toArray()
     const journal: JournalEntry[] = []
+    let skipped = 0
     for (const r of rows) {
       if (r.enc) {
         try {
           const p = await decryptJSON<{ text: string; words: number }>(key, r.enc)
           journal.push({ id: r.id, off: (r.day ?? today) - today, words: p.words, text: p.text })
         } catch {
-          /* skip unreadable */
+          skipped++ // the verifier passed, so a failure here is a corrupt/foreign row
         }
       }
     }
@@ -708,7 +789,11 @@ export const useData = create<DataState>()((set, get) => ({
       }
     }
     set({ journalKey: key, journal, scratchpad })
-    useUI.getState().showToast('Journal unlocked')
+    useUI.getState().showToast(
+      skipped > 0
+        ? `Journal unlocked — ${skipped} entr${skipped === 1 ? 'y' : 'ies'} couldn't be decrypted`
+        : 'Journal unlocked',
+    )
     return true
   },
   lockJournalCrypto: () => set({ journalKey: null, journal: [], scratchpad: '' }),
@@ -738,9 +823,13 @@ export const useData = create<DataState>()((set, get) => ({
     try {
       await db.transaction('rw', db.tables, async () => {
         for (const name of TABLE_NAMES) {
-          await db.table(name).clear()
           const rows = data[name]
-          if (Array.isArray(rows) && rows.length) await db.table(name).bulkAdd(rows)
+          // Only replace tables the file actually carries. A partial/older backup
+          // that omits a table leaves the existing one intact instead of wiping
+          // it (this used to clear all 12 tables before checking each).
+          if (!Array.isArray(rows)) continue
+          await db.table(name).clear()
+          if (rows.length) await db.table(name).bulkAdd(rows)
         }
       })
       return true
