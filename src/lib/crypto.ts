@@ -1,9 +1,14 @@
 /*
  * Journal encryption at rest (Web Crypto). A passphrase is stretched with
- * PBKDF2-SHA256 (150k iterations) into a non-extractable AES-GCM key that
- * lives only in memory while unlocked. IndexedDB stores just salt + a verifier
+ * PBKDF2-SHA256 into a non-extractable AES-GCM key that lives only in memory
+ * while unlocked. IndexedDB stores just salt + iteration count + a verifier
  * token + per-entry {iv, ct} ciphertext — never the passphrase or plaintext.
  * Someone with the raw database cannot read the journal without the passphrase.
+ *
+ * The iteration count is stored per-vault (see JournalCrypto) so it can be
+ * raised for new vaults without locking out ones encrypted at an older count.
+ * `DEFAULT_ITERATIONS` is the count assumed for vaults created before it was
+ * recorded; `CURRENT_ITERATIONS` is used for newly-encrypted journals.
  */
 
 const enc = new TextEncoder()
@@ -29,12 +34,21 @@ export function randomSalt(): string {
   return b64(crypto.getRandomValues(new Uint8Array(16)).buffer)
 }
 
-export async function deriveKey(passphrase: string, saltB64: string): Promise<CryptoKey> {
+/** Iteration count for vaults encrypted before the count was recorded. */
+export const DEFAULT_ITERATIONS = 150_000
+/** Iteration count for newly-encrypted vaults (OWASP guidance for PBKDF2-SHA256). */
+export const CURRENT_ITERATIONS = 600_000
+
+export async function deriveKey(
+  passphrase: string,
+  saltB64: string,
+  iterations: number = DEFAULT_ITERATIONS,
+): Promise<CryptoKey> {
   const base = await crypto.subtle.importKey('raw', enc.encode(passphrase), 'PBKDF2', false, [
     'deriveKey',
   ])
   return crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt: unb64(saltB64), iterations: 150_000, hash: 'SHA-256' },
+    { name: 'PBKDF2', salt: unb64(saltB64), iterations, hash: 'SHA-256' },
     base,
     { name: 'AES-GCM', length: 256 },
     false,

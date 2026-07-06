@@ -15,6 +15,7 @@ export default function App() {
   const accent = useUI((s) => s.accent)
   const hydrated = useData((s) => s.hydrated)
   const hydrate = useData((s) => s.hydrate)
+  const hydrateError = useData((s) => s.hydrateError)
 
   useKeyboard()
 
@@ -59,6 +60,32 @@ export default function App() {
           <Settings />
           <Toast />
         </>
+      ) : hydrateError ? (
+        <div
+          style={{
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 16,
+            textAlign: 'center',
+            padding: 24,
+          }}
+        >
+          <div style={{ fontFamily: "'Newsreader', Georgia, serif", fontSize: 22, color: 'var(--ink)' }}>
+            Couldn't open the vault.
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--ink2)', maxWidth: 420, lineHeight: 1.55 }}>
+            Your data is still on this device — the browser just couldn't open the database. {hydrateError}
+          </div>
+          <button
+            onClick={() => void hydrate()}
+            style={{ background: 'var(--ink)', color: 'var(--bg)', border: 'none', borderRadius: 9, padding: '9px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+          >
+            Try again
+          </button>
+        </div>
       ) : (
         <div
           style={{

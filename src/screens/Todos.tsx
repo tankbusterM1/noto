@@ -98,7 +98,7 @@ export function Todos() {
   const now = new Date()
   const dateLine = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
   const doneN = todos.filter((t) => t.done).length
-  const tPct = Math.round((100 * doneN) / todos.length)
+  const tPct = todos.length ? Math.round((100 * doneN) / todos.length) : 0
 
   const yy = now.getFullYear()
   const mm = now.getMonth()

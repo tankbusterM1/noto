@@ -75,4 +75,32 @@ describe('markdown ⇄ blocks', () => {
     expect(blocks[1].src).toBe('data:image/png;base64,AAAA')
     expect(blocks[1].text).toBe('a cat')
   })
+
+  it('preserves a link’s full URL (path/query/fragment) across a round-trip', () => {
+    const md = '[RFC](https://www.rfc-editor.org/rfc/rfc793#section-3.4)'
+    const blocks = markdownToBlocks(md)
+    expect(blocks[0].t).toBe('link')
+    expect(blocks[0].url).toBe('https://www.rfc-editor.org/rfc/rfc793#section-3.4')
+    expect(blocks[0].domain).toBe('rfc-editor.org')
+    // The full href must survive serialization, not collapse to the bare domain.
+    expect(blocksToMarkdown(blocks)).toBe(md)
+  })
+
+  it('keeps an image/link whose URL contains a closing paren', () => {
+    const blocks = markdownToBlocks('![diagram](https://en.wikipedia.org/wiki/Foo_(bar).png)')
+    expect(blocks[0].t).toBe('img')
+    expect(blocks[0].src).toBe('https://en.wikipedia.org/wiki/Foo_(bar).png')
+  })
+
+  it('does NOT collapse a line with prose after a link into one link block', () => {
+    // The url-with-paren fix must not over-capture: a line that has trailing
+    // text after the link stays a paragraph rather than becoming a malformed link.
+    expect(markdownToBlocks('[see](https://x.com) (note)')[0].t).toBe('p')
+    expect(markdownToBlocks('[A](https://a.com) and [B](https://b.com)')[0].t).toBe('p')
+  })
+
+  it('drops trailing ATX hashes from a heading', () => {
+    const blocks = markdownToBlocks('## Heading ##')
+    expect(blocks[0]).toMatchObject({ t: 'h2', level: 2, text: 'Heading' })
+  })
 })

@@ -30,7 +30,7 @@ export function blocksToMarkdown(blocks: Block[]): string {
         case 'img':
           return '![' + (b.text ?? '') + '](' + (b.src ?? '') + ')'
         case 'link':
-          return '[' + (b.text ?? '') + '](https://' + (b.domain ?? '') + ')'
+          return '[' + (b.text ?? '') + '](' + (b.url ?? 'https://' + (b.domain ?? '')) + ')'
         default:
           return b.text ?? ''
       }
@@ -73,12 +73,17 @@ export function markdownToBlocks(md: string): Block[] {
     const h = line.match(/^(#{1,6})\s+(.*)$/)
     if (h) {
       flush()
-      blocks.push({ id: blockId(), t: 'h2', level: h[1].length, text: h[2].trim() })
+      // Strip an optional run of trailing ATX hashes ("## Heading ##" → "Heading").
+      const text = h[2].replace(/\s+#+\s*$/, '').trim()
+      blocks.push({ id: blockId(), t: 'h2', level: h[1].length, text })
       i++
       continue
     }
 
-    const img = line.match(/^!\[([^\]]*)\]\(([^)]*)\)\s*$/)
+    // `[^\s]+` (not `.+`) so a URL containing `)` (e.g. wiki paths) survives,
+    // while a line with trailing prose after the link — which contains spaces —
+    // fails the match and stays a paragraph instead of over-capturing.
+    const img = line.match(/^!\[([^\]]*)\]\(([^\s]+)\)\s*$/)
     if (img) {
       flush()
       blocks.push({ id: blockId(), t: 'img', text: img[1], src: img[2] || undefined })
@@ -86,10 +91,10 @@ export function markdownToBlocks(md: string): Block[] {
       continue
     }
 
-    const link = line.match(/^\[([^\]]+)\]\(([^)]+)\)\s*$/)
+    const link = line.match(/^\[([^\]]+)\]\(([^\s]+)\)\s*$/)
     if (link) {
       flush()
-      blocks.push({ id: blockId(), t: 'link', text: link[1], domain: domainOf(link[2]) })
+      blocks.push({ id: blockId(), t: 'link', text: link[1], url: link[2], domain: domainOf(link[2]) })
       i++
       continue
     }

@@ -39,7 +39,7 @@ export function WatchDrawer() {
         {/* thumb */}
         <div style={{ height: 150, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(250,248,240,0.95)', flexShrink: 0, background: `linear-gradient(135deg, hsl(${dw.hue},30%,62%), hsl(${dw.hue + 34},32%,42%))` }}>
           {dw.thumb && (
-            <img src={dw.thumb} alt="" onError={(e) => (e.currentTarget.style.display = 'none')} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+            <img src={dw.thumb} alt="" referrerPolicy="no-referrer" onError={(e) => (e.currentTarget.style.display = 'none')} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
           )}
           {dw.kind === 'video' && (
             <div style={{ width: 46, height: 46, borderRadius: 99, background: 'rgba(20,16,8,0.4)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1 }}>
@@ -61,7 +61,11 @@ export function WatchDrawer() {
             contentEditable
             suppressContentEditableWarning
             spellCheck={false}
-            onBlur={(e) => watchPatch(dw.id, { title: e.currentTarget.innerText })}
+            onBlur={(e) => {
+              const t = e.currentTarget.innerText.trim()
+              if (t && t !== dw.title) watchPatch(dw.id, { title: t })
+              else if (!t) e.currentTarget.innerText = dw.title // don't save a blank title
+            }}
             style={{ fontFamily: SERIF, fontSize: 23, fontWeight: 500, lineHeight: 1.25, margin: '8px 0 0', outline: 'none' }}
           >
             {dw.title}

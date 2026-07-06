@@ -52,6 +52,11 @@ function decode(s?: string): string | undefined {
   return el.value
 }
 
+/** Only trust absolute http(s) thumbnail URLs from scraped (untrusted) pages. */
+function safeThumb(u?: string): string | undefined {
+  return u && /^https?:\/\//i.test(u.trim()) ? u.trim() : undefined
+}
+
 export async function scrapeLink(rawUrl: string): Promise<Scraped> {
   const url = withProtocol(rawUrl)
 
@@ -90,7 +95,7 @@ export async function scrapeLink(rawUrl: string): Promise<Scraped> {
       'https://api.allorigins.win/raw?url=' + encodeURIComponent(url),
     ).then((r) => r.text())
     const title = decode(metaTag(html, 'og:title')) || decode(html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1])
-    const thumb = metaTag(html, 'og:image')
+    const thumb = safeThumb(metaTag(html, 'og:image'))
     const source = metaTag(html, 'og:site_name')
     if (title || thumb) return { title: title?.trim(), thumb, source }
   } catch {
