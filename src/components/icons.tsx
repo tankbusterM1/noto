@@ -31,6 +31,30 @@ export function Caret({ size = 10, ...props }: IconProps) {
   )
 }
 
+/** The Loom — a constellation: three knots woven by threads. */
+export function LoomIcon({ size = 16, ...props }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 18 18"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <circle cx="4" cy="5" r="1.7" />
+      <circle cx="13.5" cy="3.8" r="1.7" />
+      <circle cx="9.5" cy="13.5" r="1.7" />
+      <line x1="5.6" y1="5.4" x2="11.9" y2="4.2" />
+      <line x1="4.8" y1="6.6" x2="8.7" y2="12" />
+      <line x1="12.7" y1="5.3" x2="10.3" y2="12" />
+    </svg>
+  )
+}
+
 /** Today — a sunrise. */
 export function TodayIcon({ size = 16, ...props }: IconProps) {
   return (

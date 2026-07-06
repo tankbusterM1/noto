@@ -33,6 +33,7 @@ export function CommandPalette() {
   const watch = useData((s) => s.watch)
   const todos = useData((s) => s.todos)
   const startSession = useData((s) => s.startSession)
+  const newNote = useData((s) => s.newNote)
 
   const pal = useUI((s) => s.pal)
   const palIdx = useUI((s) => s.palIdx)
@@ -45,6 +46,7 @@ export function CommandPalette() {
   const openWatchItem = useUI((s) => s.openWatchItem)
   const setTSeg = useUI((s) => s.setTSeg)
   const toggleTheme = useUI((s) => s.toggleTheme)
+  const toggleSidebar = useUI((s) => s.toggleSidebar)
 
   if (pal === null) return null
 
@@ -53,6 +55,8 @@ export function CommandPalette() {
     { kind: 'action', label: 'Start review session', meta: dueCount + ' due', go: () => { closePalette(); startSession() } },
     { kind: 'action', label: "Write today's journal", meta: 'journal', go: () => { closePalette(); setScreen('journal') } },
     { kind: 'action', label: 'Toggle appearance', meta: dark ? 'to light' : 'to dark', go: () => { closePalette(); toggleTheme() } },
+    { kind: 'action', label: 'Toggle sidebar', meta: '⌘\\', go: () => { closePalette(); toggleSidebar() } },
+    { kind: 'action', label: 'Open the loom', meta: 'knowledge web', go: () => { closePalette(); setScreen('loom') } },
     { kind: 'action', label: 'Open month planner', meta: 'todos', go: () => { closePalette(); setScreen('todos'); setTSeg('month') } },
   ]
   const noteItems: PalItem[] = notes.map((n) => ({
@@ -77,7 +81,13 @@ export function CommandPalette() {
 
   const q = pal.toLowerCase()
   const all = [...actions, ...noteItems, ...watchItems, ...todoItems]
-  const items = (q ? all.filter((x) => (x.label + ' ' + x.meta + ' ' + (x.body ?? '')).toLowerCase().includes(q)) : all).slice(0, 9)
+  // With a query, the tail slot is always "create a note from this" — so ⌘K
+  // doubles as instant capture: type a thought, ↵ on the last row, keep going.
+  const createItem: PalItem | null = pal.trim()
+    ? { kind: 'action', label: `Create note “${pal.trim()}”`, meta: 'new note ↵', go: () => { closePalette(); newNote(pal.trim()) } }
+    : null
+  const filtered = q ? all.filter((x) => (x.label + ' ' + x.meta + ' ' + (x.body ?? '')).toLowerCase().includes(q)) : all
+  const items = [...filtered.slice(0, createItem ? 8 : 9), ...(createItem ? [createItem] : [])]
   const sel = items.length ? ((palIdx % items.length) + items.length) % items.length : 0
 
   return (

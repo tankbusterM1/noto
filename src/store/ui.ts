@@ -12,6 +12,7 @@ export type Screen =
   | 'today'
   | 'notes'
   | 'editor'
+  | 'loom'
   | 'queue'
   | 'session'
   | 'journal'
@@ -35,6 +36,8 @@ interface UIState {
   // preferences (persisted)
   dark: boolean
   slim: boolean
+  /** Sidebar fully visible? false = hidden (immersive full-screen writing). */
+  sbOpen: boolean
   accent: Accent
   inkFade: boolean
 
@@ -52,6 +55,8 @@ interface UIState {
   jLocked: boolean
   jMode: JournalMode
   thread: string | null
+  /** Ink trail — the path of notes you've hopped through (most recent last). */
+  trail: string[]
   pal: string | null
   palIdx: number
   settingsOpen: boolean
@@ -60,6 +65,8 @@ interface UIState {
   // preference actions
   toggleTheme: () => void
   toggleSlim: () => void
+  /** Show/hide the whole sidebar (⌘\ · Obsidian-style immersive mode). */
+  toggleSidebar: () => void
   setAccent: (accent: Accent) => void
   setInkFade: (inkFade: boolean) => void
 
@@ -78,6 +85,7 @@ interface UIState {
   setWFilter: (f: WatchFilter) => void
   setWTagF: (t: string) => void
   setThread: (tag: string | null) => void
+  clearTrail: () => void
 
   // command palette
   openPalette: () => void
@@ -105,6 +113,7 @@ export const useUI = create<UIState>()(
     (set, get) => ({
       dark: false,
       slim: false,
+      sbOpen: true,
       accent: '#35518E',
       inkFade: true,
 
@@ -121,6 +130,7 @@ export const useUI = create<UIState>()(
       jLocked: true,
       jMode: 'prompt',
       thread: null,
+      trail: [],
       pal: null,
       palIdx: 0,
       settingsOpen: false,
@@ -128,11 +138,19 @@ export const useUI = create<UIState>()(
 
       toggleTheme: () => set((s) => ({ dark: !s.dark })),
       toggleSlim: () => set((s) => ({ slim: !s.slim })),
+      // Reopening always returns to the full-width sidebar (never slim).
+      toggleSidebar: () => set((s) => (s.sbOpen ? { sbOpen: false } : { sbOpen: true, slim: false })),
       setAccent: (accent) => set({ accent }),
       setInkFade: (inkFade) => set({ inkFade }),
 
       setScreen: (screen) => set({ screen }),
-      openNote: (id) => set({ noteId: id, screen: 'editor' }),
+      openNote: (id) =>
+        set((s) => ({
+          noteId: id,
+          screen: 'editor',
+          // Ink trail: move this note to the end of the path (cap 6).
+          trail: [...s.trail.filter((x) => x !== id), id].slice(-6),
+        })),
       openWatchItem: (id) => set({ screen: 'watch', wOpenId: id }),
       closeWatch: () => set({ wOpenId: null }),
       setSelFolder: (id) => set({ selFolder: id }),
@@ -146,6 +164,7 @@ export const useUI = create<UIState>()(
       setWFilter: (wFilter) => set({ wFilter }),
       setWTagF: (wTagF) => set({ wTagF }),
       setThread: (thread) => set({ thread }),
+      clearTrail: () => set({ trail: [] }),
 
       openPalette: () => set({ pal: '', palIdx: 0 }),
       closePalette: () => set({ pal: null }),
@@ -173,6 +192,7 @@ export const useUI = create<UIState>()(
       partialize: (s) => ({
         dark: s.dark,
         slim: s.slim,
+        sbOpen: s.sbOpen,
         accent: s.accent,
         inkFade: s.inkFade,
       }),

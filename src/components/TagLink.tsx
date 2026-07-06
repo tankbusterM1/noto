@@ -1,5 +1,6 @@
 import type { MouseEvent } from 'react'
 import { useUI } from '../store/ui'
+import { threadColor } from '../lib/loom'
 import { MONO } from '../lib/ui'
 
 /**
@@ -29,9 +30,13 @@ export function TagLink({
         fontFamily: MONO,
         fontSize: size,
         color: variant === 'muted' ? 'var(--ink3)' : 'var(--am)',
-        display: 'inline-block',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 3,
       }}
     >
+      {/* the thread's signature color — same hue in the Loom and drawers */}
+      <span style={{ width: 4.5, height: 4.5, borderRadius: 99, background: threadColor(tag), flexShrink: 0, opacity: 0.9 }} />
       #{tag}
     </span>
   )

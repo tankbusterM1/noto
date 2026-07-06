@@ -2,6 +2,7 @@ import { useUI } from '../store/ui'
 import { Today } from './Today'
 import { Notes } from './Notes'
 import { Editor } from './Editor'
+import { Loom } from './Loom'
 import { Queue } from './Queue'
 import { Session } from './Session'
 import { Journal } from './Journal'
@@ -18,6 +19,8 @@ export function Router() {
       return <Notes />
     case 'editor':
       return <Editor />
+    case 'loom':
+      return <Loom />
     case 'queue':
       return <Queue />
     case 'session':

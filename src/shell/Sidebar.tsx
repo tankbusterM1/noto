@@ -7,6 +7,7 @@ import {
   Caret,
   TodayIcon,
   NotesIcon,
+  LoomIcon,
   JournalIcon,
   TodosIcon,
   WatchIcon,
@@ -49,9 +50,11 @@ function NavItem({ icon, label, active, onClick, right }: NavItemProps) {
 export function Sidebar() {
   const screen = useUI((st) => st.screen)
   const slim = useUI((st) => st.slim)
+  const sbOpen = useUI((st) => st.sbOpen)
   const dark = useUI((st) => st.dark)
   const setScreen = useUI((st) => st.setScreen)
   const toggleSlim = useUI((st) => st.toggleSlim)
+  const toggleSidebar = useUI((st) => st.toggleSidebar)
   const toggleTheme = useUI((st) => st.toggleTheme)
   const openPalette = useUI((st) => st.openPalette)
   const openSettings = useUI((st) => st.openSettings)
@@ -73,10 +76,21 @@ export function Sidebar() {
   const reviewsWeek = reviewsLastWeek(ledgerByDay, todayEpochDay())
   const vaultFiles = notes.length + watch.length + journal.length + todos.length
 
-  const width = screen === 'session' ? 0 : slim ? 64 : 236
+  const width = screen === 'session' || !sbOpen ? 0 : slim ? 64 : 236
   const go = (target: Screen) => () => setScreen(target)
 
+  // Caret cycles wide → icon rail → fully hidden (Obsidian-style focus mode);
+  // the floating chip (or ⌘\) brings it back at full width.
+  const collapseStep = () => {
+    if (!slim) toggleSlim()
+    else {
+      toggleSlim()
+      toggleSidebar()
+    }
+  }
+
   return (
+    <>
     <aside
       className={`${s.sidebar} ${slim ? s.slim : ''}`}
       style={{ width }}
@@ -94,9 +108,9 @@ export function Sidebar() {
         <button
           type="button"
           className={s.collapse}
-          onClick={toggleSlim}
-          title={slim ? 'Expand sidebar' : 'Collapse sidebar — immersive mode'}
-          aria-label={slim ? 'Expand sidebar' : 'Collapse sidebar'}
+          onClick={collapseStep}
+          title={slim ? 'Hide sidebar — full screen · ⌘\\' : 'Collapse sidebar — immersive mode'}
+          aria-label={slim ? 'Hide sidebar' : 'Collapse sidebar'}
         >
           <Caret className={s.caret} />
         </button>
@@ -122,6 +136,12 @@ export function Sidebar() {
             active={isActive('notes', screen)}
             onClick={go('notes')}
             right={<span className={s.count}>{notesCount}</span>}
+          />
+          <NavItem
+            icon={<LoomIcon />}
+            label="Loom"
+            active={isActive('loom', screen)}
+            onClick={go('loom')}
           />
           <NavItem
             icon={<JournalIcon />}
@@ -208,5 +228,19 @@ export function Sidebar() {
         </button>
       </div>
     </aside>
+
+    {/* Floating reopen chip — the only chrome left in full-screen mode. */}
+    {!sbOpen && screen !== 'session' && (
+      <button
+        type="button"
+        className={s.reopen}
+        onClick={toggleSidebar}
+        title="Open sidebar · ⌘\"
+        aria-label="Open sidebar"
+      >
+        <Caret style={{ transform: 'rotate(180deg)' }} />
+      </button>
+    )}
+    </>
   )
 }
