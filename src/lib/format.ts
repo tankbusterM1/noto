@@ -1,22 +1,62 @@
 import type { Note } from './types'
 
-/** Minutes → "1h 56m" / "26m". */
+/** Minutes → "1h 56m" / "26m". Guards NaN / negative / fractional input. */
 export function fmtMins(m: number): string {
-  return m >= 60
-    ? Math.floor(m / 60) + 'h' + (m % 60 ? ' ' + (m % 60) + 'm' : '')
-    : m + 'm'
+  const n = Number.isFinite(m) && m > 0 ? Math.floor(m) : 0
+  return n >= 60
+    ? Math.floor(n / 60) + 'h' + (n % 60 ? ' ' + (n % 60) + 'm' : '')
+    : n + 'm'
 }
 
-/** Bare domain from a pasted URL. */
+/**
+ * Bare host from a pasted URL — case-insensitive, scheme-agnostic, `www.`
+ * stripped. Uses the URL parser first (handles paths, ports, uppercase and
+ * protocol-relative links) and falls back to a permissive parse.
+ */
 export function domainOf(url: string): string {
-  const m = (url || '').match(/^(?:https?:\/\/)?(?:www\.)?([^/\s]+)/)
+  const raw = (url || '').trim()
+  if (!raw) return 'link'
+  try {
+    const withProto = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw)
+      ? raw
+      : raw.startsWith('//')
+        ? 'https:' + raw
+        : 'https://' + raw
+    const host = new URL(withProto).hostname.replace(/^www\./i, '')
+    if (host) return host
+  } catch {
+    /* fall through to a permissive parse */
+  }
+  const cleaned = raw
+    .replace(/^[a-z][a-z0-9+.-]*:\/\//i, '')
+    .replace(/^[a-z][a-z0-9+.-]*:/i, '')
+    .replace(/^\/\//, '')
+    .replace(/^www\./i, '')
+  const m = cleaned.match(/^([^/\s?#]+)/)
   return m ? m[1] : 'link'
 }
 
-/** First paragraph (or first list item) as a card snippet. */
+/**
+ * Strip inline markdown markers for read surfaces (card snippets): keeps the
+ * words, drops **, *, ~~, backticks, link targets and leading heading hashes.
+ * Content symbols that aren't markdown (a literal #tag, math, code text) pass
+ * through untouched.
+ */
+export function stripInline(s: string): string {
+  return s
+    .replace(/\[\[([^[\]]+)\]\]/g, '$1')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\*([^*]+)\*/g, '$1')
+    .replace(/~~([^~]+)~~/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '')
+}
+
+/** First paragraph (or first list item) as a card snippet — markers stripped. */
 export function snippet(note: Note): string {
   const p = note.blocks.find((b) => b.t === 'p')
-  return p?.text ?? note.blocks[0]?.items?.[0] ?? ''
+  return stripInline(p?.text ?? note.blocks[0]?.items?.[0] ?? '')
 }
 
 /** All searchable text for a note — title, tags, and every block body. */

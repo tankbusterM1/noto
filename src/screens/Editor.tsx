@@ -1,12 +1,18 @@
-import { useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { useData } from '../store/data'
 import { useUI } from '../store/ui'
 import { dueLabel, gradeColor, gradeName } from '../lib/srs'
+import { recallNow } from '../lib/adaptive'
 import { folderPath } from '../lib/tree'
-import { words } from '../lib/format'
+import { words, noteFullText } from '../lib/format'
+import { markdownToBlocks } from '../lib/markdown'
+import { TEMPLATES } from '../lib/templates'
 import { ago, addDays, fmtShort } from '../lib/dates'
 import { MONO, SERIF, rise } from '../lib/ui'
-import { MarkdownEditor } from '../components/MarkdownEditor'
+import { MarkdownEditor, type EditorWeaveApi } from '../components/MarkdownEditor'
+import { NoteBlocks } from '../components/NoteBlocks'
+import { LocalLoom } from '../components/LocalLoom'
+import { threadColor, unwovenMentions } from '../lib/loom'
 import { TrashIcon } from '../components/icons'
 
 const railLabel: CSSProperties = {
@@ -39,13 +45,38 @@ export function Editor() {
   const setScreen = useUI((s) => s.setScreen)
   const setThread = useUI((s) => s.setThread)
   const showToast = useUI((s) => s.showToast)
+  const trail = useUI((s) => s.trail)
+  const clearTrail = useUI((s) => s.clearTrail)
 
   const [tagInput, setTagInput] = useState('')
   const [armed, setArmed] = useState(false)
   const armTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  // Reading ⇄ edit mode (⌘E, like Obsidian). Reading renders blocks fully
+  // styled — no markdown markers; edit is the CodeMirror live-preview source.
+  const [reading, setReading] = useState(false)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'e' || e.key === 'E')) {
+        e.preventDefault()
+        setReading((r) => !r)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   const note = notes.find((n) => n.id === noteId) ?? notes[0]
   const sr = srs[note.id]
+
+  // Load the title into the uncontrolled contentEditable ourselves (keyed on the
+  // note) so React never owns its text node — otherwise a concurrent store write
+  // (autosave, tag edit, move) could re-commit the old title over what you're
+  // typing and reset the caret.
+  const titleRef = useRef<HTMLHeadingElement>(null)
+  useLayoutEffect(() => {
+    if (titleRef.current) titleRef.current.innerText = note.title
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [note.id])
 
   const armDelete = () => {
     if (armed) {
@@ -61,6 +92,25 @@ export function Editor() {
     .filter((n) => n.id !== note.id && n.tags.some((t) => note.tags.includes(t)))
     .slice(0, 3)
 
+  // Backlinks — notes whose body mentions [[this note's title]].
+  const backlinks = notes.filter(
+    (n) => n.id !== note.id && noteFullText(n).includes('[[' + note.title.trim().toLowerCase() + ']]'),
+  )
+
+  // "Noto noticed" — other notes' titles sitting in this text, not yet linked.
+  // One click weaves them via the live editor (edApi), so no save races.
+  const edApi = useRef<EditorWeaveApi | null>(null)
+  const unwoven = reading ? [] : unwovenMentions(note, notes).slice(0, 3)
+
+  // Study templates: offered while the note is still empty. Applying one
+  // remounts the editor (tplN in the key) so CodeMirror picks up the blocks.
+  const isEmpty = note.blocks.length === 1 && note.blocks[0].t === 'p' && !(note.blocks[0].text ?? '').trim()
+  const [tplN, setTplN] = useState(0)
+  const applyTpl = (md: string) => {
+    updateNote(note.id, { blocks: markdownToBlocks(md) })
+    setTplN((x) => x + 1)
+  }
+
   return (
     <div style={{ display: 'flex', minHeight: '100%', animation: 'fadein 0.3s ease both' }}>
       {/* Main column */}
@@ -73,22 +123,68 @@ export function Editor() {
             <span>/</span>
             <span>{folderPath(folders, note.folderId)}</span>
             <span style={{ flex: 1 }} />
+            {/* reading ⇄ edit segmented toggle (⌘E) */}
+            <div style={{ display: 'flex', gap: 2, background: 'var(--sf2)', borderRadius: 7, padding: 2 }} title="Toggle reading mode · ⌘E">
+              {(['edit', 'read'] as const).map((m) => {
+                const active = (m === 'read') === reading
+                return (
+                  <span
+                    key={m}
+                    onClick={() => setReading(m === 'read')}
+                    style={{ fontFamily: MONO, fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 9px', borderRadius: 5, cursor: 'pointer', color: active ? 'var(--ink)' : 'var(--ink3)', background: active ? 'var(--sf)' : 'transparent', fontWeight: active ? 600 : 500, transition: 'all 0.15s ease' }}
+                  >
+                    {m === 'edit' ? '✎ edit' : '❧ read'}
+                  </span>
+                )
+              })}
+            </div>
             <span style={{ fontFamily: MONO, fontSize: 10 }}>edited {ago(note.updated)}</span>
           </div>
 
+          {/* Ink trail — the path of notes hopped through this session */}
+          {trail.length > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', margin: '-16px 0 22px', animation: 'fadein 0.25s ease both' }}>
+              <span style={{ fontFamily: MONO, fontSize: 8.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ink3)' }}>ink trail</span>
+              {trail.map((id, i) => {
+                const t = notes.find((n) => n.id === id)
+                if (!t) return null
+                const isCurrent = id === note.id
+                return (
+                  <span key={id} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                    {i > 0 && <span style={{ color: 'var(--ink3)', fontSize: 9 }}>▸</span>}
+                    <span
+                      onClick={isCurrent ? undefined : () => openNote(id)}
+                      style={{ fontFamily: SERIF, fontSize: 12, fontStyle: 'italic', color: isCurrent ? 'var(--am)' : 'var(--ink3)', fontWeight: isCurrent ? 600 : undefined, cursor: isCurrent ? 'default' : 'pointer', maxWidth: 150, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                      className={isCurrent ? undefined : 'crumb'}
+                    >
+                      {t.title}
+                    </span>
+                  </span>
+                )
+              })}
+              <span onClick={clearTrail} title="Clear trail" style={{ cursor: 'pointer', color: 'var(--ink3)', fontSize: 11, padding: '0 3px' }}>
+                ×
+              </span>
+            </div>
+          )}
+
           <h1
-            key={note.id}
-            contentEditable
+            key={`title-${note.id}`}
+            ref={titleRef}
+            contentEditable={!reading}
             suppressContentEditableWarning
             spellCheck={false}
-            onBlur={(e) => updateNote(note.id, { title: e.currentTarget.innerText })}
+            onBlur={(e) => {
+              const t = e.currentTarget.innerText.trim()
+              if (t && t !== note.title) updateNote(note.id, { title: t })
+              else if (!t) e.currentTarget.innerText = note.title // keep a title
+            }}
             style={{ fontFamily: SERIF, fontSize: 37, fontWeight: 500, letterSpacing: '-0.015em', lineHeight: 1.15, margin: '0 0 8px', outline: 'none' }}
-          >
-            {note.title}
-          </h1>
+          />
           <div style={{ display: 'flex', gap: 6, marginBottom: 26, flexWrap: 'wrap', alignItems: 'center' }}>
             {note.tags.map((t) => (
               <span key={t} className="tag-lift" onClick={() => setThread(t)} title="Pull this thread" style={{ display: 'flex', alignItems: 'center', gap: 3, fontFamily: MONO, fontSize: 11, color: 'var(--am)', cursor: 'pointer' }}>
+                <span style={{ width: 5, height: 5, borderRadius: 99, background: threadColor(t), marginRight: 2, flexShrink: 0 }} />
                 #{t}
                 <span className="tag-x" onClick={(e) => { e.stopPropagation(); noteRemoveTag(note.id, t) }} style={{ width: 14, height: 14, borderRadius: 99, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink3)' }}>
                   ×
@@ -110,10 +206,32 @@ export function Editor() {
             />
           </div>
 
-          <MarkdownEditor key={note.id} note={note} />
-          <div style={{ fontFamily: MONO, fontSize: 9.5, color: 'var(--ink3)', marginTop: 20, letterSpacing: '0.04em' }}>
-            markdown · # heading · - list · &gt; quote · ``` code · paste or drop an image
-          </div>
+          {reading ? (
+            <NoteBlocks key={`read-${note.id}`} note={note} readOnly full />
+          ) : (
+            <>
+              {isEmpty && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 16, animation: 'fadein 0.3s ease both' }}>
+                  <span style={{ fontFamily: MONO, fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink3)' }}>start from</span>
+                  {TEMPLATES.map((t) => (
+                    <span
+                      key={t.name}
+                      className="suggest"
+                      onClick={() => applyTpl(t.md)}
+                      title={t.hint}
+                      style={{ fontFamily: MONO, fontSize: 10, color: 'var(--ink2)', border: '1px dashed var(--ln)', borderRadius: 999, padding: '4px 11px', cursor: 'pointer', transition: 'all 0.15s ease' }}
+                    >
+                      ◇ {t.name}
+                    </span>
+                  ))}
+                </div>
+              )}
+              <MarkdownEditor key={`body-${note.id}-${tplN}`} note={note} apiRef={edApi} />
+              <div style={{ fontFamily: MONO, fontSize: 9.5, color: 'var(--ink3)', marginTop: 20, letterSpacing: '0.04em' }}>
+                markdown · right-click to format · [[link a note]] · ⌘B bold · ⌘I italic · ⌘E reading mode · paste or drop an image
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -134,6 +252,16 @@ export function Editor() {
                 <div style={{ fontFamily: MONO, fontSize: 10, color: 'var(--ink3)', marginTop: 5 }}>
                   next review · {fmtShort(addDays(Math.max(0, sr.due)))}
                 </div>
+                {(() => {
+                  const recall = recallNow(sr)
+                  if (recall === null || sr.stab === undefined) return null
+                  const strength = sr.stab >= 1 ? Math.round(sr.stab) + 'd' : '<1d'
+                  return (
+                    <div style={{ fontFamily: MONO, fontSize: 10, color: 'var(--ink3)', marginTop: 3 }} title="FSRS memory model — recall probability now · stability">
+                      recall now ~{Math.round(recall * 100)}% · memory {strength}
+                    </div>
+                  )
+                })()}
                 <div style={{ display: 'flex', gap: 14, marginTop: 14, paddingTop: 13, borderTop: '1px solid var(--ln)' }}>
                   <div>
                     <div style={statLabel}>interval</div>
@@ -192,6 +320,9 @@ export function Editor() {
           )}
         </div>
 
+        {/* Local loom — this note's corner of the knowledge web */}
+        <LocalLoom note={note} notes={notes} srs={srs} />
+
         {/* Details + marginalia */}
         <div>
           <div style={{ ...railLabel, marginBottom: 10 }}>Details</div>
@@ -232,6 +363,47 @@ export function Editor() {
               <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 12.5, color: 'var(--ink3)' }}>
                 No siblings yet — tag this note to weave it in.
               </div>
+            )}
+            {unwoven.length > 0 && (
+              <>
+                <div style={{ height: 1, background: 'var(--ln)', margin: '8px 0 4px' }} />
+                <div style={railLabel}>Noto noticed · unwoven</div>
+                {unwoven.map((n) => (
+                  <div key={n.id} style={{ border: '1px dashed var(--ln)', borderRadius: 11, padding: '9px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontFamily: SERIF, fontSize: 13, fontWeight: 500, lineHeight: 1.3 }}>{n.title}</div>
+                      <div style={{ fontFamily: MONO, fontSize: 8.5, color: 'var(--ink3)', marginTop: 2 }}>mentioned in this text</div>
+                    </div>
+                    <button
+                      className="border-hover"
+                      onClick={() => {
+                        const ok = edApi.current?.weaveTitle(n.title)
+                        showToast(ok ? `Woven [[${n.title}]] ✓` : 'Mention not found in the current text')
+                      }}
+                      style={{ border: '1px solid var(--ln)', background: 'transparent', color: 'var(--ac)', borderRadius: 7, padding: '4px 9px', fontSize: 10.5, fontWeight: 600, cursor: 'pointer', fontFamily: MONO, flexShrink: 0 }}
+                    >
+                      weave →
+                    </button>
+                  </div>
+                ))}
+              </>
+            )}
+            {backlinks.length > 0 && (
+              <>
+                <div style={{ height: 1, background: 'var(--ln)', margin: '8px 0 4px' }} />
+                <div style={railLabel}>Linked mentions · {backlinks.length}</div>
+                {backlinks.slice(0, 4).map((n) => (
+                  <div
+                    key={n.id}
+                    className="nudge"
+                    onClick={() => openNote(n.id)}
+                    style={{ border: '1px solid var(--ln)', background: 'var(--sf)', borderRadius: 11, padding: '10px 12px', cursor: 'pointer' }}
+                  >
+                    <div style={{ fontFamily: SERIF, fontSize: 14, fontWeight: 500, lineHeight: 1.3 }}>{n.title}</div>
+                    <div style={{ fontFamily: MONO, fontSize: 9, color: 'var(--ac)', marginTop: 3 }}>[[links here]]</div>
+                  </div>
+                ))}
+              </>
             )}
           </div>
           <div style={{ height: 1, background: 'var(--ln)', margin: '18px 0 12px' }} />

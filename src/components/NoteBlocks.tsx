@@ -1,25 +1,92 @@
-import { useRef } from 'react'
+import { useRef, type ReactNode } from 'react'
 import { useData } from '../store/data'
+import { useUI } from '../store/ui'
 import { LANGS } from '../lib/constants'
+import { MONO } from '../lib/ui'
 import { ImageIcon, ExternalArrow, LightbulbIcon } from './icons'
 import type { Block, Note } from '../lib/types'
 import s from './NoteBlocks.module.css'
 
 /**
- * Renders a note's ordered blocks. `readOnly` (review session) drops the
- * contentEditable affordances and the img/link/call blocks.
- *
- * When editable, text edits + list-item edits + the code language chip persist
- * to the note (autosaved on blur via the data store → Dexie). Appended blocks
- * come from the editor toolbar (also persisted).
+ * Renders a note's ordered blocks.
+ *  - `readOnly` (review session / reading mode): no contentEditable, and
+ *    inline markdown (**bold**, *italic*, `code`, [links]) renders styled
+ *    instead of showing the raw markers.
+ *  - `full` (reading mode): also renders the img / link / call blocks the
+ *    review session intentionally drops.
+ * When editable, raw text is shown and saved byte-faithfully on blur — never
+ * style text inside the contentEditable path.
  */
-export function NoteBlocks({ note, readOnly = false }: { note: Note; readOnly?: boolean }) {
+
+// One-level inline markdown for read views: wikilink, bold, italic, strike,
+// code, link.
+const INLINE_RE = /(\[\[[^[\]]+\]\]|\*\*[^*]+\*\*|\*[^*]+\*|~~[^~]+~~|`[^`]+`|\[[^\]]+\]\([^)\s]+\))/g
+
+/** Open a [[wikilink]] target by title (toast when it doesn't exist). */
+function openByTitle(title: string) {
+  const t = title.trim()
+  const found = useData.getState().notes.find((n) => n.title.trim().toLowerCase() === t.toLowerCase())
+  if (found) useUI.getState().openNote(found.id)
+  else useUI.getState().showToast('No note titled “' + t + '” yet')
+}
+
+export function Inline({ text }: { text?: string }): ReactNode {
+  const parts = (text ?? '').split(INLINE_RE)
+  return (
+    <>
+      {parts.map((p, i) => {
+        let m = p.match(/^\[\[([^[\]]+)\]\]$/)
+        if (m) {
+          const t = m[1].trim()
+          return (
+            <span
+              key={i}
+              onClick={(e) => {
+                e.stopPropagation()
+                openByTitle(t)
+              }}
+              title={'Open “' + t + '”'}
+              style={{ color: 'var(--ac)', cursor: 'pointer', borderBottom: '1px dashed rgba(53,81,142,0.45)' }}
+            >
+              {t}
+            </span>
+          )
+        }
+        m = p.match(/^\*\*([^*]+)\*\*$/)
+        if (m) return <strong key={i}>{m[1]}</strong>
+        m = p.match(/^\*([^*]+)\*$/)
+        if (m) return <em key={i}>{m[1]}</em>
+        m = p.match(/^~~([^~]+)~~$/)
+        if (m) return <s key={i}>{m[1]}</s>
+        m = p.match(/^`([^`]+)`$/)
+        if (m)
+          return (
+            <code key={i} style={{ fontFamily: MONO, color: 'var(--am)', fontSize: '0.88em' }}>
+              {m[1]}
+            </code>
+          )
+        m = p.match(/^\[([^\]]+)\]\(([^)\s]+)\)$/)
+        if (m)
+          return (
+            <a key={i} href={m[2]} target="_blank" rel="noreferrer" style={{ color: 'var(--ac)' }}>
+              {m[1]}
+            </a>
+          )
+        return p
+      })}
+    </>
+  )
+}
+
+export function NoteBlocks({ note, readOnly = false, full = false }: { note: Note; readOnly?: boolean; full?: boolean }) {
   const updateNote = useData((st) => st.updateNote)
 
   const blocks: Block[] = note.blocks
   const editable = readOnly
     ? {}
     : { contentEditable: true, suppressContentEditableWarning: true, spellCheck: false }
+  // Read views render inline markdown styled; the editable path stays raw.
+  const txt = (s?: string): ReactNode => (readOnly ? <Inline text={s} /> : s)
 
   const saveText = (index: number, text: string) => {
     if (blocks[index]?.text === text) return
@@ -49,14 +116,14 @@ export function NoteBlocks({ note, readOnly = false }: { note: Note; readOnly?: 
               : b.level === 1 ? 27 : b.level === 3 ? 19 : 23
             return (
               <h2 key={key} className={s.h2} style={{ fontSize: size }} {...editable} onBlur={onBlurText(i)}>
-                {b.text}
+                {txt(b.text)}
               </h2>
             )
           }
           case 'p':
             return (
               <p key={key} className={s.p} {...editable} onBlur={onBlurText(i)}>
-                {b.text}
+                {txt(b.text)}
               </p>
             )
           case 'ul':
@@ -70,7 +137,7 @@ export function NoteBlocks({ note, readOnly = false }: { note: Note; readOnly?: 
                       {...editable}
                       onBlur={readOnly ? undefined : (e) => saveItem(i, j, e.currentTarget.innerText)}
                     >
-                      {item}
+                      {txt(item)}
                     </div>
                   </div>
                 ))}
@@ -94,11 +161,18 @@ export function NoteBlocks({ note, readOnly = false }: { note: Note; readOnly?: 
           case 'q':
             return (
               <div key={key} className={s.quote} {...editable} onBlur={onBlurText(i)}>
-                {b.text}
+                {txt(b.text)}
               </div>
             )
           case 'img':
-            if (readOnly) return null
+            if (readOnly && !full) return null
+            if (readOnly)
+              return (
+                <figure key={key} className={s.imgFig}>
+                  {b.src && <img src={b.src} alt={b.text || ''} style={{ maxWidth: '100%', borderRadius: 14, display: 'block' }} />}
+                  {b.text && <figcaption className={s.imgCaption}>{b.text}</figcaption>}
+                </figure>
+              )
             return (
               <ImgBlock
                 key={key}
@@ -109,10 +183,17 @@ export function NoteBlocks({ note, readOnly = false }: { note: Note; readOnly?: 
               />
             )
           case 'link': {
-            if (readOnly) return null
+            if (readOnly && !full) return null
             const initial = (b.domain || 'L')[0].toUpperCase()
+            const href = b.url ?? 'https://' + (b.domain ?? '')
             return (
-              <div key={key} className={s.link}>
+              <div
+                key={key}
+                className={s.link}
+                onClick={readOnly ? () => window.open(href, '_blank', 'noopener') : undefined}
+                style={readOnly ? { cursor: 'pointer' } : undefined}
+                title={readOnly ? href : undefined}
+              >
                 <div className={s.linkTile}>{initial}</div>
                 <div className={s.linkBody}>
                   <div className={s.linkTitle} {...editable} onBlur={onBlurText(i)}>
@@ -125,14 +206,14 @@ export function NoteBlocks({ note, readOnly = false }: { note: Note; readOnly?: 
             )
           }
           case 'call':
-            if (readOnly) return null
+            if (readOnly && !full) return null
             return (
               <div key={key} className={s.callout}>
                 <span className={s.calloutIcon}>
                   <LightbulbIcon style={{ color: 'var(--am)' }} />
                 </span>
                 <div className={s.calloutText} {...editable} onBlur={onBlurText(i)}>
-                  {b.text}
+                  {txt(b.text)}
                 </div>
               </div>
             )
