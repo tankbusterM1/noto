@@ -76,6 +76,16 @@ export function Journal() {
   }))
   const earlier = journal.filter((e) => e.off < 0)
 
+  // Echo — the page you wrote exactly a week / month / half-year / year ago
+  // today. Journals compound: the longer you keep one, the further it echoes.
+  const ECHOES: [number, string][] = [
+    [-365, 'one year ago today'],
+    [-180, 'six months ago today'],
+    [-30, 'one month ago today'],
+    [-7, 'a week ago today'],
+  ]
+  const echo = ECHOES.map(([off, label]) => ({ e: journal.find((x) => x.off === off), label })).find((x) => x.e)
+
   // (Re)load stored content whenever lock state changes (uncontrolled editors).
   const loadKey = `${hasPassphrase}-${unlocked}`
   useEffect(() => {
@@ -191,6 +201,17 @@ export function Journal() {
 
             {/* Earlier entries */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {echo?.e && (
+                <div style={{ background: 'var(--sf)', border: '1px dashed var(--am)', borderRadius: 14, padding: '15px 18px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                    <span style={{ ...microLabel, color: 'var(--am)' }}>Echo · {echo.label}</span>
+                    <span style={{ fontFamily: MONO, fontSize: 9.5, color: 'var(--ink3)' }}>{echo.e.words} words</span>
+                  </div>
+                  <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 13.5, color: 'var(--ink2)', lineHeight: 1.6, marginTop: 8, ...clamp(3) }}>
+                    “{echo.e.text}”
+                  </div>
+                </div>
+              )}
               <div style={{ ...microLabel, fontSize: 10.5, letterSpacing: '0.15em', padding: '0 2px' }}>Earlier entries</div>
               {earlier.map((e, i) => (
                 <div key={e.id ?? i} className="border-hover" style={{ background: 'var(--sf)', border: '1px solid var(--ln)', borderRadius: 14, padding: '15px 18px', cursor: 'pointer', animation: 'rise 0.4s ease both', animationDelay: `${Math.min(i * 0.045, 0.4)}s` }}>
@@ -248,7 +269,7 @@ export function Journal() {
                     value={setupPass}
                     onChange={(e) => setSetupPass(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && doSetup()}
-                    placeholder="Choose a passphrase (4+ chars)"
+                    placeholder="Choose a passphrase (8+ chars)"
                     style={passInput}
                   />
                   <div style={{ fontFamily: MONO, fontSize: 9, color: 'var(--g1)', lineHeight: 1.5 }}>

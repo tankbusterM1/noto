@@ -12,6 +12,7 @@ import {
   reviewTotal,
   longestReviewStreak,
 } from '../lib/srs'
+import { recallNow } from '../lib/adaptive'
 import { folderPath } from '../lib/tree'
 import { addDays, fmtShort, todayEpochDay, dateFromEpochDay } from '../lib/dates'
 import { MONO, SERIF, kicker, rise } from '../lib/ui'
@@ -40,6 +41,7 @@ export function Queue() {
   const srs = useData((s) => s.srs)
   const doneToday = useData((s) => s.doneToday)
   const ledgerByDay = useData((s) => s.ledgerByDay)
+  const journal = useData((s) => s.journal)
   const startSession = useData((s) => s.startSession)
   const inkFade = useUI((s) => s.inkFade)
   const openNote = useUI((s) => s.openNote)
@@ -86,6 +88,51 @@ export function Queue() {
   const inkTotalLabel = reviewTotal(ledgerByDay).toLocaleString('en-US')
   const inkStreak = longestReviewStreak(ledgerByDay)
 
+  // ── Growth rings — the vault as a tree cross-section ────────────────
+  // One ring per month (oldest at the core); a ring thickens with that
+  // month's activity: reviews + notes written + journal entries. Years of
+  // studying literally accrete like wood.
+  const monthKey = (d: Date) => d.getFullYear() * 12 + d.getMonth()
+  const rings: { label: string; reviews: number; created: number; journal: number }[] = []
+  const ringIndex = new Map<number, number>()
+  for (let k = 11; k >= 0; k--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - k, 1)
+    ringIndex.set(monthKey(d), rings.length)
+    rings.push({
+      label: d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+      reviews: 0,
+      created: 0,
+      journal: 0,
+    })
+  }
+  for (const [day, cnt] of Object.entries(ledgerByDay)) {
+    const i = ringIndex.get(monthKey(dateFromEpochDay(Number(day))))
+    if (i !== undefined) rings[i].reviews += cnt
+  }
+  for (const n of notes) {
+    const i = ringIndex.get(monthKey(dateFromEpochDay(today + n.created)))
+    if (i !== undefined) rings[i].created++
+  }
+  for (const e of journal) {
+    const i = ringIndex.get(monthKey(dateFromEpochDay(today + e.off)))
+    if (i !== undefined) rings[i].journal++
+  }
+  const ringTotals = rings.map((r) => r.reviews + r.created * 2 + r.journal)
+  const ringMax = Math.max(1, ...ringTotals)
+  const activeMonths = ringTotals.filter((t) => t > 0).length
+
+  // Practice ahead: the FSRS model's weakest memories that aren't due yet —
+  // lowest predicted recall first. Early reviews are legitimate in FSRS (the
+  // update sees the true elapsed time), so this only strengthens the schedule.
+  const weakest = notes
+    .filter((n) => srs[n.id] && srs[n.id].due > 0)
+    .map((n) => ({ n, r: recallNow(srs[n.id]) ?? 1 }))
+    .sort((a, b) => a.r - b.r)
+    .slice(0, 5)
+  const weakestAvg = weakest.length
+    ? Math.round((100 * weakest.reduce((s, x) => s + x.r, 0)) / weakest.length)
+    : 100
+
   const upcoming = notes
     .filter((n) => srs[n.id] && srs[n.id].due > 0)
     .sort((a, b) => srs[a.id].due - srs[b.id].due)
@@ -102,15 +149,27 @@ export function Queue() {
           <div style={kicker}>Memory · spaced review</div>
           <h1 style={{ fontFamily: SERIF, fontSize: 36, fontWeight: 500, letterSpacing: '-0.015em', margin: '6px 0 0' }}>Review</h1>
         </div>
-        {dueCount > 0 && (
-          <button
-            className="btn-accent"
-            onClick={() => startSession()}
-            style={{ background: 'var(--ac)', color: 'var(--acI)', border: 'none', borderRadius: 10, padding: '11px 18px', fontSize: 13.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
-          >
-            Start session · {dueCount} due →
-          </button>
-        )}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {weakest.length > 0 && (
+            <button
+              className="border-hover"
+              onClick={() => startSession(weakest.map((x) => x.n.id))}
+              title={`Extra practice — the ${weakest.length} notes the memory model predicts you're closest to forgetting (avg recall ~${weakestAvg}%)`}
+              style={{ background: 'transparent', color: 'var(--ink2)', border: '1px solid var(--ln)', borderRadius: 10, padding: '10px 15px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              ◇ Practice weakest ink · ~{weakestAvg}%
+            </button>
+          )}
+          {dueCount > 0 && (
+            <button
+              className="btn-accent"
+              onClick={() => startSession()}
+              style={{ background: 'var(--ac)', color: 'var(--acI)', border: 'none', borderRadius: 10, padding: '11px 18px', fontSize: 13.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              Start session · {dueCount} due →
+            </button>
+          )}
+        </div>
       </div>
       <div style={{ fontSize: 13, color: 'var(--ink2)', marginBottom: 26, fontFamily: SERIF, fontStyle: 'italic' }}>
         Ink fades as memory does — review a note to re-ink it.
@@ -179,6 +238,44 @@ export function Queue() {
               <span style={{ fontFamily: MONO, fontSize: 8.5, color: 'var(--ink3)', marginLeft: 3 }}>more</span>
             </div>
             <div style={{ fontFamily: MONO, fontSize: 8.5, color: 'var(--am)', textAlign: 'right' }}>today burns amber ◆</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Growth rings */}
+      <div style={{ background: 'var(--sf)', border: '1px solid var(--ln)', borderRadius: 16, padding: '18px 22px', marginBottom: 28, display: 'flex', gap: 26, alignItems: 'center' }}>
+        <svg viewBox="0 0 170 170" style={{ width: 168, flexShrink: 0 }}>
+          {/* the seed */}
+          <circle cx="85" cy="85" r="2.6" fill="var(--am)" />
+          {rings.map((r, i) => {
+            const t = ringTotals[i]
+            const share = t / ringMax
+            const isNow = i === rings.length - 1
+            return (
+              <circle
+                key={i}
+                cx="85"
+                cy="85"
+                r={13 + i * 6}
+                fill="none"
+                stroke={isNow && t > 0 ? 'var(--am)' : 'var(--ac)'}
+                strokeWidth={t === 0 ? 0.7 : 1.4 + 4.2 * share}
+                opacity={t === 0 ? 0.13 : 0.28 + 0.72 * share}
+              >
+                <title>{`${r.label} · ${r.reviews} reviews · ${r.created} notes · ${r.journal} journal entries`}</title>
+              </circle>
+            )
+          })}
+        </svg>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={microLabel}>growth rings · last 12 months</div>
+          <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 15.5, color: 'var(--ink2)', lineHeight: 1.55, margin: '10px 0 12px' }}>
+            Your vault, grown like wood — each ring a month, thick rings the heavy seasons. Come back in a year and read the tree.
+          </div>
+          <div style={{ fontFamily: MONO, fontSize: 10, color: 'var(--ink3)', lineHeight: 1.9 }}>
+            this month · {rings[11].reviews} review{rings[11].reviews === 1 ? '' : 's'} · {rings[11].created} note{rings[11].created === 1 ? '' : 's'} · {rings[11].journal} journal entr{rings[11].journal === 1 ? 'y' : 'ies'}
+            <br />
+            {activeMonths} of 12 months carry ink · hover a ring for its story
           </div>
         </div>
       </div>

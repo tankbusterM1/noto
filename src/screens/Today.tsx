@@ -2,8 +2,8 @@ import { useData } from '../store/data'
 import { useUI } from '../store/ui'
 import { forecastCounts, dueNotes } from '../lib/srs'
 import { PROMPTS } from '../lib/constants'
-import { addDays } from '../lib/dates'
-import { fmtMins, journalStreak } from '../lib/format'
+import { addDays, todayEpochDay } from '../lib/dates'
+import { fmtMins, journalStreak, snippet } from '../lib/format'
 import { MONO, SERIF, kicker } from '../lib/ui'
 import { useMounted } from '../lib/useMounted'
 import { NoteCard } from '../components/NoteCard'
@@ -34,6 +34,7 @@ export function Today() {
   const startSession = useData((s) => s.startSession)
   const setScreen = useUI((s) => s.setScreen)
   const openWatchItem = useUI((s) => s.openWatchItem)
+  const openNote = useUI((s) => s.openNote)
   const mounted = useMounted()
 
   const now = new Date()
@@ -53,7 +54,7 @@ export function Today() {
 
   const recent = notes.slice().sort((a, b) => b.updated - a.updated).slice(0, 3)
   const doneN = todos.filter((t) => t.done).length
-  const tPct = Math.round((100 * doneN) / todos.length)
+  const tPct = todos.length ? Math.round((100 * doneN) / todos.length) : 0
   const jStreak = '◆ ' + journalStreak(journal) + '-day streak'
   const jPrompt = PROMPTS[now.getDate() % PROMPTS.length]
   const jWeekDots = [6, 5, 4, 3, 2, 1, 0].map((k) => ({
@@ -61,6 +62,25 @@ export function Today() {
     today: k === 0,
   }))
   const watchNext = watch.filter((w) => !w.done && !w.loading).slice(0, 2)
+
+  // Resurface — one old note a day, picked from what the SRS *won't* bring
+  // back soon (settled >7d out, or never added to review). Serendipity keeps
+  // long-term knowledge alive beyond the queue; deterministic per day.
+  const archive = notes.filter((n) => {
+    const sr = srs[n.id]
+    return !sr || sr.due > 7
+  })
+  // Anniversaries outrank the daily hash-pick: a note written exactly a
+  // month / quarter / half-year / year ago today is the resurface.
+  const ANNS: [number, string][] = [
+    [-365, 'written one year ago today'],
+    [-180, 'written six months ago today'],
+    [-90, 'written three months ago today'],
+    [-30, 'written one month ago today'],
+  ]
+  const ann = ANNS.map(([off, label]) => ({ n: archive.find((x) => x.created === off), label })).find((x) => x.n)
+  const resurface = ann?.n ?? (archive.length ? archive[Math.abs(Math.imul(todayEpochDay(), 2654435761)) % archive.length] : null)
+  const resurfaceTag = ann ? '✦ ' + ann.label : '◆ daily pick'
 
   return (
     <div style={{ maxWidth: 1060, margin: '0 auto', padding: '44px 48px 120px', animation: 'rise 0.4s ease both' }}>
@@ -188,6 +208,32 @@ export function Today() {
             </div>
             <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--ac)', marginTop: 12 }}>Write today's entry →</div>
           </div>
+
+          {/* Resurface — serendipity from the archive */}
+          {resurface && (
+            <div
+              className="border-hover"
+              onClick={() => openNote(resurface.id)}
+              style={{ background: 'var(--sf)', border: '1px dashed var(--ln)', borderRadius: 16, padding: '18px 20px', cursor: 'pointer' }}
+            >
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+                <div style={label}>Resurface · from the archive</div>
+                <div style={{ fontFamily: MONO, fontSize: 9.5, color: 'var(--am)' }}>{resurfaceTag}</div>
+              </div>
+              <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 13, color: 'var(--ink3)', marginTop: 10 }}>
+                Do you still remember —
+              </div>
+              <div style={{ fontFamily: SERIF, fontSize: 17.5, fontWeight: 500, lineHeight: 1.3, marginTop: 3 }}>
+                {resurface.title}
+              </div>
+              {snippet(resurface) && (
+                <div style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.5, marginTop: 6, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                  {snippet(resurface)}
+                </div>
+              )}
+              <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--ac)', marginTop: 10 }}>Read it again →</div>
+            </div>
+          )}
 
           {/* Up next · watch later */}
           <div style={{ background: 'var(--sf)', border: '1px solid var(--ln)', borderRadius: 16, padding: '18px 20px' }}>

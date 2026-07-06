@@ -156,7 +156,7 @@ export function Notes() {
           </div>
           <button
             className="btn-dark"
-            onClick={newNote}
+            onClick={() => newNote()}
             style={{ background: 'var(--ink)', color: 'var(--bg)', border: 'none', borderRadius: 10, padding: '9px 15px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 7 }}
           >
             <PlusIcon />
