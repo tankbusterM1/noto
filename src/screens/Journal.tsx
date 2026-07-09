@@ -63,6 +63,8 @@ export function Journal() {
   const [unlockPass, setUnlockPass] = useState('')
   const [setupPass, setSetupPass] = useState('')
   const [setupOpen, setSetupOpen] = useState(false)
+  /** Which earlier entry is expanded to full text (they collapse to 2 lines). */
+  const [openEntry, setOpenEntry] = useState<number | null>(null)
 
   const now = new Date()
   const todayEntry = journal.find((e) => e.off === 0)
@@ -150,7 +152,7 @@ export function Journal() {
           </div>
           <div style={{ display: 'flex', gap: 4, marginTop: 7 }}>
             {jWeekDots.map((d, i) => (
-              <div key={i} style={{ width: 20, height: 5, borderRadius: 99, background: d.filled ? 'var(--am)' : d.today ? 'transparent' : 'var(--sf2)', border: !d.filled && d.today ? '1px dashed var(--ink3)' : undefined, transition: 'background 0.4s ease' }} />
+              <div key={i} style={{ width: 20, height: 5, borderRadius: 99, background: d.filled ? 'var(--am)' : d.today ? 'transparent' : 'var(--sf2)', border: !d.filled && d.today ? '1px dashed var(--ink3)' : undefined, transition: 'background 0.4s ease', animation: 'fadein 0.4s ease both', animationDelay: `${i * 0.05}s` }} />
             ))}
           </div>
         </div>
@@ -213,17 +215,31 @@ export function Journal() {
                 </div>
               )}
               <div style={{ ...microLabel, fontSize: 10.5, letterSpacing: '0.15em', padding: '0 2px' }}>Earlier entries</div>
-              {earlier.map((e, i) => (
-                <div key={e.id ?? i} className="border-hover" style={{ background: 'var(--sf)', border: '1px solid var(--ln)', borderRadius: 14, padding: '15px 18px', cursor: 'pointer', animation: 'rise 0.4s ease both', animationDelay: `${Math.min(i * 0.045, 0.4)}s` }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                    <span style={{ fontFamily: SERIF, fontSize: 16, fontWeight: 500 }}>
-                      {addDays(e.off).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                    </span>
-                    <span style={{ fontFamily: MONO, fontSize: 9.5, color: 'var(--ink3)' }}>{e.words} words</span>
+              {earlier.map((e, i) => {
+                const key = e.id ?? -i - 1
+                const isOpen = openEntry === key
+                return (
+                  <div
+                    key={key}
+                    className="border-hover"
+                    onClick={() => setOpenEntry(isOpen ? null : key)}
+                    title={isOpen ? 'Collapse' : 'Read the whole entry'}
+                    style={{ background: 'var(--sf)', border: '1px solid var(--ln)', borderRadius: 14, padding: '15px 18px', cursor: 'pointer', animation: 'rise 0.4s ease both', animationDelay: `${Math.min(i * 0.045, 0.4)}s` }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                      <span style={{ fontFamily: SERIF, fontSize: 16, fontWeight: 500 }}>
+                        {addDays(e.off).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                      </span>
+                      <span style={{ fontFamily: MONO, fontSize: 9.5, color: 'var(--ink3)' }}>
+                        {e.words} words · {isOpen ? '▴' : '▾'}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.6, marginTop: 6, fontFamily: SERIF, whiteSpace: isOpen ? 'pre-wrap' : undefined, ...(isOpen ? {} : clamp(2)) }}>
+                      {e.text}
+                    </div>
                   </div>
-                  <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.55, marginTop: 6, fontFamily: SERIF, ...clamp(2) }}>{e.text}</div>
-                </div>
-              ))}
+                )
+              })}
               {earlier.length === 0 && !locked && (
                 <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 13, color: 'var(--ink3)', padding: '4px 2px' }}>
                   No earlier entries yet — today is page one.

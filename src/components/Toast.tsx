@@ -22,8 +22,12 @@ export function Toast() {
         boxShadow: '0 12px 30px rgba(20,16,8,0.28)',
         animation: 'popin 0.25s ease both',
         whiteSpace: 'nowrap',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
       }}
     >
+      <span style={{ width: 6, height: 6, borderRadius: 99, background: 'var(--am)', flexShrink: 0 }} />
       {toast}
     </div>
   )

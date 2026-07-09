@@ -71,9 +71,14 @@ export function WatchDrawer() {
             {dw.title}
           </h2>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 10, background: 'var(--sf)', border: '1px solid var(--ln)', borderRadius: 9, padding: '7px 11px' }}>
+          <div
+            className="tint"
+            title="Open in a new tab"
+            onClick={() => window.open(/^https?:\/\//i.test(dw.url) ? dw.url : 'https://' + dw.url, '_blank', 'noopener')}
+            style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 10, background: 'var(--sf)', border: '1px solid var(--ln)', borderRadius: 9, padding: '7px 11px', cursor: 'pointer' }}
+          >
             <span style={{ fontFamily: MONO, fontSize: 10, color: 'var(--ink2)', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{dw.url}</span>
-            <ExternalArrow size={11} style={{ color: 'var(--ink3)', flexShrink: 0 }} />
+            <ExternalArrow size={11} style={{ color: 'var(--ac)', flexShrink: 0 }} />
           </div>
 
           <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
@@ -124,6 +129,7 @@ export function WatchDrawer() {
                 }
               }}
               placeholder="+ tag ↵"
+              className="tag-add"
               style={{ border: '1px dashed var(--ln)', outline: 'none', background: 'transparent', fontFamily: MONO, fontSize: 11, color: 'var(--ink)', borderRadius: 999, padding: '5px 11px', width: 76 }}
             />
           </div>

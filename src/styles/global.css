@@ -146,3 +146,96 @@ body {
   color: var(--ink3);
   padding: 5px 10px 2px;
 }
+
+/* ── Design-detail pass ─────────────────────────────────────────────── */
+
+/* Growth rings grow outward from the seed */
+@keyframes ringgrow {
+  from {
+    transform: scale(0.55);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+/* Sidebar due-badge breathes while work waits */
+@keyframes badgepulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.12);
+  }
+}
+
+/* Session-complete stamp radiates one ink ripple */
+@keyframes inkripple {
+  from {
+    box-shadow: 0 0 0 0 rgba(53, 81, 142, 0.4);
+  }
+  to {
+    box-shadow: 0 0 0 30px rgba(53, 81, 142, 0);
+  }
+}
+
+/* Selection reads as ink highlight */
+::selection {
+  background: rgba(184, 122, 38, 0.22);
+}
+
+/* Thin, themed scrollbars everywhere */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ln) transparent;
+}
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--ln);
+  border-radius: 99px;
+  border: 2.5px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--ink3);
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Keyboard-focus ring (inputs already style their own borders) */
+button:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--am);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/*
+ * NOTE: deliberately NOT honoring `prefers-reduced-motion` with a blanket
+ * kill-switch. Windows reports it whenever OS "Animation effects" are off —
+ * which silently deleted every micro-animation (strike-throughs, checkbox
+ * draws, rises) on this machine. If reduced motion is ever wanted, add an
+ * explicit in-app toggle instead of trusting the ambient OS flag.
+ */
+
+/* Warp threads & link arcs draw themselves in on the Loom */
+@keyframes threaddraw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Loom index search — editorial underline field */
+.index-search input::placeholder {
+  font-family: 'Newsreader', Georgia, serif;
+  font-style: italic;
+  color: var(--ink3);
+}
+.index-search:focus-within {
+  border-color: var(--am) !important;
+}

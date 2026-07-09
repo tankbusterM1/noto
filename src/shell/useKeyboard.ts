@@ -43,6 +43,17 @@ export function useKeyboard() {
         if (e.key === 'Escape') ui.closeSettings()
         return
       }
+      // Same for the '?' cheatsheet.
+      if (ui.helpOpen) {
+        if (e.key === 'Escape' || e.key === '?') ui.closeHelp()
+        return
+      }
+      // '?' opens the shortcut sheet (when not typing).
+      if (e.key === '?' && !typing && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        ui.toggleHelp()
+        return
+      }
 
       // Whole-note review: no reveal gate — 1-4 grade the note directly.
       const s = data.session

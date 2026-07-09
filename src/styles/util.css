@@ -261,3 +261,19 @@
 .ref-chip:active {
   transform: scale(0.85);
 }
+
+/* Loom knots — the dot swells under the cursor */
+.knot:hover .knot-dot {
+  transform: scale(1.4);
+}
+
+/* "+ tag" slivers grow into a comfortable field on focus */
+.tag-add {
+  transition:
+    width 0.2s cubic-bezier(0.3, 0.7, 0.3, 1),
+    border-color 0.15s ease;
+}
+.tag-add:focus {
+  width: 130px !important;
+  border-color: var(--am) !important;
+}

@@ -220,7 +220,7 @@ export function Queue() {
         </div>
         <div style={{ display: 'flex', gap: 3 }}>
           {weeks.map((days, wi) => (
-            <div key={wi} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <div key={wi} style={{ display: 'flex', flexDirection: 'column', gap: 3, animation: 'fadein 0.45s ease both', animationDelay: `${wi * 0.018}s` }}>
               {days.map((c, di) => (
                 <div key={di} title={c.tip} style={{ width: 9, height: 9, borderRadius: 2.5, background: c.bg, opacity: c.opacity }} />
               ))}
@@ -259,8 +259,9 @@ export function Queue() {
                 r={13 + i * 6}
                 fill="none"
                 stroke={isNow && t > 0 ? 'var(--am)' : 'var(--ac)'}
-                strokeWidth={t === 0 ? 0.7 : 1.4 + 4.2 * share}
-                opacity={t === 0 ? 0.13 : 0.28 + 0.72 * share}
+                strokeWidth={t === 0 ? 0.5 : 1.4 + 4.2 * share}
+                opacity={t === 0 ? 0.08 : 0.28 + 0.72 * share}
+                style={{ transformBox: 'fill-box', transformOrigin: 'center', animation: 'ringgrow 0.7s cubic-bezier(0.3,0.7,0.3,1) both', animationDelay: `${0.1 + i * 0.055}s` }}
               >
                 <title>{`${r.label} · ${r.reviews} reviews · ${r.created} notes · ${r.journal} journal entries`}</title>
               </circle>

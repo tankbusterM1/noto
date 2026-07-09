@@ -8,6 +8,7 @@ import { WatchDrawer } from './components/WatchDrawer'
 import { ThreadDrawer } from './components/ThreadDrawer'
 import { CommandPalette } from './components/CommandPalette'
 import { Settings } from './components/Settings'
+import { HelpOverlay } from './components/HelpOverlay'
 import { useKeyboard } from './shell/useKeyboard'
 
 export default function App() {
@@ -58,6 +59,7 @@ export default function App() {
           <ThreadDrawer />
           <CommandPalette />
           <Settings />
+          <HelpOverlay />
           <Toast />
         </>
       ) : hydrateError ? (

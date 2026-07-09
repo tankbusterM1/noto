@@ -1,13 +1,13 @@
 import { useState, type CSSProperties } from 'react'
 import { useData } from '../store/data'
 import { useUI, type TodoSeg } from '../store/ui'
-import { MONTH_EXTRA } from '../lib/constants'
 import { addDays, fmtShort } from '../lib/dates'
 import { MONO, SERIF, kicker, rise } from '../lib/ui'
 import { Checkbox } from '../components/Checkbox'
 import { StrikeText } from '../components/StrikeText'
 import { TodoLine } from '../components/TodoLine'
 import { AddRow } from '../components/AddRow'
+import { EmptyState } from '../components/EmptyState'
 import { StarIcon, CloseIcon, PlusIcon } from '../components/icons'
 
 /** Small × shown on task-row hover. */
@@ -165,6 +165,11 @@ export function Todos() {
             {todos.map((t) => (
               <TodoLine key={t.id} todo={t} onDelete={() => deleteTodo(t.id)} />
             ))}
+            {todos.length === 0 && (
+              <div style={{ margin: '10px 0 4px' }}>
+                <EmptyState compact title="A clean slate — the day is unwritten." hint="add the first task below ↓" />
+              </div>
+            )}
             <div style={{ marginTop: 6 }}>
               <AddRow placeholder="Add a task — use #tag" onAdd={addTodo} />
             </div>
@@ -303,11 +308,6 @@ function MonthView() {
       ;(dayItems[k] = dayItems[k] || []).push({ text: w.text, done: w.done })
     }
   })
-  Object.entries(MONTH_EXTRA).forEach(([k, text]) => {
-    const kk = Number(k)
-    ;(dayItems[kk] = dayItems[kk] || []).push({ text, done: false })
-  })
-
   const monthName = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
   const ongoing = ranged.map((r) => ({ ...r, color: `hsl(${r.hue},34%,52%)` }))
 

@@ -172,6 +172,11 @@ export function Today() {
               {todos.map((t) => (
                 <TodoLine key={t.id} todo={t} dense />
               ))}
+              {todos.length === 0 && (
+                <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 13, color: 'var(--ink3)', padding: '10px 2px 4px' }}>
+                  The day is unwritten — plan it in Todos.
+                </div>
+              )}
             </div>
             <div style={{ ...linkText, paddingTop: 12 }} onClick={() => setScreen('todos')}>
               Open todos →
@@ -199,6 +204,8 @@ export function Today() {
                     background: d.filled ? 'var(--am)' : d.today ? 'transparent' : 'var(--sf2)',
                     border: !d.filled && d.today ? '1px dashed var(--ink3)' : undefined,
                     transition: 'background 0.4s ease',
+                    animation: 'fadein 0.4s ease both',
+                    animationDelay: `${i * 0.05}s`,
                   }}
                 />
               ))}
@@ -266,7 +273,7 @@ export function Today() {
                       {w.title}
                     </div>
                     <div style={{ fontFamily: MONO, fontSize: 9.5, color: 'var(--ink3)', marginTop: 3 }}>
-                      {w.source} · {fmtMins(w.mins || 0)}
+                      {w.source} · {w.mins ? fmtMins(w.mins) : '—'}
                     </div>
                   </div>
                 </div>

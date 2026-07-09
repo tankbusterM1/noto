@@ -194,7 +194,19 @@
   display: none;
 }
 
-/* amber due badge (expanded) / amber dot (slim) */
+/* amber due badge (expanded) / amber dot (slim) — breathes while work waits.
+   Keyframes live HERE (not global.css): CSS modules scope animation names,
+   so the reference and definition must share the file. */
+@keyframes badgepulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.12);
+  }
+}
+
 .badge {
   font-family: 'JetBrains Mono', ui-monospace, monospace;
   font-size: 10.5px;
@@ -203,6 +215,7 @@
   color: var(--bg);
   border-radius: 999px;
   padding: 2px 7px;
+  animation: badgepulse 3.2s ease-in-out infinite;
 }
 .sidebar.slim .badge {
   display: none;

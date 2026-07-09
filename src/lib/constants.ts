@@ -16,12 +16,8 @@ export const PROMPTS = [
   'What did you figure out today that yesterday-you did not know?',
   'What confused you today — and what would unconfuse it?',
   'What would you tell yourself from this morning?',
+  'Which idea from this week deserves a second look?',
+  'What did you almost give up on today?',
+  'What surprised you — and why did it?',
+  'If today had a title, what would it be?',
 ]
-
-/** Extra month-planner items keyed by day-of-month (demo content). */
-export const MONTH_EXTRA: Record<number, string> = {
-  8: 'Paper club',
-  15: 'OS midterm',
-  21: 'Ship demo day',
-  26: 'Backups + clean setup',
-}

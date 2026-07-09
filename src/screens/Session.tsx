@@ -120,7 +120,7 @@ function Completion({
   return (
     <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40 }}>
       <div style={{ textAlign: 'center', maxWidth: 420, animation: 'rise 0.5s ease both' }}>
-        <div style={{ width: 52, height: 52, margin: '0 auto 18px', background: 'var(--ac)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 12, animation: 'stamp 0.5s cubic-bezier(0.3,0.7,0.4,1.1) both' }}>
+        <div style={{ width: 52, height: 52, margin: '0 auto 18px', background: 'var(--ac)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 12, animation: 'stamp 0.5s cubic-bezier(0.3,0.7,0.4,1.1) both, inkripple 0.9s ease 0.4s both' }}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--acI)" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" style={{ transform: 'rotate(-45deg)' }}>
             <polyline points="4,13 9.5,18 20,6" />
           </svg>
@@ -128,10 +128,11 @@ function Completion({
         <h2 style={{ fontFamily: SERIF, fontSize: 32, fontWeight: 500, margin: 0 }}>Session complete.</h2>
         <div style={{ fontSize: 13.5, color: 'var(--ink2)', marginTop: 8, lineHeight: 1.6 }}>{summary}</div>
         <div style={{ display: 'flex', justifyContent: 'center', gap: 16, margin: '22px 0', fontFamily: MONO, fontSize: 11 }}>
-          <span style={{ color: 'var(--g1)' }}>{tally(1)} again</span>
-          <span style={{ color: 'var(--g2)' }}>{tally(2)} hard</span>
-          <span style={{ color: 'var(--ac)' }}>{tally(3)} good</span>
-          <span style={{ color: 'var(--g4)' }}>{tally(4)} easy</span>
+          {([1, 2, 3, 4] as Grade[]).map((g, i) => (
+            <span key={g} style={{ color: ['', 'var(--g1)', 'var(--g2)', 'var(--ac)', 'var(--g4)'][g], animation: 'rise 0.35s ease both', animationDelay: `${0.3 + i * 0.09}s` }}>
+              {tally(g)} {['', 'again', 'hard', 'good', 'easy'][g]}
+            </span>
+          ))}
         </div>
         <button className="btn-dark" onClick={onExit} style={{ background: 'var(--ink)', color: 'var(--bg)', border: 'none', borderRadius: 10, padding: '11px 20px', fontSize: 13.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
           Back to queue

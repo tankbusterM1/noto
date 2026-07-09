@@ -40,6 +40,8 @@ interface UIState {
   sbOpen: boolean
   accent: Accent
   inkFade: boolean
+  /** Per-note reading mode (true = reading). Sticks until you flip it back. */
+  noteMode: Record<string, boolean>
 
   // navigation / view state (ephemeral)
   screen: Screen
@@ -60,6 +62,8 @@ interface UIState {
   pal: string | null
   palIdx: number
   settingsOpen: boolean
+  /** '?' shortcut cheatsheet. */
+  helpOpen: boolean
   toast: string | null
 
   // preference actions
@@ -69,6 +73,8 @@ interface UIState {
   toggleSidebar: () => void
   setAccent: (accent: Accent) => void
   setInkFade: (inkFade: boolean) => void
+  /** Remember a note's reading/edit mode. */
+  setNoteReading: (id: string, reading: boolean) => void
 
   // navigation actions
   setScreen: (screen: Screen) => void
@@ -97,6 +103,10 @@ interface UIState {
   openSettings: () => void
   closeSettings: () => void
 
+  // help sheet
+  toggleHelp: () => void
+  closeHelp: () => void
+
   // journal actions
   unlockJournal: () => void
   toggleJournalLock: () => void
@@ -116,6 +126,7 @@ export const useUI = create<UIState>()(
       sbOpen: true,
       accent: '#35518E',
       inkFade: true,
+      noteMode: {},
 
       screen: 'today',
       noteId: 'n2',
@@ -134,6 +145,7 @@ export const useUI = create<UIState>()(
       pal: null,
       palIdx: 0,
       settingsOpen: false,
+      helpOpen: false,
       toast: null,
 
       toggleTheme: () => set((s) => ({ dark: !s.dark })),
@@ -142,6 +154,7 @@ export const useUI = create<UIState>()(
       toggleSidebar: () => set((s) => (s.sbOpen ? { sbOpen: false } : { sbOpen: true, slim: false })),
       setAccent: (accent) => set({ accent }),
       setInkFade: (inkFade) => set({ inkFade }),
+      setNoteReading: (id, reading) => set((s) => ({ noteMode: { ...s.noteMode, [id]: reading } })),
 
       setScreen: (screen) => set({ screen }),
       openNote: (id) =>
@@ -174,6 +187,9 @@ export const useUI = create<UIState>()(
       openSettings: () => set({ settingsOpen: true }),
       closeSettings: () => set({ settingsOpen: false }),
 
+      toggleHelp: () => set((s) => ({ helpOpen: !s.helpOpen })),
+      closeHelp: () => set({ helpOpen: false }),
+
       unlockJournal: () => {
         set({ jLocked: false })
         get().showToast('Unlocked — just you and the page')
@@ -195,6 +211,7 @@ export const useUI = create<UIState>()(
         sbOpen: s.sbOpen,
         accent: s.accent,
         inkFade: s.inkFade,
+        noteMode: s.noteMode,
       }),
     },
   ),

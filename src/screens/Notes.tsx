@@ -5,6 +5,7 @@ import { kidsOf, notesIn, countRec, pathOf } from '../lib/tree'
 import { noteFullText } from '../lib/format'
 import { MONO, SERIF, kicker, rise } from '../lib/ui'
 import { NoteCard } from '../components/NoteCard'
+import { EmptyState } from '../components/EmptyState'
 import { ContextMenu, type MenuState } from '../components/ContextMenu'
 import { GridIcon, FolderIcon, TreeCaret, SearchIcon, PlusIcon, CloseIcon, TrashIcon, ReviewIcon } from '../components/icons'
 import type { Folder, Note } from '../lib/types'
@@ -150,9 +151,15 @@ export function Notes() {
             <input
               value={libQ}
               onChange={(e) => setLibQ(e.target.value)}
+              onKeyDown={(e) => e.key === 'Escape' && setLibQ('')}
               placeholder="Search all notes…"
               style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 13, fontFamily: 'inherit', color: 'var(--ink)', width: '100%' }}
             />
+            {libQ && (
+              <span onClick={() => setLibQ('')} title="Clear" style={{ cursor: 'pointer', color: 'var(--ink3)', fontSize: 13, padding: '0 2px', flexShrink: 0 }}>
+                ×
+              </span>
+            )}
           </div>
           <button
             className="btn-dark"
@@ -334,6 +341,11 @@ export function Notes() {
           {folderEmpty && (
             <div style={{ padding: '44px 0', textAlign: 'center', fontFamily: SERIF, fontStyle: 'italic', fontSize: 16, color: 'var(--ink2)' }}>
               Nothing here yet — this folder is waiting for its first note.
+            </div>
+          )}
+          {isSearching && gridSrc.length === 0 && (
+            <div style={{ marginTop: 6 }}>
+              <EmptyState title={`Nothing in the vault matches “${libQ}”.`} hint="⌘K → type it → create note" />
             </div>
           )}
         </div>

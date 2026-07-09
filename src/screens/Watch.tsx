@@ -5,7 +5,8 @@ import { fmtMins, domainOf } from '../lib/format'
 import { MONO, SERIF, kicker, clamp, rise } from '../lib/ui'
 import { Checkbox } from '../components/Checkbox'
 import { TagLink } from '../components/TagLink'
-import { LinkIcon, PlayTriangle, ArticleIcon, PaperIcon } from '../components/icons'
+import { EmptyState } from '../components/EmptyState'
+import { LinkIcon, PlayTriangle, ArticleIcon, PaperIcon, WatchIcon } from '../components/icons'
 import type { Watch as WatchItem } from '../lib/types'
 
 const shimmer =
@@ -107,6 +108,13 @@ export function Watch() {
           </div>
         ))}
       </div>
+      {filtered.length === 0 && (
+        <EmptyState
+          icon={<WatchIcon size={22} />}
+          title={watch.length === 0 ? 'Nothing saved for later — yet.' : 'Nothing matches this filter.'}
+          hint={watch.length === 0 ? 'paste a link above · Noto fetches the title & thumbnail' : 'try another kind, or all tags'}
+        />
+      )}
     </div>
   )
 }
@@ -119,7 +127,7 @@ function Skeleton() {
       <div style={{ padding: '14px 16px' }}>
         <div style={{ height: 13, width: '80%', borderRadius: 6, ...bar }} />
         <div style={{ height: 10, width: '45%', borderRadius: 6, marginTop: 9, ...bar }} />
-        <div style={{ fontFamily: MONO, fontSize: 9.5, color: 'var(--ink3)', marginTop: 11 }}>scraping title · thumbnail · duration…</div>
+        <div style={{ fontFamily: MONO, fontSize: 9.5, color: 'var(--ink3)', marginTop: 11 }}>scraping title · thumbnail…</div>
       </div>
     </div>
   )

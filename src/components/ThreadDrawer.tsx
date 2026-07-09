@@ -84,7 +84,7 @@ export function ThreadDrawer() {
                     </div>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontSize: 12.5, fontWeight: 500, lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{w.title}</div>
-                      <div style={{ fontFamily: MONO, fontSize: 9, color: 'var(--ink3)', marginTop: 2 }}>{w.source} · {fmtMins(w.mins || 0)}</div>
+                      <div style={{ fontFamily: MONO, fontSize: 9, color: 'var(--ink3)', marginTop: 2 }}>{w.source} · {w.mins ? fmtMins(w.mins) : '—'}</div>
                     </div>
                   </div>
                 ))}

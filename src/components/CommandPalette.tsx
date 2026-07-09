@@ -47,6 +47,7 @@ export function CommandPalette() {
   const setTSeg = useUI((s) => s.setTSeg)
   const toggleTheme = useUI((s) => s.toggleTheme)
   const toggleSidebar = useUI((s) => s.toggleSidebar)
+  const toggleHelp = useUI((s) => s.toggleHelp)
 
   if (pal === null) return null
 
@@ -57,6 +58,7 @@ export function CommandPalette() {
     { kind: 'action', label: 'Toggle appearance', meta: dark ? 'to light' : 'to dark', go: () => { closePalette(); toggleTheme() } },
     { kind: 'action', label: 'Toggle sidebar', meta: '⌘\\', go: () => { closePalette(); toggleSidebar() } },
     { kind: 'action', label: 'Open the loom', meta: 'knowledge web', go: () => { closePalette(); setScreen('loom') } },
+    { kind: 'action', label: 'Keyboard shortcuts', meta: '?', go: () => { closePalette(); toggleHelp() } },
     { kind: 'action', label: 'Open month planner', meta: 'todos', go: () => { closePalette(); setScreen('todos'); setTSeg('month') } },
   ]
   const noteItems: PalItem[] = notes.map((n) => ({
@@ -69,7 +71,7 @@ export function CommandPalette() {
   const watchItems: PalItem[] = watch.filter((w) => !w.loading).map((w) => ({
     kind: 'watch',
     label: w.title,
-    meta: fmtMins(w.mins || 0),
+    meta: w.mins ? fmtMins(w.mins) : w.source,
     go: () => { closePalette(); openWatchItem(w.id) },
   }))
   const todoItems: PalItem[] = todos.map((t) => ({
