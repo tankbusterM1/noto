@@ -61,11 +61,7 @@ export function Settings() {
       setTimeout(() => location.reload(), 500)
     }
   }
-  const doReset = async () => {
-    if (!resetArmed) {
-      setResetArmed(true)
-      return
-    }
+  const confirmReset = async () => {
     await resetData()
     location.reload()
   }
@@ -141,20 +137,44 @@ export function Settings() {
           <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.55, marginBottom: 14 }}>
             Everything lives in this browser (IndexedDB). Export a portable JSON backup — it's unencrypted and holds your whole vault, so keep the file somewhere safe — or restore one.
           </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
             <button className="border-hover" style={rowBtn} onClick={doExport}>Export vault</button>
             <button className="border-hover" style={rowBtn} onClick={() => fileRef.current?.click()}>Import vault</button>
             <input ref={fileRef} type="file" accept="application/json,.json" style={{ display: 'none' }} onChange={(e) => doImport(e.target.files?.[0])} />
             <span style={{ flex: 1 }} />
-            <button
-              className="del-btn"
-              style={{ ...rowBtn, color: resetArmed ? 'var(--g1)' : 'var(--ink3)', borderColor: resetArmed ? 'var(--g1)' : 'var(--ln)' }}
-              onClick={doReset}
-              onMouseLeave={() => setResetArmed(false)}
-            >
-              {resetArmed ? 'Click again to reset' : 'Reset to sample data'}
-            </button>
+            {!resetArmed && (
+              <button
+                className="del-btn"
+                style={{ ...rowBtn, color: 'var(--ink3)' }}
+                onClick={() => setResetArmed(true)}
+              >
+                {import.meta.env.DEV ? 'Reset to sample data' : 'Erase all data'}
+              </button>
+            )}
           </div>
+
+          {/* Explicit confirmation — the app's most destructive action. */}
+          {resetArmed && (
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 12, padding: '12px 14px', background: 'var(--sf2)', border: '1px solid var(--g1)', borderRadius: 11, animation: 'fadein 0.2s ease both' }}>
+              <span style={{ flex: 1, fontSize: 12, color: 'var(--ink2)', lineHeight: 1.5 }}>
+                <span style={{ color: 'var(--g1)', fontWeight: 600 }}>
+                  {import.meta.env.DEV ? 'Reset to sample data?' : 'Erase everything?'}
+                </span>{' '}
+                {import.meta.env.DEV
+                  ? 'Your current vault is replaced with the sample set.'
+                  : 'Every note, todo, journal entry and review is deleted from this browser. This cannot be undone.'}
+              </span>
+              <button className="border-hover" style={{ ...rowBtn, flexShrink: 0 }} onClick={() => setResetArmed(false)}>
+                Cancel
+              </button>
+              <button
+                style={{ ...rowBtn, flexShrink: 0, background: 'var(--g1)', color: '#fff', borderColor: 'var(--g1)' }}
+                onClick={confirmReset}
+              >
+                {import.meta.env.DEV ? 'Reset' : 'Erase everything'}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </>

@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { db } from '../data/db'
 import { seedDatabase } from '../data/seed'
-import { todayEpochDay } from '../lib/dates'
+import { todayEpochDay, agoMs } from '../lib/dates'
 import { domainOf } from '../lib/format'
 import { scrapeLink, type Scraped } from '../lib/scrape'
 import { applyGrade, dueNotes } from '../lib/srs'
@@ -181,7 +181,9 @@ let hydrating: Promise<void> | null = null
 
 async function hydrateImpl(set: (partial: Partial<DataState>) => void): Promise<void> {
   await db.open()
-  if ((await db.folders.count()) === 0) await seedDatabase()
+  // Sample data seeds ONLY in the dev sandbox (npm run dev). The real app
+  // (production build) starts as a clean, empty vault — your own notebook.
+  if (import.meta.env.DEV && (await db.folders.count()) === 0) await seedDatabase()
 
   const today = todayEpochDay()
   const [
@@ -254,7 +256,26 @@ async function hydrateImpl(set: (partial: Partial<DataState>) => void): Promise<
     }
   }
 
-  const watch: Watch[] = watchRows.slice().sort((a, b) => b.addedAt - a.addedAt)
+  // "added" is derived live from the timestamp (was a frozen "just now"
+  // string). Legacy/demo rows with synthetic addedAt keep their stored label.
+  const watch: Watch[] = watchRows
+    .slice()
+    .sort((a, b) => b.addedAt - a.addedAt)
+    .map((r) => ({ ...r, added: r.addedAt > 1.4e12 ? agoMs(r.addedAt) : r.added }))
+
+  // Ritual daily rollover — rituals are real: a day boundary checks yesterday's
+  // completion (streak +1) or breaks the streak, then unticks for the new day.
+  const lastRitualDay = (metaRows.find((m) => m.key === 'ritualDay')?.value as number | undefined) ?? null
+  let liveRituals = rituals
+  if (lastRitualDay !== null && lastRitualDay < today) {
+    liveRituals = rituals.map((r) => ({
+      ...r,
+      streak: today - lastRitualDay === 1 && r.done ? r.streak + 1 : 0,
+      done: false,
+    }))
+    await db.rituals.bulkPut(liveRituals)
+  }
+  if (lastRitualDay !== today) await db.meta.put({ key: 'ritualDay', value: today })
   const journalCrypto =
     (metaRows.find((m) => m.key === 'journalCrypto')?.value as JournalCrypto | undefined) ?? null
   // Encrypted journals stay locked (empty) until the passphrase is entered.
@@ -287,7 +308,7 @@ async function hydrateImpl(set: (partial: Partial<DataState>) => void): Promise<
     todos,
     goals,
     week,
-    rituals,
+    rituals: liveRituals,
     ranged,
     watch,
     journal,
@@ -498,7 +519,14 @@ export const useData = create<DataState>()((set, get) => ({
 
   newNote: (title) => {
     const ui = useUI.getState()
-    const folders = get().folders
+    let folders = get().folders
+    // A clean (empty) vault has no folders yet — give the first note a home.
+    if (folders.length === 0) {
+      const f = { id: uid('f'), name: 'Notes', parentId: null }
+      set({ folders: [f] })
+      void db.folders.add(f)
+      folders = [f]
+    }
     const sel = ui.selFolder
     const folderId = sel !== 'all' && folders.some((f) => f.id === sel) ? sel : folders[0]?.id ?? ''
     const id = uid('n')

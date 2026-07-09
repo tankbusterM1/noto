@@ -44,3 +44,16 @@ export function ago(offset: number): string {
   if (offset === -1) return 'yesterday'
   return Math.abs(offset) + 'd ago'
 }
+
+/** Relative label for a ms timestamp ("just now", "3h ago", "2d ago", "3w ago"). */
+export function agoMs(ts: number): string {
+  const mins = Math.max(0, Math.round((Date.now() - ts) / 60000))
+  if (mins < 60) return 'just now'
+  const h = Math.round(mins / 60)
+  if (h < 24) return h + 'h ago'
+  const d = Math.round(h / 24)
+  if (d < 7) return d + 'd ago'
+  const w = Math.round(d / 7)
+  if (w < 5) return w + 'w ago'
+  return Math.round(d / 30) + 'mo ago'
+}

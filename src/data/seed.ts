@@ -178,8 +178,8 @@ export const SEED_JOURNAL: JournalEntry[] = [
 
 export const SEED_TAGS_POOL = ['ml', 'systems', 'deep-dive', 'interview-prep', 'weekend']
 
-/** Fixed base for seed watch sort keys — safely below any real Date.now(). */
-const WATCH_BASE = 1_000_000_000_000
+/** Real ages (days) for the seed watch items, matching their story. */
+const WATCH_AGES = [2, 3, 4, 7, 7, 14]
 
 /** First-run population. Converts offsets → absolute epoch-days. */
 export async function seedDatabase(): Promise<void> {
@@ -218,7 +218,11 @@ export async function seedDatabase(): Promise<void> {
       await db.week.bulkAdd(SEED_WEEK)
       await db.rituals.bulkAdd(SEED_RITUALS)
       await db.ranged.bulkAdd(SEED_RANGED)
-      const watchRows: WatchRow[] = SEED_WATCH.map((w, i) => ({ ...w, addedAt: WATCH_BASE - i }))
+      // Real timestamps so the "added Xd ago" labels age truthfully.
+      const watchRows: WatchRow[] = SEED_WATCH.map((w, i) => ({
+        ...w,
+        addedAt: Date.now() - (WATCH_AGES[i] ?? i + 1) * 86_400_000 - i,
+      }))
       await db.watch.bulkAdd(watchRows)
       await db.journal.bulkAdd(SEED_JOURNAL.map((e) => ({ day: T + e.off, words: e.words, text: e.text })))
       await db.meta.bulkAdd([
