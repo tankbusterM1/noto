@@ -47,26 +47,32 @@ export function Editor() {
   const showToast = useUI((s) => s.showToast)
   const trail = useUI((s) => s.trail)
   const clearTrail = useUI((s) => s.clearTrail)
+  const noteMode = useUI((s) => s.noteMode)
+  const setNoteReading = useUI((s) => s.setNoteReading)
 
   const [tagInput, setTagInput] = useState('')
   const [armed, setArmed] = useState(false)
   const armTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  // Reading ⇄ edit mode (⌘E, like Obsidian). Reading renders blocks fully
-  // styled — no markdown markers; edit is the CodeMirror live-preview source.
-  const [reading, setReading] = useState(false)
+
+  const note = notes.find((n) => n.id === noteId) ?? notes[0]
+  const sr = srs[note.id]
+
+  // Reading ⇄ edit mode, remembered PER NOTE (⌘E toggles). A note you leave in
+  // reading mode opens in reading mode next time, until you flip it back.
+  const reading = noteMode[note.id] ?? false
+  const noteIdRef = useRef(note.id)
+  noteIdRef.current = note.id
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && (e.key === 'e' || e.key === 'E')) {
         e.preventDefault()
-        setReading((r) => !r)
+        const id = noteIdRef.current
+        setNoteReading(id, !(useUI.getState().noteMode[id] ?? false))
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
-
-  const note = notes.find((n) => n.id === noteId) ?? notes[0]
-  const sr = srs[note.id]
+  }, [setNoteReading])
 
   // Load the title into the uncontrolled contentEditable ourselves (keyed on the
   // note) so React never owns its text node — otherwise a concurrent store write
@@ -130,7 +136,7 @@ export function Editor() {
                 return (
                   <span
                     key={m}
-                    onClick={() => setReading(m === 'read')}
+                    onClick={() => setNoteReading(note.id, m === 'read')}
                     style={{ fontFamily: MONO, fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 9px', borderRadius: 5, cursor: 'pointer', color: active ? 'var(--ink)' : 'var(--ink3)', background: active ? 'var(--sf)' : 'transparent', fontWeight: active ? 600 : 500, transition: 'all 0.15s ease' }}
                   >
                     {m === 'edit' ? '✎ edit' : '❧ read'}
@@ -202,6 +208,7 @@ export function Editor() {
                 }
               }}
               placeholder="+ tag"
+              className="tag-add"
               style={{ border: '1px dashed var(--ln)', outline: 'none', background: 'transparent', fontFamily: MONO, fontSize: 11, color: 'var(--ink)', borderRadius: 999, padding: '3px 9px', width: 64 }}
             />
           </div>
@@ -227,8 +234,8 @@ export function Editor() {
                 </div>
               )}
               <MarkdownEditor key={`body-${note.id}-${tplN}`} note={note} apiRef={edApi} />
-              <div style={{ fontFamily: MONO, fontSize: 9.5, color: 'var(--ink3)', marginTop: 20, letterSpacing: '0.04em' }}>
-                markdown · right-click to format · [[link a note]] · ⌘B bold · ⌘I italic · ⌘E reading mode · paste or drop an image
+              <div style={{ fontFamily: MONO, fontSize: 9.5, color: 'var(--ink3)', marginTop: 20, letterSpacing: '0.04em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                markdown · right-click to format · [[link]] · ⌘B/⌘I · ⌘E read · ⌘S save · paste an image
               </div>
             </>
           )}
@@ -244,7 +251,7 @@ export function Editor() {
               <div style={{ background: 'var(--sf)', border: '1px solid var(--ln)', borderRadius: 14, padding: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <div style={{ width: 8, height: 8, background: 'var(--am)', transform: 'rotate(45deg)' }} />
-                  <span style={{ fontSize: 12.5, fontWeight: 600 }}>{sr.due <= 0 ? 'In review — due now' : 'In review'}</span>
+                  <span style={{ fontSize: 12.5, fontWeight: 600 }}>In review</span>
                 </div>
                 <div style={{ fontFamily: SERIF, fontSize: 26, fontWeight: 500, marginTop: 12, lineHeight: 1 }}>
                   {sr.due <= 0 ? 'due now' : dueLabel(sr.due).replace('in ', '')}

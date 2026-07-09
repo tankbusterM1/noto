@@ -62,11 +62,13 @@ const highlight = HighlightStyle.define([
   { tag: [t.variableName, t.propertyName, t.labelName], color: 'var(--ink)' },
 ])
 
-// ── Live preview (Obsidian-style) ─────────────────────────────────────
-// Markdown markers (#, **, *, ~~, `, link urls) are hidden unless the
-// cursor is inside that construct — move away and `**bold**` reads as
-// just bold text; click back in and the source reveals for editing.
-// Display-only (Decoration.replace) — the stored markdown never changes.
+// ── Live preview (Notion-style WYSIWYG) ───────────────────────────────
+// Markdown markers (#, **, *, ~~, `, link urls) are hidden as you write —
+// type `**bold**` and it snaps to bold with the stars gone; type `# ` and
+// the line becomes a heading with no hash. Formatting is applied live, not
+// only in reading mode. To edit the raw syntax, *select across it* and the
+// markers reappear. Display-only (Decoration.replace) — the stored markdown
+// never changes; ⌘B / the format menu drive most formatting.
 
 const HIDE_MARK: Record<string, string[]> = {
   HeaderMark: ['ATXHeading1', 'ATXHeading2', 'ATXHeading3', 'ATXHeading4', 'ATXHeading5', 'ATXHeading6'],
@@ -80,7 +82,10 @@ const HIDE_MARK: Record<string, string[]> = {
 function buildLivePreview(view: EditorView): DecorationSet {
   const b = new RangeSetBuilder<Decoration>()
   const sel = view.state.selection.ranges
-  const touches = (from: number, to: number) => sel.some((r) => r.to >= from && r.from <= to)
+  // Reveal the raw markers only where a NON-EMPTY selection overlaps them —
+  // so a plain cursor keeps the text clean, but you can still select to edit.
+  const selected = (from: number, to: number) =>
+    sel.some((r) => r.from !== r.to && r.from < to && r.to > from)
   for (const { from, to } of view.visibleRanges) {
     syntaxTree(view.state).iterate({
       from,
@@ -90,7 +95,7 @@ function buildLivePreview(view: EditorView): DecorationSet {
         if (!parents) return
         const parent = n.node.parent
         if (!parent || !parents.includes(parent.name)) return
-        if (touches(parent.from, parent.to)) return // cursor inside → show source
+        if (selected(parent.from, parent.to)) return // selecting it → show source
         let end = n.to
         // Swallow the space after ATX hashes so `# hi` renders flush as `hi`.
         if (n.name === 'HeaderMark' && view.state.doc.sliceString(end, end + 1) === ' ') end++
@@ -290,15 +295,65 @@ interface Sel {
 }
 
 /** Wrap the selection in markers (toggles off if already wrapped). */
+const FMT_NODE: Record<string, string> = {
+  '**': 'StrongEmphasis',
+  '*': 'Emphasis',
+  '~~': 'Strikethrough',
+  '`': 'InlineCode',
+}
+
 function wrapSel(view: EditorView, r: Sel, before: string, after = before) {
-  const text = view.state.sliceDoc(r.from, r.to)
-  const wrapped = text.length >= before.length + after.length && text.startsWith(before) && text.endsWith(after)
-  if (wrapped) {
+  const st = view.state
+  // Collapsed caret → target the whole word under it, so ⌘B / the menu format
+  // the word you're in (Notion-style) instead of inserting empty ** markers.
+  if (r.from === r.to) {
+    const w = st.wordAt(r.from)
+    if (w && w.from !== w.to) r = { from: w.from, to: w.to, head: w.to }
+  }
+  const text = st.sliceDoc(r.from, r.to)
+  // (0) syntax-aware toggle: if the caret/selection sits INSIDE a bold/italic/
+  //     strike/code node, strip that whole node's markers — so ⌘B un-bolds a
+  //     word you're just resting the cursor in, even with the ** hidden.
+  const fmtName = before === after ? FMT_NODE[before] : undefined
+  if (fmtName) {
+    let node: ReturnType<typeof syntaxTree>['topNode'] | null = syntaxTree(st).resolveInner(r.from, 1)
+    while (node && node.name !== fmtName) node = node.parent
+    if (node && node.from <= r.from && node.to >= r.to && node.to - node.from >= before.length + after.length) {
+      view.dispatch({
+        changes: [
+          { from: node.from, to: node.from + before.length, insert: '' },
+          { from: node.to - after.length, to: node.to, insert: '' },
+        ],
+      })
+      view.focus()
+      return
+    }
+  }
+  // (a) markers sit inside the selection → unwrap them.
+  if (text.length >= before.length + after.length && text.startsWith(before) && text.endsWith(after)) {
     const inner = text.slice(before.length, text.length - after.length)
     view.dispatch({ changes: { from: r.from, to: r.to, insert: inner }, selection: EditorSelection.range(r.from, r.from + inner.length) })
-  } else {
-    view.dispatch({ changes: { from: r.from, to: r.to, insert: before + text + after }, selection: EditorSelection.range(r.from + before.length, r.to + before.length) })
+    view.focus()
+    return
   }
+  // (b) markers sit just OUTSIDE the selection (hidden by live preview) → strip
+  //     them, so ⌘B on a bold word un-bolds it even with the ** hidden.
+  const outBefore = st.sliceDoc(Math.max(0, r.from - before.length), r.from)
+  const outAfter = st.sliceDoc(r.to, Math.min(st.doc.length, r.to + after.length))
+  if (outBefore === before && outAfter === after) {
+    view.dispatch({
+      changes: [
+        { from: r.from - before.length, to: r.from, insert: '' },
+        { from: r.to, to: r.to + after.length, insert: '' },
+      ],
+      selection: EditorSelection.range(r.from - before.length, r.to - before.length),
+    })
+    view.focus()
+    return
+  }
+  // (c) otherwise wrap — and collapse the caret to the end so the just-applied
+  //     markers hide right away (a lingering selection would reveal them).
+  view.dispatch({ changes: { from: r.from, to: r.to, insert: before + text + after }, selection: EditorSelection.cursor(r.to + before.length) })
   view.focus()
 }
 
