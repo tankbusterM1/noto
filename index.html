@@ -3,13 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=JetBrains+Mono:wght@400;500;600&display=swap"
-    />
+    <meta name="description" content="A local-first notebook with spaced-repetition memory. Your vault never leaves this device." />
     <title>Noto — notes that stay</title>
+    <script>
+      // Paint the correct paper/ink background before React mounts — no white
+      // flash when the installed app launches (reads the persisted theme).
+      try {
+        var st = (JSON.parse(localStorage.getItem('noto-ui') || '{}').state) || {}
+        document.documentElement.style.backgroundColor = st.dark ? '#14110c' : '#f4f1e9'
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

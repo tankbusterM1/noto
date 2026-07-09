@@ -5,6 +5,7 @@ node_modules
 
 # build
 dist
+dev-dist
 dist-ssr
 *.local
 
@@ -26,3 +27,6 @@ Thumbs.db
 # vite / vitest
 .vite
 coverage
+
+# vite-plugin-pwa dev output
+dev-dist
