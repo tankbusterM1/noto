@@ -1,5 +1,28 @@
 import { describe, it, expect } from 'vitest'
-import { domainOf, fmtMins, stripInline } from './format'
+import { domainOf, fmtMins, stripInline, blocksWords, blocksSnippet } from './format'
+import type { Block } from './types'
+
+describe('blocksWords / blocksSnippet (draft + trash previews)', () => {
+  const blocks: Block[] = [
+    { t: 'h2', text: '# Heading' },
+    { t: 'p', text: 'A short **paragraph** here.' },
+    { t: 'ul', items: ['one', 'two three'] },
+  ]
+  it('counts words across text + list items', () => {
+    // "# Heading"(2) + "A short **paragraph** here."(4) + "one two three"(3)
+    expect(blocksWords(blocks)).toBe(9)
+  })
+  it('snippet is the first paragraph, markers stripped', () => {
+    expect(blocksSnippet(blocks)).toBe('A short paragraph here.')
+  })
+  it('falls back to the first list item when there is no paragraph', () => {
+    expect(blocksSnippet([{ t: 'ul', items: ['first item', 'second'] }])).toBe('first item')
+  })
+  it('handles an empty block list', () => {
+    expect(blocksWords([])).toBe(0)
+    expect(blocksSnippet([])).toBe('')
+  })
+})
 
 describe('stripInline', () => {
   it('drops markdown markers but keeps the words', () => {

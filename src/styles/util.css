@@ -277,3 +277,15 @@
   width: 130px !important;
   border-color: var(--am) !important;
 }
+
+/* Recently-deleted cards sit faded; hovering re-inks them (they're recoverable) */
+.trash-card {
+  opacity: 0.72;
+  transition:
+    opacity 0.2s ease,
+    border-color 0.15s ease;
+}
+.trash-card:hover {
+  opacity: 1;
+  border-color: var(--ink3);
+}

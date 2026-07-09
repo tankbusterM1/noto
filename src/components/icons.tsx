@@ -31,6 +31,27 @@ export function Caret({ size = 10, ...props }: IconProps) {
   )
 }
 
+/** Draft history — a clock wound back. */
+export function HistoryIcon({ size = 16, ...props }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 18 18"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <path d="M3.2 9a5.8 5.8 0 1 0 1.9-4.3" />
+      <polyline points="2.4 3.1 2.4 5.4 4.7 5.4" />
+      <polyline points="9 5.6 9 9 11.4 10.4" />
+    </svg>
+  )
+}
+
 /** The Loom — a constellation: three knots woven by threads. */
 export function LoomIcon({ size = 16, ...props }: IconProps) {
   return (

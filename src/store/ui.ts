@@ -64,6 +64,10 @@ interface UIState {
   settingsOpen: boolean
   /** '?' shortcut cheatsheet. */
   helpOpen: boolean
+  /** Per-note draft-history drawer (opens for the current note). */
+  historyOpen: boolean
+  /** Bumped to force the note editor to remount (e.g. after restoring a draft). */
+  editorEpoch: number
   toast: string | null
 
   // preference actions
@@ -107,6 +111,11 @@ interface UIState {
   toggleHelp: () => void
   closeHelp: () => void
 
+  // draft history
+  openHistory: () => void
+  closeHistory: () => void
+  bumpEditor: () => void
+
   // journal actions
   unlockJournal: () => void
   toggleJournalLock: () => void
@@ -146,6 +155,8 @@ export const useUI = create<UIState>()(
       palIdx: 0,
       settingsOpen: false,
       helpOpen: false,
+      historyOpen: false,
+      editorEpoch: 0,
       toast: null,
 
       toggleTheme: () => set((s) => ({ dark: !s.dark })),
@@ -189,6 +200,10 @@ export const useUI = create<UIState>()(
 
       toggleHelp: () => set((s) => ({ helpOpen: !s.helpOpen })),
       closeHelp: () => set({ helpOpen: false }),
+
+      openHistory: () => set({ historyOpen: true }),
+      closeHistory: () => set({ historyOpen: false }),
+      bumpEditor: () => set((s) => ({ editorEpoch: s.editorEpoch + 1 })),
 
       unlockJournal: () => {
         set({ jLocked: false })

@@ -1,9 +1,10 @@
-import { useState, type MouseEvent } from 'react'
-import { useData } from '../store/data'
+import { useEffect, useRef, useState, type MouseEvent } from 'react'
+import { useData, TRASH_TTL_DAYS } from '../store/data'
 import { useUI } from '../store/ui'
 import { kidsOf, notesIn, countRec, pathOf } from '../lib/tree'
-import { noteFullText } from '../lib/format'
-import { MONO, SERIF, kicker, rise } from '../lib/ui'
+import { noteFullText, blocksSnippet } from '../lib/format'
+import { agoMs } from '../lib/dates'
+import { MONO, SERIF, kicker, rise, clamp } from '../lib/ui'
 import { NoteCard } from '../components/NoteCard'
 import { EmptyState } from '../components/EmptyState'
 import { ContextMenu, type MenuState } from '../components/ContextMenu'
@@ -30,6 +31,10 @@ export function Notes() {
   const deleteNote = useData((s) => s.deleteNote)
   const addToReview = useData((s) => s.addToReview)
   const startSession = useData((s) => s.startSession)
+  const trash = useData((s) => s.trash)
+  const restoreNote = useData((s) => s.restoreNote)
+  const purgeNote = useData((s) => s.purgeNote)
+  const emptyTrash = useData((s) => s.emptyTrash)
   const openNote = useUI((s) => s.openNote)
   const selFolder = useUI((s) => s.selFolder)
   const libQ = useUI((s) => s.libQ)
@@ -41,8 +46,39 @@ export function Notes() {
   const toggleExpand = useUI((s) => s.toggleExpand)
   const startRenameFolder = useUI((s) => s.startRenameFolder)
   const stopRenameFolder = useUI((s) => s.stopRenameFolder)
+  const showToast = useUI((s) => s.showToast)
 
   const [menu, setMenu] = useState<MenuState | null>(null)
+  const [binArmed, setBinArmed] = useState(false)
+  const binTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const emptyBin = () => {
+    if (binArmed) {
+      emptyTrash()
+      setBinArmed(false)
+      return
+    }
+    setBinArmed(true)
+    clearTimeout(binTimer.current)
+    binTimer.current = setTimeout(() => setBinArmed(false), 3000)
+  }
+
+  // Deleting a folder is now a safe, recoverable subtree delete (its notes go to
+  // the recycle bin), so it takes a confirm: first click arms the row and toasts
+  // the consequence, second click within 3s commits.
+  const [armedFolder, setArmedFolder] = useState<string | null>(null)
+  const folderTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const promptDeleteFolder = (id: string, name: string) => {
+    if (armedFolder === id) {
+      setArmedFolder(null)
+      deleteFolder(id)
+      return
+    }
+    setArmedFolder(id)
+    clearTimeout(folderTimer.current)
+    folderTimer.current = setTimeout(() => setArmedFolder(null), 3000)
+    const n = countRec(folders, notes, id)
+    showToast(n ? `Delete “${name}”? ${n} ${n === 1 ? 'note' : 'notes'} → bin · click again` : `Delete “${name}”? Click again`)
+  }
 
   const folderMenu = (e: MouseEvent, folder: Folder) => {
     e.preventDefault()
@@ -55,7 +91,7 @@ export function Notes() {
         { label: 'New subfolder', icon: <FolderIcon size={13} />, onClick: () => newFolder(folder.id) },
         { label: '', onClick: () => {}, divider: true },
         { label: 'Rename', onClick: () => startRenameFolder(folder.id) },
-        { label: 'Delete folder', icon: <TrashIcon size={12} />, danger: true, onClick: () => deleteFolder(folder.id) },
+        { label: 'Delete folder', icon: <TrashIcon size={12} />, danger: true, onClick: () => promptDeleteFolder(folder.id, folder.name) },
       ],
     })
   }
@@ -92,6 +128,14 @@ export function Notes() {
 
   const q = libQ.toLowerCase()
   const isSearching = q.length > 0
+  const isTrash = selFolder === 'trash' && !isSearching
+
+  // Disarm "Empty bin" whenever we leave the trash view or the bin empties.
+  // Otherwise the armed flag survives an unmount of the button, and a later
+  // first click (which looks safe) would irreversibly erase the bin.
+  useEffect(() => {
+    if (!isTrash || trash.length === 0) setBinArmed(false)
+  }, [isTrash, trash.length])
 
   // Full-text search across title, tags, and every block body.
   const searchResults = notes.filter((n) => noteFullText(n).includes(q))
@@ -258,18 +302,33 @@ export function Notes() {
                       <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title="Double-click to rename">
                         {r.folder.name}
                       </span>
-                      <span
-                        className="frow-del"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          deleteFolder(r.folder.id)
-                        }}
-                        title="Delete folder"
-                        style={{ display: 'flex', alignItems: 'center', color: 'var(--ink3)', cursor: 'pointer', paddingRight: 2 }}
-                      >
-                        <CloseIcon size={9} />
-                      </span>
-                      <span style={{ fontFamily: MONO, fontSize: 10, color: 'var(--ink3)', paddingRight: 6 }}>{r.count}</span>
+                      {armedFolder === r.folder.id ? (
+                        <span
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            promptDeleteFolder(r.folder.id, r.folder.name)
+                          }}
+                          title="Click to confirm — the folder's notes move to the bin"
+                          style={{ display: 'flex', alignItems: 'center', color: 'var(--g1)', cursor: 'pointer', fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.03em', paddingRight: 6 }}
+                        >
+                          delete?
+                        </span>
+                      ) : (
+                        <>
+                          <span
+                            className="frow-del"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              promptDeleteFolder(r.folder.id, r.folder.name)
+                            }}
+                            title="Delete folder"
+                            style={{ display: 'flex', alignItems: 'center', color: 'var(--ink3)', cursor: 'pointer', paddingRight: 2 }}
+                          >
+                            <CloseIcon size={9} />
+                          </span>
+                          <span style={{ fontFamily: MONO, fontSize: 10, color: 'var(--ink3)', paddingRight: 6 }}>{r.count}</span>
+                        </>
+                      )}
                     </>
                   )}
                 </div>
@@ -284,11 +343,72 @@ export function Notes() {
             <PlusIcon size={11} />
             New folder
           </div>
+
+          {/* Recently deleted — the recycle bin */}
+          <div style={{ height: 1, background: 'var(--ln)', margin: '10px 2px 6px' }} />
+          <div
+            className="tint"
+            onClick={() => { setSelFolder('trash'); setLibQ('') }}
+            style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '7px 10px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 500, color: isTrash ? 'var(--ink)' : 'var(--ink2)', background: isTrash ? 'var(--sf2)' : undefined }}
+          >
+            <TrashIcon size={13} />
+            <span style={{ flex: 1 }}>Recently deleted</span>
+            {trash.length > 0 && <span style={{ fontFamily: MONO, fontSize: 10, color: 'var(--am)' }}>{trash.length}</span>}
+          </div>
         </div>
 
         {/* Folder contents */}
-        <div style={{ flex: 1, minWidth: 0 }} onContextMenu={bgMenu}>
-          {isSearching ? (
+        <div style={{ flex: 1, minWidth: 0 }} onContextMenu={isTrash ? undefined : bgMenu}>
+          {isTrash ? (
+            <>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+                <div style={{ fontFamily: MONO, fontSize: 11, color: 'var(--ink3)' }}>
+                  recently deleted · {trash.length} {trash.length === 1 ? 'note' : 'notes'}
+                </div>
+                {trash.length > 0 && (
+                  <button
+                    className="del-btn"
+                    onClick={emptyBin}
+                    style={{ border: `1px solid ${binArmed ? 'var(--g1)' : 'var(--ln)'}`, background: 'transparent', color: binArmed ? 'var(--g1)' : 'var(--ink3)', borderRadius: 9, padding: '7px 13px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+                  >
+                    {binArmed ? 'Click again to erase all forever' : 'Empty bin'}
+                  </button>
+                )}
+              </div>
+              {trash.length === 0 ? (
+                <EmptyState icon={<TrashIcon size={20} />} title="Nothing deleted — the bin is empty." hint={`deleted notes rest here until you restore them — the bin clears itself after ${TRASH_TTL_DAYS} days`} />
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
+                  {trash.map((t, i) => {
+                    const daysLeft = Math.max(0, TRASH_TTL_DAYS - Math.floor((Date.now() - t.deletedAt) / 86_400_000))
+                    return (
+                    <div key={t.id} className="trash-card" style={{ background: 'var(--sf)', border: '1px dashed var(--ln)', borderRadius: 15, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 8, ...rise(i) }}>
+                      <div style={{ fontFamily: SERIF, fontSize: 17, fontWeight: 500, lineHeight: 1.25 }}>{t.title}</div>
+                      <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.5, ...clamp(2) }}>{blocksSnippet(t.blocks) || 'empty note'}</div>
+                      <div style={{ flex: 1, minHeight: 4 }} />
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, borderTop: '1px solid var(--ln)', paddingTop: 10 }}>
+                        <span style={{ display: 'flex', flexDirection: 'column', gap: 2, fontFamily: MONO, fontSize: 9.5, color: 'var(--ink3)' }}>
+                          <span>deleted {agoMs(t.deletedAt)}</span>
+                          <span style={{ color: daysLeft <= 3 ? 'var(--am)' : 'var(--ink3)' }}>
+                            {daysLeft === 0 ? 'auto-deletes today' : `auto-deletes in ${daysLeft}d`}
+                          </span>
+                        </span>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button onClick={() => restoreNote(t.id)} className="press" style={{ border: '1px solid var(--g4)', background: 'transparent', color: 'var(--g4)', borderRadius: 8, padding: '5px 11px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                            ↺ Restore
+                          </button>
+                          <button onClick={() => purgeNote(t.id)} className="del-btn" title="Delete forever" style={{ border: '1px solid var(--ln)', background: 'transparent', color: 'var(--ink3)', borderRadius: 8, padding: '5px 9px', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center' }}>
+                            <TrashIcon size={11} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                    )
+                  })}
+                </div>
+              )}
+            </>
+          ) : isSearching ? (
             <div style={{ fontFamily: MONO, fontSize: 11, color: 'var(--ink3)', marginBottom: 14 }}>
               results for "{libQ}" · {searchResults.length} {searchResults.length === 1 ? 'note' : 'notes'}
             </div>

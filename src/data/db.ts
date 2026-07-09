@@ -70,6 +70,22 @@ export interface JournalRow {
 /** Watch item + a monotonic sort key so newest-first order survives reloads. */
 export type WatchRow = Watch & { addedAt: number }
 
+/** A saved past version of a note (coalesced ~one per editing burst). */
+export interface RevisionRow {
+  id?: number
+  noteId: string
+  savedAt: number // epoch ms
+  title: string
+  blocks: Block[]
+}
+
+/** A deleted note, kept for recovery (the recycle bin). */
+export interface TrashRow extends NoteRow {
+  deletedAt: number // epoch ms
+  /** SRS scheduling snapshot (absolute), so review state survives a restore. */
+  srs?: { ease: number; ivl: number; dueDay: number }
+}
+
 /** Key/value bag for shared bits (tag vocabulary, install marker, …). */
 export interface MetaRow {
   key: string
@@ -89,6 +105,8 @@ export const db = new Dexie('noto') as Dexie & {
   watch: EntityTable<WatchRow, 'id'>
   journal: EntityTable<JournalRow, 'id'>
   meta: EntityTable<MetaRow, 'key'>
+  revisions: EntityTable<RevisionRow, 'id'>
+  trash: EntityTable<TrashRow, 'id'>
 }
 
 db.version(1).stores({
@@ -104,4 +122,11 @@ db.version(1).stores({
   watch: 'id',
   journal: '++id',
   meta: 'key',
+})
+
+// v2 — note version history (drafts) + the recycle bin. Existing tables carry
+// forward; Dexie just adds the two new stores on upgrade.
+db.version(2).stores({
+  revisions: '++id, noteId, savedAt',
+  trash: 'id, deletedAt',
 })

@@ -15,6 +15,7 @@ import {
   SearchIcon,
   AppearanceIcon,
   GearIcon,
+  TrashIcon,
 } from '../components/icons'
 import s from './Sidebar.module.css'
 
@@ -53,6 +54,9 @@ export function Sidebar() {
   const sbOpen = useUI((st) => st.sbOpen)
   const dark = useUI((st) => st.dark)
   const setScreen = useUI((st) => st.setScreen)
+  const selFolder = useUI((st) => st.selFolder)
+  const setSelFolder = useUI((st) => st.setSelFolder)
+  const setLibQ = useUI((st) => st.setLibQ)
   const toggleSlim = useUI((st) => st.toggleSlim)
   const toggleSidebar = useUI((st) => st.toggleSidebar)
   const toggleTheme = useUI((st) => st.toggleTheme)
@@ -65,6 +69,8 @@ export function Sidebar() {
   const watch = useData((st) => st.watch)
   const journal = useData((st) => st.journal)
   const ledgerByDay = useData((st) => st.ledgerByDay)
+  const trashCount = useData((st) => st.trash.length)
+  const inTrash = screen === 'notes' && selFolder === 'trash'
 
   const notesCount = notes.length
   const todosLeft = todos.filter((t) => !t.done).length
@@ -133,8 +139,11 @@ export function Sidebar() {
           <NavItem
             icon={<NotesIcon />}
             label="Notes"
-            active={isActive('notes', screen)}
-            onClick={go('notes')}
+            active={isActive('notes', screen) && !inTrash}
+            onClick={() => {
+              setSelFolder('all')
+              go('notes')()
+            }}
             right={<span className={s.count}>{notesCount}</span>}
           />
           <NavItem
@@ -161,6 +170,17 @@ export function Sidebar() {
             label="Watch Later"
             active={isActive('watch', screen)}
             onClick={go('watch')}
+          />
+          <NavItem
+            icon={<TrashIcon size={16} />}
+            label="Recently deleted"
+            active={inTrash}
+            onClick={() => {
+              setSelFolder('trash')
+              setLibQ('')
+              go('notes')()
+            }}
+            right={trashCount > 0 ? <span className={s.count}>{trashCount}</span> : undefined}
           />
         </div>
       </div>

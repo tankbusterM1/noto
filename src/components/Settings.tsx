@@ -135,7 +135,7 @@ export function Settings() {
           {/* Data */}
           <div style={label}>Your data · local-first</div>
           <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.55, marginBottom: 14 }}>
-            Everything lives in this browser (IndexedDB). Export a portable JSON backup — it's unencrypted and holds your whole vault, so keep the file somewhere safe — or restore one.
+            Everything lives in this browser (IndexedDB). Export a portable JSON backup — it's unencrypted and holds your whole vault, so keep the file somewhere safe — or import one to merge it in (matching notes are updated, the rest are added).
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
             <button className="border-hover" style={rowBtn} onClick={doExport}>Export vault</button>

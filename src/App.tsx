@@ -9,6 +9,7 @@ import { ThreadDrawer } from './components/ThreadDrawer'
 import { CommandPalette } from './components/CommandPalette'
 import { Settings } from './components/Settings'
 import { HelpOverlay } from './components/HelpOverlay'
+import { HistoryDrawer } from './components/HistoryDrawer'
 import { useKeyboard } from './shell/useKeyboard'
 
 export default function App() {
@@ -17,12 +18,37 @@ export default function App() {
   const hydrated = useData((s) => s.hydrated)
   const hydrate = useData((s) => s.hydrate)
   const hydrateError = useData((s) => s.hydrateError)
+  const journalKey = useData((s) => s.journalKey)
+  const lockJournalCrypto = useData((s) => s.lockJournalCrypto)
 
   useKeyboard()
 
   useEffect(() => {
     void hydrate()
   }, [hydrate])
+
+  // Auto-lock the encrypted journal after a stretch of inactivity, so an unlocked
+  // journal left open doesn't stay readable indefinitely (reload already locks —
+  // the key is memory-only). Only runs while a key is actually held.
+  useEffect(() => {
+    if (!journalKey) return
+    const IDLE_MS = 8 * 60_000
+    let timer: ReturnType<typeof setTimeout>
+    const arm = () => {
+      clearTimeout(timer)
+      timer = setTimeout(() => {
+        lockJournalCrypto()
+        useUI.getState().showToast('Journal auto-locked')
+      }, IDLE_MS)
+    }
+    const events = ['keydown', 'pointerdown', 'wheel', 'touchstart']
+    events.forEach((e) => window.addEventListener(e, arm, { passive: true }))
+    arm()
+    return () => {
+      clearTimeout(timer)
+      events.forEach((e) => window.removeEventListener(e, arm))
+    }
+  }, [journalKey, lockJournalCrypto])
 
   // The theme wrapper sets --accent-base; tokens.css derives --ac/--acI from it.
   const rootStyle = {
@@ -57,6 +83,7 @@ export default function App() {
           </div>
           <WatchDrawer />
           <ThreadDrawer />
+          <HistoryDrawer />
           <CommandPalette />
           <Settings />
           <HelpOverlay />

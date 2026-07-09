@@ -1,4 +1,4 @@
-import type { Note } from './types'
+import type { Block, Note } from './types'
 
 /** Minutes → "1h 56m" / "26m". Guards NaN / negative / fractional input. */
 export function fmtMins(m: number): string {
@@ -53,10 +53,24 @@ export function stripInline(s: string): string {
     .replace(/^#{1,6}\s+/gm, '')
 }
 
+/** First paragraph (or first list item) of a block list — markers stripped. */
+export function blocksSnippet(blocks: Block[]): string {
+  const p = blocks.find((b) => b.t === 'p')
+  return stripInline(p?.text ?? blocks[0]?.items?.[0] ?? '')
+}
+
+/** Rough word count across a block list. */
+export function blocksWords(blocks: Block[]): number {
+  return blocks
+    .map((b) => (b.text || '') + ' ' + (b.items || []).join(' '))
+    .join(' ')
+    .split(/\s+/)
+    .filter(Boolean).length
+}
+
 /** First paragraph (or first list item) as a card snippet — markers stripped. */
 export function snippet(note: Note): string {
-  const p = note.blocks.find((b) => b.t === 'p')
-  return stripInline(p?.text ?? note.blocks[0]?.items?.[0] ?? '')
+  return blocksSnippet(note.blocks)
 }
 
 /** All searchable text for a note — title, tags, and every block body. */
@@ -69,11 +83,7 @@ export function noteFullText(note: Note): string {
 
 /** Rough word count across all block text. */
 export function words(note: Note): number {
-  return note.blocks
-    .map((b) => (b.text || '') + (b.items || []).join(' '))
-    .join(' ')
-    .split(/\s+/)
-    .filter(Boolean).length
+  return blocksWords(note.blocks)
 }
 
 /** Consecutive-day journal streak, counting from today (or yesterday, grace). */

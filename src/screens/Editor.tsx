@@ -13,7 +13,7 @@ import { MarkdownEditor, type EditorWeaveApi } from '../components/MarkdownEdito
 import { NoteBlocks } from '../components/NoteBlocks'
 import { LocalLoom } from '../components/LocalLoom'
 import { threadColor, unwovenMentions } from '../lib/loom'
-import { TrashIcon } from '../components/icons'
+import { TrashIcon, HistoryIcon } from '../components/icons'
 
 const railLabel: CSSProperties = {
   fontFamily: MONO,
@@ -49,6 +49,8 @@ export function Editor() {
   const clearTrail = useUI((s) => s.clearTrail)
   const noteMode = useUI((s) => s.noteMode)
   const setNoteReading = useUI((s) => s.setNoteReading)
+  const openHistory = useUI((s) => s.openHistory)
+  const editorEpoch = useUI((s) => s.editorEpoch)
 
   const [tagInput, setTagInput] = useState('')
   const [armed, setArmed] = useState(false)
@@ -79,10 +81,17 @@ export function Editor() {
   // (autosave, tag edit, move) could re-commit the old title over what you're
   // typing and reset the caret.
   const titleRef = useRef<HTMLHeadingElement>(null)
+  // Re-commit the title text on note switch AND on editorEpoch bumps (a draft
+  // restore updates the store title + bumps the epoch) — otherwise restoring a
+  // draft with a different title leaves the old title showing until note switch.
   useLayoutEffect(() => {
     if (titleRef.current) titleRef.current.innerText = note.title
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [note.id])
+  }, [note.id, editorEpoch])
+
+  // Disarm delete when switching notes — a delete armed on the previous note
+  // must not make the first click on the new note's button delete it.
+  useEffect(() => setArmed(false), [note.id])
 
   const armDelete = () => {
     if (armed) {
@@ -144,7 +153,15 @@ export function Editor() {
                 )
               })}
             </div>
-            <span style={{ fontFamily: MONO, fontSize: 10 }}>edited {ago(note.updated)}</span>
+            <span
+              className="crumb"
+              onClick={openHistory}
+              title="Draft history — view & restore past versions"
+              style={{ display: 'flex', alignItems: 'center', gap: 5, fontFamily: MONO, fontSize: 10, cursor: 'pointer', color: 'var(--ink3)', transition: 'color 0.15s ease' }}
+            >
+              <HistoryIcon size={12} />
+              edited {ago(note.updated)}
+            </span>
           </div>
 
           {/* Ink trail — the path of notes hopped through this session */}
@@ -233,7 +250,7 @@ export function Editor() {
                   ))}
                 </div>
               )}
-              <MarkdownEditor key={`body-${note.id}-${tplN}`} note={note} apiRef={edApi} />
+              <MarkdownEditor key={`body-${note.id}-${tplN}-${editorEpoch}`} note={note} apiRef={edApi} />
               <div style={{ fontFamily: MONO, fontSize: 9.5, color: 'var(--ink3)', marginTop: 20, letterSpacing: '0.04em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 markdown · right-click to format · [[link]] · ⌘B/⌘I · ⌘E read · ⌘S save · paste an image
               </div>

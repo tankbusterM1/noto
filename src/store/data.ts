@@ -1,10 +1,11 @@
 import { create } from 'zustand'
-import { db } from '../data/db'
+import { db, type RevisionRow, type TrashRow } from '../data/db'
 import { seedDatabase } from '../data/seed'
 import { todayEpochDay, agoMs } from '../lib/dates'
 import { domainOf } from '../lib/format'
 import { scrapeLink, type Scraped } from '../lib/scrape'
 import { applyGrade, dueNotes } from '../lib/srs'
+import { changeChars, shouldSnapshot, draftsToPrune, MIN_GAP_MS } from '../lib/history'
 import {
   allHistory,
   calibration,
@@ -14,7 +15,6 @@ import {
   reviewMemory,
   scheduleInterval,
 } from '../lib/adaptive'
-import { notesIn, kidsOf } from '../lib/tree'
 import { blockId } from '../lib/types'
 import {
   deriveKey,
@@ -92,6 +92,10 @@ interface DataState {
   session: Session | null
   /** Non-null if the last hydrate attempt failed (App shows a retry screen). */
   hydrateError: string | null
+  /** Deleted notes, most-recent first (the recycle bin). */
+  trash: TrashRow[]
+  /** Version history for the currently-open note (loaded on demand). */
+  revisions: RevisionRow[]
 
   hydrate: () => Promise<void>
   startSession: (ids?: string[]) => void
@@ -114,6 +118,16 @@ interface DataState {
   updateNote: (id: string, patch: Partial<Note>) => void
   appendBlock: (noteId: string, block: Block) => void
   deleteNote: (id: string) => void
+  /** Load the open note's draft history into `revisions`. */
+  loadRevisions: (noteId: string) => Promise<void>
+  /** Restore a past draft (snapshots the current state first, so it's undoable). */
+  restoreRevision: (rev: RevisionRow) => void
+  /** Recover a deleted note from the recycle bin. */
+  restoreNote: (id: string) => Promise<void>
+  /** Permanently delete one trashed note. */
+  purgeNote: (id: string) => Promise<void>
+  /** Permanently delete everything in the recycle bin. */
+  emptyTrash: () => Promise<void>
   moveNote: (id: string, folderId: string) => void
   noteAddTag: (id: string, rawTag: string) => string
   noteRemoveTag: (id: string, tag: string) => void
@@ -153,6 +167,8 @@ const TABLE_NAMES = [
   'watch',
   'journal',
   'meta',
+  'revisions',
+  'trash',
 ]
 
 /** Shared tag normalizer: lowercase, spaces → hyphens. */
@@ -176,11 +192,49 @@ const WATCH_HUES = [358, 215, 165, 262, 32, 205]
 let idSeq = 0
 const uid = (prefix: string) => prefix + (Date.now() * 1000 + (idSeq++ % 1000))
 
+// Recycle-bin notes auto-purge this many days after deletion (also surfaced as
+// a countdown on each trash card). Shared so the UI and the purge agree.
+export const TRASH_TTL_DAYS = 30
+const TRASH_TTL_MS = TRASH_TTL_DAYS * 24 * 3_600_000
+
+// ── Note version history (drafts) ─────────────────────────────────────
+// Save the about-to-be-overwritten state as a draft, but smartly: only when it
+// has meaningfully changed and is spaced out (policy in lib/history), then thin
+// old drafts on a logarithmic curve. `snapAt` bounds DB reads to ~one per
+// MIN_GAP per note, so the common autosave case does zero I/O.
+const snapAt = new Map<string, number>()
+
+function snapshotNote(note: Note, force = false): void {
+  const now = Date.now()
+  if (!force && now - (snapAt.get(note.id) ?? 0) < MIN_GAP_MS) return
+  snapAt.set(note.id, now)
+  void (async () => {
+    const revs = await db.revisions.where('noteId').equals(note.id).sortBy('savedAt')
+    const newest = revs.length ? revs[revs.length - 1] : null
+    if (newest && changeChars(newest.blocks, note.blocks) === 0) return // never store a duplicate
+    if (!force && !shouldSnapshot(note.blocks, newest, now)) return
+    await db.revisions.add({ noteId: note.id, savedAt: now, title: note.title, blocks: note.blocks })
+    const after = await db.revisions.where('noteId').equals(note.id).sortBy('savedAt')
+    const del = draftsToPrune(after.map((r) => ({ id: r.id!, savedAt: r.savedAt })), now)
+    if (del.length) await db.revisions.bulkDelete(del)
+  })().catch(() => {})
+}
+
 // Single-flight guard so React StrictMode's double mount can't seed twice.
 let hydrating: Promise<void> | null = null
 
 async function hydrateImpl(set: (partial: Partial<DataState>) => void): Promise<void> {
   await db.open()
+  // Ask the browser to keep our IndexedDB from being evicted under storage
+  // pressure — best-effort, granted from engagement / installed-PWA heuristics,
+  // silently ignored where unsupported. Notes live here, so durability matters.
+  try {
+    if (navigator.storage?.persist && !(await navigator.storage.persisted())) {
+      await navigator.storage.persist()
+    }
+  } catch {
+    /* storage manager unavailable — ignore */
+  }
   // Sample data seeds ONLY in the dev sandbox (npm run dev). The real app
   // (production build) starts as a clean, empty vault — your own notebook.
   if (import.meta.env.DEV && (await db.folders.count()) === 0) await seedDatabase()
@@ -300,6 +354,20 @@ async function hydrateImpl(set: (partial: Partial<DataState>) => void): Promise<
   for (const l of ledgerRows) ledgerByDay[l.day] = (ledgerByDay[l.day] ?? 0) + 1
   const doneToday = ledgerByDay[today] ?? 0
 
+  // Auto-purge recycle-bin notes older than TRASH_TTL_DAYS — along with their
+  // ledger history and drafts — so the bin (and IndexedDB) can't grow forever.
+  const nowMs = Date.now()
+  const trashRows = await db.trash.toArray()
+  for (const t of trashRows) {
+    if (nowMs - t.deletedAt < TRASH_TTL_MS) continue
+    await db.trash.delete(t.id)
+    await db.ledger.where('noteId').equals(t.id).delete()
+    await db.revisions.where('noteId').equals(t.id).delete()
+  }
+  const trash = trashRows
+    .filter((t) => nowMs - t.deletedAt < TRASH_TTL_MS)
+    .sort((a, b) => b.deletedAt - a.deletedAt)
+
   set({
     hydrated: true,
     folders,
@@ -317,6 +385,7 @@ async function hydrateImpl(set: (partial: Partial<DataState>) => void): Promise<
     journalCrypto,
     ledgerByDay,
     doneToday,
+    trash,
   })
 }
 
@@ -340,6 +409,8 @@ export const useData = create<DataState>()((set, get) => ({
   ledgerByDay: {},
   session: null,
   hydrateError: null,
+  trash: [],
+  revisions: [],
 
   hydrate: () => {
     if (get().hydrated) return Promise.resolve()
@@ -546,6 +617,11 @@ export const useData = create<DataState>()((set, get) => ({
     ui.showToast('New note created')
   },
   updateNote: (id, patch) => {
+    // Snapshot the pre-edit state as a draft (throttled) before overwriting.
+    if (patch.blocks !== undefined || patch.title !== undefined) {
+      const prev = get().notes.find((n) => n.id === id)
+      if (prev) snapshotNote(prev)
+    }
     const notes = get().notes.map((n) => (n.id === id ? { ...n, ...patch, updated: 0 } : n))
     set({ notes })
     const n = notes.find((x) => x.id === id)
@@ -564,22 +640,98 @@ export const useData = create<DataState>()((set, get) => ({
     if (n) get().updateNote(noteId, { blocks: [...n.blocks, { ...block, id: block.id ?? blockId() }] })
   },
   deleteNote: (id) => {
+    const note = get().notes.find((n) => n.id === id)
+    if (!note) return
+    const today = todayEpochDay()
+    const sr = get().srs[id]
+    // Soft delete → the recycle bin. The ledger rows stay so review history
+    // survives a restore; the SRS state is snapshotted (absolute) too.
+    const row: TrashRow = {
+      id,
+      title: note.title,
+      folderId: note.folderId,
+      tags: note.tags,
+      createdDay: today + note.created,
+      updatedDay: today + note.updated,
+      blocks: note.blocks,
+      deletedAt: Date.now(),
+      srs: sr ? { ease: sr.ease, ivl: sr.ivl, dueDay: today + sr.due } : undefined,
+    }
     const srs = { ...get().srs }
     delete srs[id]
+    // Capture the todos pointing at this note BEFORE clearing them in state —
+    // otherwise the post-set db update reads the already-cleared refs and never
+    // persists, so the stale ref would return on reload.
+    const clearedTodos = get().todos.filter((t) => t.ref?.type === 'note' && t.ref.id === id)
     set({
       notes: get().notes.filter((n) => n.id !== id),
       srs,
+      trash: [row, ...get().trash],
       todos: get().todos.map((t) => (t.ref?.type === 'note' && t.ref.id === id ? { ...t, ref: undefined } : t)),
     })
+    void db.trash.put(row)
     void db.notes.delete(id)
     void db.srs.delete(id)
-    void db.ledger.where('noteId').equals(id).delete()
-    get().todos.forEach((t) => {
-      if (t.ref?.type === 'note' && t.ref.id === id) void db.todos.update(t.id, { ref: undefined })
-    })
+    clearedTodos.forEach((t) => void db.todos.update(t.id, { ref: undefined }))
     const ui = useUI.getState()
     if (ui.noteId === id) ui.setScreen('notes')
-    ui.showToast('Note deleted')
+    ui.showToast('Moved to Recently deleted')
+  },
+  loadRevisions: async (noteId) => {
+    const revs = await db.revisions.where('noteId').equals(noteId).sortBy('savedAt')
+    set({ revisions: revs.reverse() })
+  },
+  restoreRevision: (rev) => {
+    // Force a snapshot of the current state first so restoring is itself undoable.
+    const cur = get().notes.find((n) => n.id === rev.noteId)
+    if (cur) snapshotNote(cur, true)
+    get().updateNote(rev.noteId, { title: rev.title, blocks: rev.blocks.map((b) => ({ ...b })) })
+    useUI.getState().bumpEditor() // remount the editor so it shows the restored text
+    void get().loadRevisions(rev.noteId)
+    useUI.getState().showToast('Restored this draft')
+  },
+  restoreNote: async (id) => {
+    const t = get().trash.find((x) => x.id === id)
+    if (!t) return
+    const today = todayEpochDay()
+    const folderId = get().folders.some((f) => f.id === t.folderId) ? t.folderId : get().folders[0]?.id ?? ''
+    const note: Note = {
+      id: t.id,
+      title: t.title,
+      folderId,
+      tags: t.tags,
+      created: t.createdDay - today,
+      updated: t.updatedDay - today,
+      blocks: t.blocks,
+    }
+    set({ notes: [...get().notes, note], trash: get().trash.filter((x) => x.id !== id) })
+    await db.notes.add({ id: note.id, title: t.title, folderId, tags: t.tags, createdDay: t.createdDay, updatedDay: t.updatedDay, blocks: t.blocks })
+    await db.trash.delete(id)
+    if (t.srs) {
+      const ledger = await db.ledger.where('noteId').equals(id).toArray()
+      const hist = ledger.sort((a, b) => a.day - b.day).map((l) => ({ d: l.day - today, g: l.grade, ivl: l.ivl }))
+      const state: SrsState = { ease: t.srs.ease, ivl: t.srs.ivl, due: t.srs.dueDay - today, hist }
+      set({ srs: { ...get().srs, [id]: state } })
+      await db.srs.put({ noteId: id, ease: t.srs.ease, ivl: t.srs.ivl, dueDay: t.srs.dueDay })
+    }
+    useUI.getState().showToast('Note restored')
+  },
+  purgeNote: async (id) => {
+    set({ trash: get().trash.filter((x) => x.id !== id) })
+    await db.trash.delete(id)
+    await db.ledger.where('noteId').equals(id).delete()
+    await db.revisions.where('noteId').equals(id).delete()
+    useUI.getState().showToast('Deleted forever')
+  },
+  emptyTrash: async () => {
+    const ids = get().trash.map((x) => x.id)
+    set({ trash: [] })
+    await db.trash.clear()
+    for (const id of ids) {
+      await db.ledger.where('noteId').equals(id).delete()
+      await db.revisions.where('noteId').equals(id).delete()
+    }
+    useUI.getState().showToast('Recycle bin emptied')
   },
   moveNote: (id, folderId) => {
     get().updateNote(id, { folderId })
@@ -601,11 +753,16 @@ export const useData = create<DataState>()((set, get) => ({
     if (n) get().updateNote(id, { tags: n.tags.filter((x) => x !== tag) })
   },
   newFolder: (parentId) => {
+    // Only a real, existing folder may be a parent. The library passes the
+    // selected folder as parent, but `selFolder` also holds the view sentinels
+    // 'all'/'trash' — without this guard, "New folder" while the recycle bin is
+    // open would write parentId:'trash', an orphan invisible to the tree.
+    const parent = parentId && get().folders.some((f) => f.id === parentId) ? parentId : null
     const id = uid('f')
-    set({ folders: [...get().folders, { id, name: 'New folder', parentId }] })
-    void db.folders.add({ id, name: 'New folder', parentId })
+    set({ folders: [...get().folders, { id, name: 'New folder', parentId: parent }] })
+    void db.folders.add({ id, name: 'New folder', parentId: parent })
     const ui = useUI.getState()
-    if (parentId) ui.setExpanded({ ...ui.expanded, [parentId]: true })
+    if (parent) ui.setExpanded({ ...ui.expanded, [parent]: true })
     ui.setSelFolder(id)
     ui.startRenameFolder(id)
   },
@@ -616,27 +773,69 @@ export const useData = create<DataState>()((set, get) => ({
   },
   deleteFolder: (id) => {
     const folders = get().folders
-    const folder = folders.find((f) => f.id === id)
-    if (!folder) return
-    const parent = folder.parentId
-    const directNotes = notesIn(get().notes, id)
-    if (parent === null && directNotes.length > 0) {
-      useUI.getState().showToast("Move this folder's notes before deleting a top-level folder")
-      return
+    const target = folders.find((f) => f.id === id)
+    if (!target) return
+    // The whole subtree: this folder + every descendant folder.
+    const subtree = new Set<string>([id])
+    let grew = true
+    while (grew) {
+      grew = false
+      for (const f of folders) {
+        if (f.parentId && subtree.has(f.parentId) && !subtree.has(f.id)) {
+          subtree.add(f.id)
+          grew = true
+        }
+      }
     }
-    const childFolders = kidsOf(folders, id)
-    set({
-      folders: folders
-        .map((f) => (f.parentId === id ? { ...f, parentId: parent } : f))
-        .filter((f) => f.id !== id),
-      notes: get().notes.map((n) => (n.folderId === id ? { ...n, folderId: parent as string } : n)),
+    // Safe delete: every note living anywhere in the subtree goes to the recycle
+    // bin (recoverable — its ledger + SRS are kept, like a single delete), then
+    // the folders themselves are removed. No note is ever lost to a folder click.
+    const today = todayEpochDay()
+    const now = Date.now()
+    const srsMap = get().srs
+    const doomed = get().notes.filter((n) => subtree.has(n.folderId))
+    const doomedIds = new Set(doomed.map((n) => n.id))
+    const rows: TrashRow[] = doomed.map((note) => {
+      const sr = srsMap[note.id]
+      return {
+        id: note.id,
+        title: note.title,
+        folderId: note.folderId,
+        tags: note.tags,
+        createdDay: today + note.created,
+        updatedDay: today + note.updated,
+        blocks: note.blocks,
+        deletedAt: now,
+        srs: sr ? { ease: sr.ease, ivl: sr.ivl, dueDay: today + sr.due } : undefined,
+      }
     })
-    childFolders.forEach((f) => void db.folders.update(f.id, { parentId: parent }))
-    directNotes.forEach((n) => void db.notes.update(n.id, { folderId: parent as string }))
-    void db.folders.delete(id)
+    const srs = { ...srsMap }
+    for (const nid of doomedIds) delete srs[nid]
+    const clearedTodos = get().todos.filter((t) => t.ref?.type === 'note' && doomedIds.has(t.ref.id))
+    set({
+      folders: get().folders.filter((f) => !subtree.has(f.id)),
+      notes: get().notes.filter((n) => !doomedIds.has(n.id)),
+      srs,
+      trash: [...rows, ...get().trash],
+      todos: get().todos.map((t) =>
+        t.ref?.type === 'note' && doomedIds.has(t.ref.id) ? { ...t, ref: undefined } : t,
+      ),
+    })
+    for (const row of rows) {
+      void db.trash.put(row)
+      void db.notes.delete(row.id)
+      void db.srs.delete(row.id)
+    }
+    clearedTodos.forEach((t) => void db.todos.update(t.id, { ref: undefined }))
+    for (const fid of subtree) void db.folders.delete(fid)
     const ui = useUI.getState()
-    if (ui.selFolder === id) ui.setSelFolder('all')
-    ui.showToast('Folder deleted')
+    if (subtree.has(ui.selFolder)) ui.setSelFolder('all')
+    if (ui.noteId && doomedIds.has(ui.noteId)) ui.setScreen('notes')
+    ui.showToast(
+      doomed.length
+        ? `Folder deleted · ${doomed.length} ${doomed.length === 1 ? 'note' : 'notes'} → bin`
+        : 'Folder deleted',
+    )
   },
 
   addTodo: (raw) => {
@@ -848,18 +1047,63 @@ export const useData = create<DataState>()((set, get) => ({
       toast('Import failed — not a Noto vault')
       return false
     }
+    // MERGE, not overwrite — fold the imported vault into this one so two vaults
+    // combine instead of one wiping the other:
+    //   · entity tables keyed by a stable string id → upsert (a shared id wins,
+    //     everything else is added) — this is the "same file overwrites" case;
+    //   · note-history tables (auto-increment ids) → append with FRESH ids,
+    //     deduped by a natural key so their local ids can't clobber unrelated
+    //     rows and re-importing the same file doesn't pile up duplicates;
+    //   · tag vocabulary → union; the journal is passphrase-tied → atomic (below).
+    const UPSERT = ['folders', 'notes', 'srs', 'todos', 'goals', 'week', 'rituals', 'ranged', 'watch', 'trash']
+    const APPEND: Record<string, (r: { [k: string]: unknown }) => string> = {
+      ledger: (r) => `${r.noteId}|${r.day}|${r.grade}|${r.ivl}`,
+      revisions: (r) => `${r.noteId}|${r.savedAt}`,
+    }
+    const dropId = (r: { [k: string]: unknown }) => {
+      const copy = { ...r }
+      delete copy.id
+      return copy
+    }
     try {
+      let journalFolded = false
       await db.transaction('rw', db.tables, async () => {
-        for (const name of TABLE_NAMES) {
+        // 1) String-keyed entities → upsert by id (shared id overwrites, rest merge in).
+        for (const name of UPSERT) {
           const rows = data[name]
-          // Only replace tables the file actually carries. A partial/older backup
-          // that omits a table leaves the existing one intact instead of wiping
-          // it (this used to clear all 12 tables before checking each).
-          if (!Array.isArray(rows)) continue
-          await db.table(name).clear()
-          if (rows.length) await db.table(name).bulkAdd(rows)
+          if (Array.isArray(rows) && rows.length) await db.table(name).bulkPut(rows)
+        }
+        // 2) Auto-increment history → append with fresh ids, skipping ones we already have.
+        for (const name of Object.keys(APPEND)) {
+          const rows = data[name] as { [k: string]: unknown }[] | undefined
+          if (!Array.isArray(rows) || !rows.length) continue
+          const keyOf = APPEND[name]
+          const seen = new Set((await db.table(name).toArray()).map(keyOf))
+          const fresh = rows.filter((r) => !seen.has(keyOf(r))).map(dropId)
+          if (fresh.length) await db.table(name).bulkAdd(fresh)
+        }
+        // 3) Tag vocabulary → union.
+        const meta = Array.isArray(data.meta) ? (data.meta as { key: string; value: unknown }[]) : []
+        const importTags = (meta.find((m) => m.key === 'tagsPool')?.value as string[]) ?? []
+        if (importTags.length) {
+          const cur = ((await db.meta.get('tagsPool'))?.value as string[]) ?? []
+          await db.meta.put({ key: 'tagsPool', value: [...new Set([...cur, ...importTags])] })
+        }
+        // 4) The journal is tied to ONE passphrase, so it can't be blended with a
+        //    second key without stranding entries. Only fold in the imported journal
+        //    when this vault has none yet; otherwise leave the local journal untouched.
+        const localJournalEmpty = (await db.journal.count()) === 0 && !(await db.meta.get('journalCrypto'))
+        if (localJournalEmpty) {
+          const jrows = Array.isArray(data.journal) ? (data.journal as { [k: string]: unknown }[]) : []
+          if (jrows.length) await db.table('journal').bulkAdd(jrows.map(dropId))
+          for (const key of ['journalCrypto', 'scratchpad', 'scratchpadEnc']) {
+            const m = meta.find((x) => x.key === key)
+            if (m) await db.meta.put(m)
+          }
+          journalFolded = jrows.length > 0 || meta.some((m) => m.key === 'journalCrypto')
         }
       })
+      toast(journalFolded ? 'Vault merged — notes + journal folded in' : 'Vault merged into yours')
       return true
     } catch {
       toast('Import failed while writing')
