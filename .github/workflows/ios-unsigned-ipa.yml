@@ -1,0 +1,122 @@
+name: iOS unsigned IPA
+
+# Builds an UNSIGNED .ipa you can sideload with Sideloadly/AltStore, which
+# re-sign it using your free Apple ID. No Apple Developer Program needed.
+#
+# Why this works: signing is what costs $99 (an Apple-issued provisioning
+# profile carrying your device UDID). Building is not. So we compile with all
+# code signing switched off, hand-roll the Payload/ folder that an .ipa really
+# is, and let Sideloadly do the signing locally with your personal team.
+#
+# Runner: macos-26 (GA since Feb 2026) => Xcode 26 => the iOS 26 SDK, which is
+# what `expo-glass-effect` needs for UIGlassEffect to link. Built here, Liquid
+# Glass is real — unlike Expo Go, whose binary predates that SDK.
+#
+# Cost: public repo => unlimited free macOS minutes. Private repo on the Free
+# plan => 2,000 min/month at the 10x macOS multiplier, i.e. ~200 macOS minutes,
+# so roughly 6-8 builds a month.
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'ios-v*'
+
+concurrency:
+  group: ios-ipa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build unsigned .ipa
+    runs-on: macos-26
+    timeout-minutes: 60
+
+    env:
+      CI: '1'
+      EXPO_NO_TELEMETRY: '1'
+
+    steps:
+      - name: Checkout (full repo — mobile/ imports ../src/lib via Metro watchFolders)
+        uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          echo "== Xcode =="
+          xcodebuild -version
+          echo "== SDKs (need an iOS 26.x SDK for Liquid Glass) =="
+          xcodebuild -showsdks | grep -i iphoneos || true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install JS dependencies
+        working-directory: mobile
+        run: npm ci
+
+      - name: Generate the native iOS project
+        working-directory: mobile
+        # --no-install so npm/pods don't run twice; we drive CocoaPods ourselves.
+        run: npx expo prebuild --platform ios --clean --no-install
+
+      - name: Install CocoaPods
+        working-directory: mobile/ios
+        run: pod install --repo-update
+
+      - name: Build (code signing fully disabled)
+        working-directory: mobile
+        run: |
+          set -euo pipefail
+          WORKSPACE="$(ls -d ios/*.xcworkspace | head -n1)"
+          SCHEME="$(basename "${WORKSPACE}" .xcworkspace)"
+          echo "workspace=${WORKSPACE} scheme=${SCHEME}"
+
+          xcodebuild \
+            -workspace "${WORKSPACE}" \
+            -scheme "${SCHEME}" \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            -destination 'generic/platform=iOS' \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            build
+
+          echo "SCHEME=${SCHEME}" >> "$GITHUB_ENV"
+
+      - name: Package Payload/ into an .ipa
+        working-directory: mobile
+        run: |
+          set -euo pipefail
+          APP="build/Build/Products/Release-iphoneos/${SCHEME}.app"
+          test -d "${APP}" || { echo "::error::${APP} not found"; ls -R build/Build/Products || true; exit 1; }
+
+          # An .ipa is literally a zip containing Payload/<App>.app — nothing more.
+          rm -rf Payload && mkdir -p Payload
+          cp -R "${APP}" "Payload/"
+          zip -qry "${SCHEME}-unsigned.ipa" Payload
+
+          echo "== result =="
+          ls -lh "${SCHEME}-unsigned.ipa"
+          unzip -l "${SCHEME}-unsigned.ipa" | head -n 5
+
+          # Prove it is genuinely unsigned: no embedded profile, no signature dir.
+          if [ -e "Payload/${SCHEME}.app/embedded.mobileprovision" ]; then
+            echo "::warning::an embedded provisioning profile is present"
+          else
+            echo "no embedded.mobileprovision — unsigned, as intended"
+          fi
+
+      - name: Upload the .ipa
+        uses: actions/upload-artifact@v4
+        with:
+          name: noto-ios-unsigned-ipa
+          path: mobile/*.ipa
+          if-no-files-found: error
+          retention-days: 30
