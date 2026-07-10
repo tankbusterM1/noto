@@ -1,0 +1,38 @@
+{
+  "cli": {
+    "version": ">= 12.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "//": [
+      "preview  -> ad hoc .ipa for YOUR iPhone. Needs a paid Apple Developer",
+      "            membership and your device UDID registered first:",
+      "              npx eas-cli device:create",
+      "simulator-> unsigned .app, no Apple account needed, but only runs in the",
+      "            iOS Simulator (requires a Mac). It cannot be sideloaded."
+    ],
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "simulator": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "simulator": true
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "ios": {
+        "simulator": false
+      }
+    },
+    "production": {
+      "autoIncrement": true
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
