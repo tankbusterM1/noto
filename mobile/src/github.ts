@@ -81,10 +81,12 @@ async function delItem(key: string): Promise<void> {
 /** `owner/repo` -> verify the token can actually see it. */
 export async function connect(token: string, repoFullName: string): Promise<ConnectResult> {
   const trimmedToken = token.trim();
-  const repo = repoFullName.trim().replace(/^https?:\/\/github\.com\//i, '').replace(/\.git$/i, '');
+  const typed = repoFullName.trim().replace(/^https?:\/\/github\.com\//i, '').replace(/\.git$/i, '');
 
   if (!trimmedToken) return { ok: false, error: 'Paste a token first.' };
-  if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) return { ok: false, error: 'Repo must look like owner/name.' };
+  if (!/^([\w.-]+\/)?[\w.-]+$/.test(typed) || /(^|\/)\.+$/.test(typed)) {
+    return { ok: false, error: 'That is not a repo name.' };
+  }
 
   let user: { login: string };
   try {
@@ -95,6 +97,9 @@ export async function connect(token: string, repoFullName: string): Promise<Conn
   } catch {
     return { ok: false, error: 'No network. GitHub is unreachable.' };
   }
+
+  // A bare name is the common case now — the owner is whoever the token belongs to.
+  const repo = typed.includes('/') ? typed : `${user.login}/${typed}`;
 
   try {
     const res = await fetch(`https://api.github.com/repos/${repo}`, { headers: api(trimmedToken) });

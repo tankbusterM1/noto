@@ -20,8 +20,8 @@ import { Card, LargeTitle, Screen, useBottomInset } from '../ui';
 import { haptics, Press, Rise } from '../motion';
 import { deviceSalt } from '../db';
 import { useData } from '../store';
-import { dates } from '../../core';
 import { connect, createPrivateRepo, disconnect, savedRepo, type Connection } from '../github';
+import { dates, gitapi } from '../../core';
 import type { SyncOutcome } from '../vault';
 import { clientId, pollForToken, requestDeviceCode, type DeviceCode } from '../githubAuth';
 
@@ -430,11 +430,14 @@ export function SettingsScreen() {
     finish(await connect(tok, repo));
   };
 
+  /** The repo the user typed, normalised. Empty box = the default name. */
+  const wantedRepo = () => gitapi.repoNameFrom(repo) || gitapi.DEFAULT_REPO;
+
   /** One tap: make the private repo for them, no trip to github.com. */
   const doCreate = async () => {
     setBusy(true);
     setErr(null);
-    finish(await createPrivateRepo(tok));
+    finish(await createPrivateRepo(tok, wantedRepo()));
   };
 
   /**
@@ -472,7 +475,8 @@ export function SettingsScreen() {
     }
 
     setBusy(true);
-    finish(await createPrivateRepo(polled.token));
+    // The vault may already exist under a name of the user's choosing.
+    finish(await createPrivateRepo(polled.token, wantedRepo()));
   };
 
   const cancelSignIn = () => {
@@ -656,19 +660,25 @@ export function SettingsScreen() {
 
               <View style={st.divider} />
 
+              {/* The repo name feeds BOTH the one-tap sign-in and the manual token. */}
               <Text style={st.body}>
-                Manual: a fine-grained token scoped to one private repo. Checked against GitHub before it is saved.
+                Which private repo? Leave it blank for <Text style={{ fontFamily: mono }}>noto-vault</Text>. This name is
+                used by the button above too.
               </Text>
 
               <TextInput
                 value={repo}
                 onChangeText={setRepo}
-                placeholder="owner/repo"
+                placeholder="noto-vault"
                 placeholderTextColor={c.ink3}
                 autoCapitalize="none"
                 autoCorrect={false}
                 style={st.input}
               />
+
+              <Text style={st.body}>
+                Manual: a fine-grained token scoped to that repo. Checked against GitHub before it is saved.
+              </Text>
               <TextInput
                 value={tok}
                 onChangeText={setTok}

@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { db, folderCreatedAt, noteCreatedAt, repairForSync, type RevisionRow, type TrashRow } from '../data/db'
 import { deviceName, readVault, writeVault } from '../data/vault'
 import { journalId } from '../lib/sync'
-import { ensureRepo, explainGitError } from '../lib/gitapi'
+import { DEFAULT_REPO, ensureRepo, explainGitError, repoNameFrom } from '../lib/gitapi'
 import { syncVault } from '../lib/vaultSync'
 import { seedDatabase } from '../data/seed'
 import { todayEpochDay, agoMs } from '../lib/dates'
@@ -156,7 +156,10 @@ interface DataState {
   exportData: () => Promise<string>
   importData: (json: string) => Promise<boolean>
   resetData: () => Promise<void>
+  /** Which private repo this device syncs into. Defaults to `noto-vault`. */
+  githubRepo: string
   setGithubToken: (token: string) => Promise<void>
+  setGithubRepo: (repo: string) => Promise<void>
   syncNow: () => Promise<SyncOutcome>
 }
 
@@ -389,6 +392,7 @@ async function hydrateImpl(set: (partial: Partial<DataState>) => void): Promise<
         .sort((a, b) => b.off - a.off)
   const tagsPool =
     (metaRows.find((m) => m.key === 'tagsPool')?.value as string[] | undefined) ?? []
+  const githubRepo = (metaRows.find((m) => m.key === 'githubRepo')?.value as string | undefined) ?? DEFAULT_REPO
   const scratchpad = journalCrypto
     ? ''
     : (metaRows.find((m) => m.key === 'scratchpad')?.value as string | undefined) ?? ''
@@ -424,6 +428,7 @@ async function hydrateImpl(set: (partial: Partial<DataState>) => void): Promise<
     watch,
     journal,
     tagsPool,
+    githubRepo,
     scratchpad,
     journalCrypto,
     ledgerByDay,
@@ -445,6 +450,7 @@ export const useData = create<DataState>()((set, get) => ({
   watch: [],
   journal: [],
   scratchpad: '',
+  githubRepo: DEFAULT_REPO,
   journalCrypto: null,
   journalKey: null,
   tagsPool: [],
@@ -1244,13 +1250,22 @@ export const useData = create<DataState>()((set, get) => ({
     else await db.meta.delete('githubToken')
   },
 
+  /*
+   * The repo is a real setting, not a hidden one. It was meta-only, and a user
+   * whose vault lives in `noto-vault-live` had no way to say so — the app kept
+   * looking for `noto-vault`, failed to find it, and tried to create it.
+   */
+  setGithubRepo: async (input) => {
+    const name = repoNameFrom(input) || DEFAULT_REPO
+    await db.meta.put({ key: 'githubRepo', value: name })
+    set({ githubRepo: name })
+  },
+
   syncNow: async () => {
     const token = (await db.meta.get('githubToken'))?.value as string | undefined
     if (!token) return { ok: false, message: 'Connect a GitHub token first.' }
 
-    // Backend-only knob: point a device at a different vault repo without a
-    // settings field for it. `noto-vault` is what both apps create by default.
-    const repoName = ((await db.meta.get('githubRepo'))?.value as string | undefined) ?? 'noto-vault'
+    const repoName = ((await db.meta.get('githubRepo'))?.value as string | undefined) ?? DEFAULT_REPO
 
     try {
       const repo = await ensureRepo(token, repoName)

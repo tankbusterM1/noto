@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { ensureRepo, explainGitError, GitError, isRaceError, pull, push } from './gitapi'
+import { ensureRepo, explainGitError, GitError, isRaceError, pull, push, repoNameFrom } from './gitapi'
 
 /*
  * `fetch` is faked so we can drive the answers GitHub gives at the worst moments:
@@ -143,6 +143,35 @@ describe('pull', () => {
  * least three different mistakes, and it names none of them. These tests exist
  * because the raw message sent a real user hunting in the wrong place.
  */
+describe('repoNameFrom', () => {
+  /* People paste what's in their address bar. The owner comes from the token. */
+  it('accepts the browser URL', () => {
+    expect(repoNameFrom('https://github.com/tankbusterM1/noto-vault-live')).toBe('noto-vault-live')
+    expect(repoNameFrom('https://www.github.com/me/noto-vault/')).toBe('noto-vault')
+    expect(repoNameFrom('https://github.com/me/noto-vault.git')).toBe('noto-vault')
+  })
+
+  it('accepts owner/name and the bare name', () => {
+    expect(repoNameFrom('tankbusterM1/noto-vault-live')).toBe('noto-vault-live')
+    expect(repoNameFrom('  noto-vault-live  ')).toBe('noto-vault-live')
+  })
+
+  it('rejects anything that is not a repo name, rather than guessing', () => {
+    expect(repoNameFrom('')).toBe('')
+    expect(repoNameFrom('has spaces')).toBe('')
+    expect(repoNameFrom('   ')).toBe('')
+  })
+
+  /* `.` and `..` are valid characters and a path traversal waiting to happen. */
+  it('rejects dot segments, which would escape the repo path', () => {
+    expect(repoNameFrom('a/b/c/../..')).toBe('')
+    expect(repoNameFrom('..')).toBe('')
+    expect(repoNameFrom('.')).toBe('')
+    expect(repoNameFrom('me/../../admin')).toBe('')
+    expect(repoNameFrom('my.vault')).toBe('my.vault') // a dot inside a name is fine
+  })
+})
+
 describe('ensureRepo, and saying what actually went wrong', () => {
   it('adopts a repo the token can already see', async () => {
     replies(json({ login: 'me' }), json({ full_name: 'me/noto-vault' }))

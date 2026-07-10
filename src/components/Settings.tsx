@@ -1,4 +1,4 @@
-import { useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { useUI, ACCENTS } from '../store/ui'
 import { useData, type SyncOutcome } from '../store/data'
 import { MONO, SERIF } from '../lib/ui'
@@ -38,18 +38,27 @@ export function Settings() {
   const importData = useData((s) => s.importData)
   const resetData = useData((s) => s.resetData)
   const setGithubToken = useData((s) => s.setGithubToken)
+  const setGithubRepo = useData((s) => s.setGithubRepo)
+  const savedRepo = useData((s) => s.githubRepo)
   const syncNow = useData((s) => s.syncNow)
   const fileRef = useRef<HTMLInputElement>(null)
   const [resetArmed, setResetArmed] = useState(false)
   const [token, setToken] = useState('')
+  const [repo, setRepo] = useState(savedRepo)
   const [syncing, setSyncing] = useState(false)
   const [syncNote, setSyncNote] = useState<SyncOutcome | null>(null)
+
+  // Settings mounts before the vault hydrates, so the first `useState` captures
+  // the default rather than the saved repo. Adopt it once it arrives.
+  useEffect(() => setRepo(savedRepo), [savedRepo])
 
   if (!settingsOpen) return null
 
   const doSync = async () => {
     setSyncing(true)
     setSyncNote(null)
+    // Persist both before syncing, so a failed sync doesn't lose what was typed.
+    if (repo.trim()) await setGithubRepo(repo)
     if (token.trim()) await setGithubToken(token)
     const outcome = await syncNow()
     setSyncNote(outcome)
@@ -151,8 +160,7 @@ export function Settings() {
           <div style={label}>Sync · private GitHub repo</div>
           <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.55, marginBottom: 12 }}>
             Everything — notes, folders, review history, todos, watch later, and the <em>encrypted</em>{' '}
-            journal — is merged into a private repo named <code style={{ fontSize: 11.5 }}>noto-vault</code>,
-            which Noto creates for you. Each sync is one commit. Journal entries are pushed as ciphertext
+            journal — is merged into the private repo named below, which Noto creates for you if it does not exist. Each sync is one commit. Journal entries are pushed as ciphertext
             only; if you haven't set a passphrase, they stay on this machine.
           </div>
           <div style={{ fontSize: 11.5, color: 'var(--ink3)', lineHeight: 1.5, marginBottom: 12 }}>
@@ -160,12 +168,22 @@ export function Settings() {
             with your computer and your account can read it. Scope it to this one repo, and revoke it if the
             machine is shared. (On iPhone it's sealed in the Keychain behind Face ID.)
           </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
+            <input
+              value={repo}
+              onChange={(e) => setRepo(e.target.value)}
+              placeholder="noto-vault"
+              spellCheck={false}
+              style={{ flex: 1, minWidth: 200, padding: '9px 12px', fontSize: 12.5, fontFamily: MONO, borderRadius: 9, border: '1px solid var(--ln)', background: 'var(--sf2)', color: 'var(--ink)' }}
+            />
+            <span style={{ fontSize: 11, color: 'var(--ink3)', flexShrink: 0 }}>repo name, or paste its URL</span>
+          </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <input
               type="password"
               value={token}
               onChange={(e) => setToken(e.target.value)}
-              placeholder="GitHub token with repo scope"
+              placeholder="GitHub token with access to that repo"
               style={{ flex: 1, minWidth: 200, padding: '9px 12px', fontSize: 12.5, fontFamily: 'inherit', borderRadius: 9, border: '1px solid var(--ln)', background: 'var(--sf2)', color: 'var(--ink)' }}
             />
             <button className="border-hover" style={rowBtn} disabled={syncing} onClick={doSync}>

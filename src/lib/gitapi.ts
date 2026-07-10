@@ -118,8 +118,32 @@ export async function getLogin(token: string): Promise<string> {
   return (await json<{ login: string }>(res)).login;
 }
 
+export const DEFAULT_REPO = 'noto-vault';
+
+/**
+ * The repo name, from whatever the user pasted.
+ *
+ * People paste the browser URL, or `owner/name`, or the name alone. All three
+ * mean the same repo, and the owner always comes from the token anyway.
+ */
+export function repoNameFrom(input: string): string {
+  const cleaned = input
+    .trim()
+    .replace(/^https?:\/\/(www\.)?github\.com\//i, '')
+    .replace(/\.git$/i, '')
+    .replace(/\/+$/, '');
+
+  const segments = cleaned.split('/').filter(Boolean);
+  // At most `owner/name`. Anything deeper, or any dot segment, is not a repo —
+  // it's a path, and we would be guessing at which part of it the user meant.
+  if (segments.length === 0 || segments.length > 2 || segments.some((s) => /^\.+$/.test(s))) return '';
+
+  const last = segments[segments.length - 1];
+  return /^[\w.-]+$/.test(last) ? last : '';
+}
+
 /** Creates the private vault repo, or adopts it if it already exists. */
-export async function ensureRepo(token: string, name = 'noto-vault'): Promise<Repo> {
+export async function ensureRepo(token: string, name = DEFAULT_REPO): Promise<Repo> {
   const owner = await getLogin(token);
 
   const existing = await gh(token, `/repos/${owner}/${name}`, { tolerate: [404] });
