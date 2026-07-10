@@ -10,13 +10,13 @@
     "backgroundColor": "#f4f1e9",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.steve.noto",
+      "bundleIdentifier": "com.noto.vault",
       "infoPlist": {
         "NSFaceIDUsageDescription": "Noto uses Face ID to unlock your encrypted journal. Nothing leaves this device."
       }
     },
     "android": {
-      "package": "com.steve.noto",
+      "package": "com.noto.vault",
       "adaptiveIcon": {
         "backgroundColor": "#f4f1e9",
         "foregroundImage": "./assets/android-icon-foreground.png",
