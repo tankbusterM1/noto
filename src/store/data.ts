@@ -1,5 +1,9 @@
 import { create } from 'zustand'
-import { db, type RevisionRow, type TrashRow } from '../data/db'
+import { db, folderCreatedAt, noteCreatedAt, repairForSync, type RevisionRow, type TrashRow } from '../data/db'
+import { deviceName, readVault, writeVault } from '../data/vault'
+import { journalId } from '../lib/sync'
+import { ensureRepo, GitError } from '../lib/gitapi'
+import { syncVault } from '../lib/vaultSync'
 import { seedDatabase } from '../data/seed'
 import { todayEpochDay, agoMs } from '../lib/dates'
 import { domainOf } from '../lib/format'
@@ -152,6 +156,15 @@ interface DataState {
   exportData: () => Promise<string>
   importData: (json: string) => Promise<boolean>
   resetData: () => Promise<void>
+  setGithubToken: (token: string) => Promise<void>
+  syncNow: () => Promise<SyncOutcome>
+}
+
+export interface SyncOutcome {
+  ok: boolean
+  message: string
+  /** Encrypted journal entries are synced; plaintext ones never leave the device. */
+  plaintextHeld?: number
 }
 
 const TABLE_NAMES = [
@@ -183,14 +196,28 @@ const extractTag = (raw: string): { text: string; tag?: string } => {
   return { text, tag }
 }
 
-const numId = (id: string) => parseInt(id.replace(/\D/g, ''), 10) || 0
 const WATCH_HUES = [358, 215, 165, 262, 32, 205]
 
-// Collision-proof entity id: Date.now() keeps ids roughly chronological (so
-// `numId` still sorts by creation) while a per-session counter breaks ties for
-// items created within the same millisecond. Purely numeric so numId parses it.
+/*
+ * Globally unique entity id.
+ *
+ * The old scheme was `Date.now() * 1000 + seq`, with `seq` restarting at 0 every
+ * session. Two devices creating their first note in the same millisecond minted
+ * the *same id* — and once they sync, one note silently overwrites the other.
+ * Thirty-two bits of entropy per id makes that impossible in practice.
+ *
+ * Creation order now comes from the `createdAt` column, not from parsing the id.
+ */
 let idSeq = 0
-const uid = (prefix: string) => prefix + (Date.now() * 1000 + (idSeq++ % 1000))
+function uid(prefix: string): string {
+  const bytes = new Uint8Array(4)
+  crypto.getRandomValues(bytes)
+  const salt = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+  return `${prefix}${Date.now().toString(36)}-${(idSeq++ % 1296).toString(36)}-${salt}`
+}
+
+/** A deletion the other devices must honour. Outlives the 30-day recycle bin. */
+const tombstone = (id: string) => void db.tombstones.put({ id, deletedAt: Date.now() })
 
 // Recycle-bin notes auto-purge this many days after deletion (also surfaced as
 // a countdown on each trash card). Shared so the UI and the purge agree.
@@ -239,6 +266,10 @@ async function hydrateImpl(set: (partial: Partial<DataState>) => void): Promise<
   // (production build) starts as a clean, empty vault — your own notebook.
   if (import.meta.env.DEV && (await db.folders.count()) === 0) await seedDatabase()
 
+  // Idempotent, and after the seed on purpose: a brand-new vault needs the sync
+  // columns just as much as an upgraded one, and Dexie runs no upgrade hook for it.
+  await repairForSync()
+
   const today = todayEpochDay()
   const [
     folderRows,
@@ -268,11 +299,16 @@ async function hydrateImpl(set: (partial: Partial<DataState>) => void): Promise<
     db.meta.toArray(),
   ])
 
+  // Creation order comes from the timestamp column now. The old code parsed the
+  // digits out of the id, which the new random ids no longer encode.
   const folders: Folder[] = folderRows
+    .slice()
+    .sort((a, b) => folderCreatedAt(a) - folderCreatedAt(b))
     .map((r) => ({ id: r.id, name: r.name, parentId: r.parentId }))
-    .sort((a, b) => numId(a.id) - numId(b.id))
 
   const notes: Note[] = noteRows
+    .slice()
+    .sort((a, b) => noteCreatedAt(a) - noteCreatedAt(b))
     .map((r) => ({
       id: r.id,
       title: r.title,
@@ -282,7 +318,6 @@ async function hydrateImpl(set: (partial: Partial<DataState>) => void): Promise<
       updated: r.updatedDay - today,
       blocks: r.blocks.map((b, i) => (b.id ? b : { ...b, id: `${r.id}-b${i}` })),
     }))
-    .sort((a, b) => numId(a.id) - numId(b.id))
 
   // Reconstruct per-note history from the ledger.
   const ledgerByNote = new Map<string, typeof ledgerRows>()
@@ -312,10 +347,18 @@ async function hydrateImpl(set: (partial: Partial<DataState>) => void): Promise<
 
   // "added" is derived live from the timestamp (was a frozen "just now"
   // string). Legacy/demo rows with synthetic addedAt keep their stored label.
+  // A watch item that arrived from the phone may lack the fields only the
+  // desktop's cards render. `tags.map(...)` on undefined is a crash, not a gap.
   const watch: Watch[] = watchRows
     .slice()
     .sort((a, b) => b.addedAt - a.addedAt)
-    .map((r) => ({ ...r, added: r.addedAt > 1.4e12 ? agoMs(r.addedAt) : r.added }))
+    .map((r) => ({
+      ...r,
+      tags: r.tags ?? [],
+      note: r.note ?? '',
+      hue: r.hue ?? WATCH_HUES[0],
+      added: r.addedAt > 1.4e12 ? agoMs(r.addedAt) : r.added ?? 'just now',
+    }))
 
   // Ritual daily rollover — rituals are real: a day boundary checks yesterday's
   // completion (streak +1) or breaks the streak, then unticks for the new day.
@@ -483,25 +526,27 @@ export const useData = create<DataState>()((set, get) => ({
     useUI.getState().setScreen('queue')
   },
 
+  // Every list write stamps `updatedAt`: without it, two devices that both ticked
+  // a todo today would have no way to tell which tick happened last.
   toggleTodo: (id) => {
     set({ todos: get().todos.map((t) => (t.id === id ? { ...t, done: !t.done } : t)) })
     const done = get().todos.find((t) => t.id === id)?.done
-    if (done !== undefined) void db.todos.update(id, { done })
+    if (done !== undefined) void db.todos.update(id, { done, updatedAt: Date.now() })
   },
   toggleGoal: (id) => {
     set({ goals: get().goals.map((t) => (t.id === id ? { ...t, done: !t.done } : t)) })
     const done = get().goals.find((t) => t.id === id)?.done
-    if (done !== undefined) void db.goals.update(id, { done })
+    if (done !== undefined) void db.goals.update(id, { done, updatedAt: Date.now() })
   },
   toggleWeek: (id) => {
     set({ week: get().week.map((t) => (t.id === id ? { ...t, done: !t.done } : t)) })
     const done = get().week.find((t) => t.id === id)?.done
-    if (done !== undefined) void db.week.update(id, { done })
+    if (done !== undefined) void db.week.update(id, { done, updatedAt: Date.now() })
   },
   toggleRitual: (id) => {
     set({ rituals: get().rituals.map((t) => (t.id === id ? { ...t, done: !t.done } : t)) })
     const done = get().rituals.find((t) => t.id === id)?.done
-    if (done !== undefined) void db.rituals.update(id, { done })
+    if (done !== undefined) void db.rituals.update(id, { done, updatedAt: Date.now() })
   },
 
   addToReview: (noteId) => {
@@ -541,7 +586,7 @@ export const useData = create<DataState>()((set, get) => ({
       loading: true,
     }
     set({ watch: [item, ...get().watch] })
-    void db.watch.add({ ...item, addedAt: Date.now() })
+    void db.watch.add({ ...item, addedAt: Date.now(), updatedAt: Date.now() })
     // Real client-side scrape (noembed / YouTube thumbnail / OG tags via a CORS
     // proxy). Durations still need a server API, so they stay unknown.
     void (async () => {
@@ -558,9 +603,11 @@ export const useData = create<DataState>()((set, get) => ({
     })()
   },
 
+  // Every watch change funnels through here — toggle, scrape result, tags — so
+  // this is the single place the edit stamp has to be set.
   watchPatch: (id, patch) => {
     set({ watch: get().watch.map((w) => (w.id === id ? { ...w, ...patch } : w)) })
-    void db.watch.update(id, patch)
+    void db.watch.update(id, { ...patch, updatedAt: Date.now() })
   },
   watchToggle: (id) => {
     const cur = get().watch.find((w) => w.id === id)
@@ -569,6 +616,7 @@ export const useData = create<DataState>()((set, get) => ({
   watchDelete: (id) => {
     set({ watch: get().watch.filter((w) => w.id !== id) })
     void db.watch.delete(id)
+    tombstone(id)
   },
 
   watchAddTag: (id, rawTag) => {
@@ -594,8 +642,9 @@ export const useData = create<DataState>()((set, get) => ({
     // A clean (empty) vault has no folders yet — give the first note a home.
     if (folders.length === 0) {
       const f = { id: uid('f'), name: 'Notes', parentId: null }
+      const now = Date.now()
       set({ folders: [f] })
-      void db.folders.add(f)
+      void db.folders.add({ ...f, createdAt: now, updatedAt: now })
       folders = [f]
     }
     const sel = ui.selFolder
@@ -612,7 +661,18 @@ export const useData = create<DataState>()((set, get) => ({
     }
     set({ notes: [...get().notes, note] })
     const today = todayEpochDay()
-    void db.notes.add({ id, title: note.title, folderId, tags: [], createdDay: today, updatedDay: today, blocks: note.blocks })
+    const now = Date.now()
+    void db.notes.add({
+      id,
+      title: note.title,
+      folderId,
+      tags: [],
+      createdDay: today,
+      updatedDay: today,
+      createdAt: now,
+      updatedAt: now,
+      blocks: note.blocks,
+    })
     ui.openNote(id)
     ui.showToast('New note created')
   },
@@ -632,6 +692,7 @@ export const useData = create<DataState>()((set, get) => ({
         tags: n.tags,
         folderId: n.folderId,
         updatedDay: todayEpochDay(),
+        updatedAt: Date.now(),
       })
     }
   },
@@ -672,7 +733,8 @@ export const useData = create<DataState>()((set, get) => ({
     void db.trash.put(row)
     void db.notes.delete(id)
     void db.srs.delete(id)
-    clearedTodos.forEach((t) => void db.todos.update(t.id, { ref: undefined }))
+    tombstone(id)
+    clearedTodos.forEach((t) => void db.todos.update(t.id, { ref: undefined, updatedAt: Date.now() }))
     const ui = useUI.getState()
     if (ui.noteId === id) ui.setScreen('notes')
     ui.showToast('Moved to Recently deleted')
@@ -705,7 +767,19 @@ export const useData = create<DataState>()((set, get) => ({
       blocks: t.blocks,
     }
     set({ notes: [...get().notes, note], trash: get().trash.filter((x) => x.id !== id) })
-    await db.notes.add({ id: note.id, title: t.title, folderId, tags: t.tags, createdDay: t.createdDay, updatedDay: t.updatedDay, blocks: t.blocks })
+    // updatedAt = now, deliberately: it must outrank the tombstone, or the next
+    // sync would read the restore as a stale note and delete it again.
+    await db.notes.add({
+      id: note.id,
+      title: t.title,
+      folderId,
+      tags: t.tags,
+      createdDay: t.createdDay,
+      updatedDay: t.updatedDay,
+      createdAt: noteCreatedAt(t),
+      updatedAt: Date.now(),
+      blocks: t.blocks,
+    })
     await db.trash.delete(id)
     if (t.srs) {
       const ledger = await db.ledger.where('noteId').equals(id).toArray()
@@ -760,7 +834,8 @@ export const useData = create<DataState>()((set, get) => ({
     const parent = parentId && get().folders.some((f) => f.id === parentId) ? parentId : null
     const id = uid('f')
     set({ folders: [...get().folders, { id, name: 'New folder', parentId: parent }] })
-    void db.folders.add({ id, name: 'New folder', parentId: parent })
+    const now = Date.now()
+    void db.folders.add({ id, name: 'New folder', parentId: parent, createdAt: now, updatedAt: now })
     const ui = useUI.getState()
     if (parent) ui.setExpanded({ ...ui.expanded, [parent]: true })
     ui.setSelFolder(id)
@@ -769,7 +844,7 @@ export const useData = create<DataState>()((set, get) => ({
   renameFolder: (id, name) => {
     const nm = name.trim() || 'Untitled folder'
     set({ folders: get().folders.map((f) => (f.id === id ? { ...f, name: nm } : f)) })
-    void db.folders.update(id, { name: nm })
+    void db.folders.update(id, { name: nm, updatedAt: Date.now() })
   },
   deleteFolder: (id) => {
     const folders = get().folders
@@ -821,12 +896,13 @@ export const useData = create<DataState>()((set, get) => ({
         t.ref?.type === 'note' && doomedIds.has(t.ref.id) ? { ...t, ref: undefined } : t,
       ),
     })
+    void db.tombstones.bulkPut([...doomedIds, ...subtree].map((id) => ({ id, deletedAt: now })))
     for (const row of rows) {
       void db.trash.put(row)
       void db.notes.delete(row.id)
       void db.srs.delete(row.id)
     }
-    clearedTodos.forEach((t) => void db.todos.update(t.id, { ref: undefined }))
+    clearedTodos.forEach((t) => void db.todos.update(t.id, { ref: undefined, updatedAt: Date.now() }))
     for (const fid of subtree) void db.folders.delete(fid)
     const ui = useUI.getState()
     if (subtree.has(ui.selFolder)) ui.setSelFolder('all')
@@ -848,44 +924,48 @@ export const useData = create<DataState>()((set, get) => ({
     }
     const todo: Todo = { id: uid('t'), text, done: false, ...(tag ? { tag } : {}) }
     set({ todos: [...get().todos, todo] })
-    void db.todos.add(todo)
+    void db.todos.add({ ...todo, updatedAt: Date.now() })
   },
   deleteTodo: (id) => {
     set({ todos: get().todos.filter((t) => t.id !== id) })
     void db.todos.delete(id)
+    tombstone(id) // without this the other device syncs it straight back
   },
   addGoal: (text) => {
     const t = text.trim()
     if (!t) return
     const g: Goal = { id: uid('g'), text: t, done: false }
     set({ goals: [...get().goals, g] })
-    void db.goals.add(g)
+    void db.goals.add({ ...g, updatedAt: Date.now() })
   },
   deleteGoal: (id) => {
     set({ goals: get().goals.filter((g) => g.id !== id) })
     void db.goals.delete(id)
+    tombstone(id)
   },
   addRitual: (text) => {
     const t = text.trim()
     if (!t) return
     const r: Ritual = { id: uid('r'), text: t, streak: 0, done: false }
     set({ rituals: [...get().rituals, r] })
-    void db.rituals.add(r)
+    void db.rituals.add({ ...r, updatedAt: Date.now() })
   },
   deleteRitual: (id) => {
     set({ rituals: get().rituals.filter((r) => r.id !== id) })
     void db.rituals.delete(id)
+    tombstone(id)
   },
   addWeekItem: (day, text) => {
     const t = text.trim()
     if (!t) return
     const w: WeekItem = { id: uid('w'), day, text: t, done: false }
     set({ week: [...get().week, w] })
-    void db.week.add(w)
+    void db.week.add({ ...w, updatedAt: Date.now() })
   },
   deleteWeekItem: (id) => {
     set({ week: get().week.filter((w) => w.id !== id) })
     void db.week.delete(id)
+    tombstone(id)
   },
   addRanged: (text, from, to) => {
     const t = text.trim()
@@ -895,11 +975,12 @@ export const useData = create<DataState>()((set, get) => ({
     const hue = [215, 28, 262, 165, 320][get().ranged.length % 5]
     const r: Ranged = { id: uid('rg'), text: t, from: lo, to: hi, hue }
     set({ ranged: [...get().ranged, r] })
-    void db.ranged.add(r)
+    void db.ranged.add({ ...r, updatedAt: Date.now() })
   },
   deleteRanged: (id) => {
     set({ ranged: get().ranged.filter((r) => r.id !== id) })
     void db.ranged.delete(id)
+    tombstone(id)
   },
 
   saveJournalEntry: async (text) => {
@@ -919,17 +1000,21 @@ export const useData = create<DataState>()((set, get) => ({
     }
     const words = clean ? clean.split(/\s+/).filter(Boolean).length : 0
     const today = todayEpochDay()
+    // `sid` is the day, so the phone's copy of today's entry is the same entry.
+    // A row saved without one would be re-uploaded under a fresh id every sync.
+    const sid = journalId(today)
+    const updatedAt = Date.now()
     if (existing) {
       set({ journal: get().journal.map((e) => (e.off === 0 ? { ...e, words, text: clean } : e)) })
       if (existing.id !== undefined) {
-        if (key) await db.journal.put({ id: existing.id, day: today, enc: await encryptJSON(key, { text: clean, words }) })
-        else await db.journal.update(existing.id, { day: today, words, text: clean })
+        if (key) await db.journal.put({ id: existing.id, sid, updatedAt, day: today, enc: await encryptJSON(key, { text: clean, words }) })
+        else await db.journal.update(existing.id, { sid, updatedAt, day: today, words, text: clean })
       }
     } else {
       set({ journal: [{ off: 0, words, text: clean }, ...get().journal] })
       const row = key
-        ? { day: today, enc: await encryptJSON(key, { text: clean, words }) }
-        : { day: today, words, text: clean }
+        ? { sid, updatedAt, day: today, enc: await encryptJSON(key, { text: clean, words }) }
+        : { sid, updatedAt, day: today, words, text: clean }
       const id = await db.journal.add(row)
       set({ journal: get().journal.map((e) => (e.off === 0 && e.id === undefined ? { ...e, id: id as number } : e)) })
     }
@@ -940,8 +1025,10 @@ export const useData = create<DataState>()((set, get) => ({
     // Same guard as saveJournalEntry: don't leak plaintext while locked.
     if (get().journalCrypto && !key) return
     set({ scratchpad: text })
-    if (key) await db.meta.put({ key: 'scratchpadEnc', value: await encryptJSON(key, text) })
-    else await db.meta.put({ key: 'scratchpad', value: text })
+    if (key) {
+      await db.meta.put({ key: 'scratchpadEnc', value: await encryptJSON(key, text) })
+      await db.meta.put({ key: 'scratchpadAt', value: Date.now() })
+    } else await db.meta.put({ key: 'scratchpad', value: text })
   },
   setJournalPassphrase: async (pass) => {
     const toast = useUI.getState().showToast
@@ -966,18 +1053,25 @@ export const useData = create<DataState>()((set, get) => ({
     // (otherwise a later save takes the "new entry" path and duplicates it).
     const migrated: JournalEntry[] = []
     await db.transaction('rw', db.journal, db.meta, async () => {
+      // Re-put replaces the whole row, so `sid` has to be restated or every entry
+      // loses its identity and re-uploads as a new one on the next sync.
+      const existing = new Map((await db.journal.toArray()).map((r) => [r.id, r]))
       for (const e of entries) {
+        const day = today + e.off
         const enc = await encryptJSON(key, { text: e.text, words: e.words })
+        const sid = (e.id !== undefined ? existing.get(e.id)?.sid : undefined) ?? journalId(day)
+        const updatedAt = Date.now()
         if (e.id !== undefined) {
-          await db.journal.put({ id: e.id, day: today + e.off, enc })
+          await db.journal.put({ id: e.id, sid, updatedAt, day, enc })
           migrated.push(e)
         } else {
-          const newId = await db.journal.add({ day: today + e.off, enc })
+          const newId = await db.journal.add({ sid, updatedAt, day, enc })
           migrated.push({ ...e, id: newId as number })
         }
       }
       await db.meta.put({ key: 'journalCrypto', value: cryptoMeta })
       await db.meta.put({ key: 'scratchpadEnc', value: await encryptJSON(key, scratch) })
+      await db.meta.put({ key: 'scratchpadAt', value: Date.now() })
       await db.meta.delete('scratchpad')
     })
     set({ journalKey: key, journalCrypto: cryptoMeta, journal: migrated })
@@ -1067,11 +1161,34 @@ export const useData = create<DataState>()((set, get) => ({
     }
     try {
       let journalFolded = false
+      const importedAt = Date.now()
       await db.transaction('rw', db.tables, async () => {
-        // 1) String-keyed entities → upsert by id (shared id overwrites, rest merge in).
+        /*
+         * 1) String-keyed entities → upsert by id (shared id overwrites, rest merge in).
+         *
+         * An export written before sync existed carries no `updatedAt`, and a
+         * bulkPut writes the whole row: without this, importing would strip the
+         * millisecond stamp off every row it lands on, and the next merge would
+         * treat those rows as older than anything.
+         */
+        const STAMPED = new Set(['todos', 'goals', 'week', 'rituals', 'ranged', 'watch', 'notes', 'folders'])
+        const DAY_MS = 86_400_000
         for (const name of UPSERT) {
           const rows = data[name]
-          if (Array.isArray(rows) && rows.length) await db.table(name).bulkPut(rows)
+          if (!Array.isArray(rows) || !rows.length) continue
+          const stamped = STAMPED.has(name)
+            ? rows.map((raw) => {
+                const r = raw as { updatedAt?: number; createdAt?: number; updatedDay?: number; createdDay?: number }
+                const fallbackUpdated = name === 'notes' && r.updatedDay ? r.updatedDay * DAY_MS : importedAt
+                const fallbackCreated = name === 'notes' && r.createdDay ? r.createdDay * DAY_MS : importedAt
+                return {
+                  ...(raw as object),
+                  updatedAt: r.updatedAt ?? fallbackUpdated,
+                  ...(name === 'notes' || name === 'folders' ? { createdAt: r.createdAt ?? fallbackCreated } : {}),
+                }
+              })
+            : rows
+          await db.table(name).bulkPut(stamped)
         }
         // 2) Auto-increment history → append with fresh ids, skipping ones we already have.
         for (const name of Object.keys(APPEND)) {
@@ -1112,5 +1229,59 @@ export const useData = create<DataState>()((set, get) => ({
   },
   resetData: async () => {
     await db.delete()
+  },
+
+  /*
+   * The token is a device-local secret. A browser has no keychain, so it lives in
+   * IndexedDB beside the notes: anyone with the disk and your OS account can read
+   * it. That is the same reach they'd already have over the vault itself, but the
+   * token also unlocks the remote copy — so scope it to one private repo and
+   * revoke it if the machine is shared.
+   */
+  setGithubToken: async (token) => {
+    const t = token.trim()
+    if (t) await db.meta.put({ key: 'githubToken', value: t })
+    else await db.meta.delete('githubToken')
+  },
+
+  syncNow: async () => {
+    const token = (await db.meta.get('githubToken'))?.value as string | undefined
+    if (!token) return { ok: false, message: 'Connect a GitHub token first.' }
+
+    // Backend-only knob: point a device at a different vault repo without a
+    // settings field for it. `noto-vault` is what both apps create by default.
+    const repoName = ((await db.meta.get('githubRepo'))?.value as string | undefined) ?? 'noto-vault'
+
+    try {
+      const repo = await ensureRepo(token, repoName)
+      const { vault, plaintextHeld } = await readVault()
+      const result = await syncVault(token, repo, vault, await deviceName())
+
+      // Nothing was pushed and nothing may be written: the merged vault would
+      // carry journal entries encrypted under a passphrase this device lacks.
+      if (result.cryptoConflict) {
+        return {
+          ok: false,
+          message:
+            'This vault was encrypted with a different journal passphrase. Nothing was synced — unlock with the vault’s passphrase, or use a separate repo.',
+          plaintextHeld,
+        }
+      }
+
+      await writeVault(result.vault)
+      await get().hydrate() // the merge may have brought in notes, reviews, folders
+
+      const { notes, ledger, lists } = result.stats
+      return {
+        ok: true,
+        plaintextHeld,
+        message: result.pushed
+          ? `Synced · ${notes} notes, ${ledger} reviews, ${lists} items`
+          : `Already up to date · ${notes} notes`,
+      }
+    } catch (e) {
+      const why = e instanceof GitError && e.status === 401 ? 'That token was rejected.' : (e as Error).message
+      return { ok: false, message: `Sync failed — ${why}` }
+    }
   },
 }))

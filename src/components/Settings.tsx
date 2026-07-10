@@ -1,6 +1,6 @@
 import { useRef, useState, type CSSProperties } from 'react'
 import { useUI, ACCENTS } from '../store/ui'
-import { useData } from '../store/data'
+import { useData, type SyncOutcome } from '../store/data'
 import { MONO, SERIF } from '../lib/ui'
 import { CloseIcon } from './icons'
 
@@ -37,10 +37,25 @@ export function Settings() {
   const exportData = useData((s) => s.exportData)
   const importData = useData((s) => s.importData)
   const resetData = useData((s) => s.resetData)
+  const setGithubToken = useData((s) => s.setGithubToken)
+  const syncNow = useData((s) => s.syncNow)
   const fileRef = useRef<HTMLInputElement>(null)
   const [resetArmed, setResetArmed] = useState(false)
+  const [token, setToken] = useState('')
+  const [syncing, setSyncing] = useState(false)
+  const [syncNote, setSyncNote] = useState<SyncOutcome | null>(null)
 
   if (!settingsOpen) return null
+
+  const doSync = async () => {
+    setSyncing(true)
+    setSyncNote(null)
+    if (token.trim()) await setGithubToken(token)
+    const outcome = await syncNow()
+    setSyncNote(outcome)
+    setSyncing(false)
+    if (outcome.ok) showToast(outcome.message)
+  }
 
   const doExport = async () => {
     const json = await exportData()
@@ -129,6 +144,40 @@ export function Settings() {
               <span style={{ position: 'absolute', top: 3, left: inkFade ? 21 : 3, width: 18, height: 18, borderRadius: 99, background: 'var(--bg)', transition: 'left 0.2s cubic-bezier(0.65,0,0.35,1)' }} />
             </button>
           </div>
+
+          <div style={{ height: 1, background: 'var(--ln)', margin: '22px 0' }} />
+
+          {/* Sync — one private repo, shared with the phone. */}
+          <div style={label}>Sync · private GitHub repo</div>
+          <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.55, marginBottom: 12 }}>
+            Notes, folders, review history and the <em>encrypted</em> journal are merged into a private
+            repo named <code style={{ fontSize: 11.5 }}>noto-vault</code>, which Noto creates for you. Each
+            sync is one commit. Journal entries are pushed as ciphertext only — if you haven't set a
+            passphrase, they stay on this machine.
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <input
+              type="password"
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              placeholder="GitHub token with repo scope"
+              style={{ flex: 1, minWidth: 200, padding: '9px 12px', fontSize: 12.5, fontFamily: 'inherit', borderRadius: 9, border: '1px solid var(--ln)', background: 'var(--sf2)', color: 'var(--ink)' }}
+            />
+            <button className="border-hover" style={rowBtn} disabled={syncing} onClick={doSync}>
+              {syncing ? 'Syncing…' : 'Sync now'}
+            </button>
+          </div>
+          {syncNote && (
+            <div style={{ marginTop: 10, fontSize: 12, lineHeight: 1.5, color: syncNote.ok ? 'var(--ink2)' : 'var(--g1)' }}>
+              {syncNote.message}
+              {!!syncNote.plaintextHeld && (
+                <div style={{ marginTop: 4, color: 'var(--ink3)' }}>
+                  {syncNote.plaintextHeld} journal {syncNote.plaintextHeld === 1 ? 'entry' : 'entries'} held back —
+                  set a passphrase to sync {syncNote.plaintextHeld === 1 ? 'it' : 'them'}.
+                </div>
+              )}
+            </div>
+          )}
 
           <div style={{ height: 1, background: 'var(--ln)', margin: '22px 0' }} />
 

@@ -55,6 +55,46 @@ export function applyGrade(prev: SrsState, g: Grade): GradeResult {
   return { state, requeue, toast }
 }
 
+/** A review as it travels between devices: absolute day, the grade, the interval it produced. */
+export interface LedgerRow {
+  noteId: string
+  day: number
+  grade: number
+  ivl: number
+}
+
+/** Scheduling state for one note, in absolute days. */
+export interface Schedule {
+  noteId: string
+  ease: number
+  ivl: number
+  dueDay: number
+}
+
+/**
+ * Rebuild a note's schedule from its review history.
+ *
+ * This is why the ledger — not the schedule — is the thing that syncs. `ease`
+ * evolves deterministically from the sequence of grades, so replaying the union
+ * of both devices' reviews lands on the same number everywhere. The interval and
+ * due day are read straight off the last recorded event rather than recomputed,
+ * so a note scheduled under an older formula keeps the date the user was shown.
+ *
+ * Shared by the desktop and iOS adapters: if they replayed differently, every
+ * sync would rewrite `state/srs.json` and the two devices would argue forever.
+ */
+export function replayLedger(rows: LedgerRow[]): Schedule | null {
+  if (!rows.length) return null
+  const sorted = rows.slice().sort((a, b) => a.day - b.day)
+
+  let state: SrsState = { ease: DEFAULT_EASE, ivl: 0, due: 0, hist: [] }
+  for (const r of sorted) state = applyGrade(state, r.grade as Grade).state
+
+  const last = sorted[sorted.length - 1]
+  const dueOffset = last.grade === 1 ? 0 : last.ivl // "Again" is due the same day
+  return { noteId: last.noteId, ease: state.ease, ivl: last.ivl, dueDay: last.day + dueOffset }
+}
+
 /**
  * The predicted-next-interval hint shown on each grade button. Note the Easy
  * hint uses the *current* ease (not ease + 0.1), matching the prototype — it's

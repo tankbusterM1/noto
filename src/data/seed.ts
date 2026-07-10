@@ -192,6 +192,8 @@ export async function seedDatabase(): Promise<void> {
     tags: n.tags,
     createdDay: T + n.created,
     updatedDay: T + n.updated,
+    createdAt: (T + n.created) * 86_400_000,
+    updatedAt: (T + n.updated) * 86_400_000,
     blocks: n.blocks.map((b) => ({ ...b, id: blockId() })),
   }))
 

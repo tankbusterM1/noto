@@ -20,7 +20,9 @@ import { Card, LargeTitle, Screen, useBottomInset } from '../ui';
 import { haptics, Press, Rise } from '../motion';
 import { deviceSalt } from '../db';
 import { useData } from '../store';
+import { dates } from '../../core';
 import { connect, createPrivateRepo, disconnect, savedRepo, type Connection } from '../github';
+import type { SyncOutcome } from '../vault';
 import { clientId, pollForToken, requestDeviceCode, type DeviceCode } from '../githubAuth';
 
 /**
@@ -59,7 +61,11 @@ export function JournalScreen() {
   const unlocked = useData((s) => s.journalUnlocked);
   const entries = useData((s) => s.journal);
   const sealedCount = useData((s) => s.journalCount);
+  const journalCrypto = useData((s) => s.journalCrypto);
+  const journalCached = useData((s) => s.journalCached);
   const unlockJournal = useData((s) => s.unlockJournal);
+  const unlockWithPassphrase = useData((s) => s.unlockJournalWithPassphrase);
+  const setPassphrase = useData((s) => s.setJournalPassphrase);
   const lockJournal = useData((s) => s.lockJournal);
   const addEntry = useData((s) => s.addJournalEntry);
   const removeEntry = useData((s) => s.removeJournalEntry);
@@ -69,7 +75,26 @@ export function JournalScreen() {
   const [code, setCode] = useState<string | null>(null);
   const [bio, setBio] = useState<Biometrics | null>(null);
   const [draft, setDraft] = useState('');
+  const [pass, setPass] = useState('');
+  const [showPass, setShowPass] = useState(false);
   const bottom = useBottomInset();
+
+  /*
+   * Three states, not two:
+   *   · no passphrase anywhere -> this device sets one, and the vault adopts it
+   *   · passphrase set, key cached -> Face ID releases it
+   *   · passphrase set, no cached key -> type it once; then Face ID forever
+   */
+  const mode = !journalCrypto ? 'create' : journalCached && !showPass ? 'faceid' : 'passphrase';
+
+  const today = dates.todayEpochDay();
+  const todayEntry = entries.find((e) => e.day === today);
+
+  // Editing today's entry means starting from what's already there, exactly as
+  // the desktop does — the journal holds one entry per day, not an append log.
+  useEffect(() => {
+    if (unlocked) setDraft(todayEntry?.text ?? '');
+  }, [unlocked, todayEntry?.text]);
 
   useEffect(() => {
     if (Platform.OS === 'web') return;
@@ -118,6 +143,7 @@ export function JournalScreen() {
       if (bio && !bio.hardware) setErr('This device has no biometric hardware.');
       else if (bio && !bio.enrolled) setErr('No face is enrolled. Settings › Face ID & Passcode.');
       else setErr('Cancelled, or Face ID could not release the key.');
+      setShowPass(true); // fall back to the passphrase rather than dead-ending
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : 'Keychain unavailable in this runtime.');
     } finally {
@@ -125,10 +151,36 @@ export function JournalScreen() {
     }
   };
 
+  /*
+   * 600,000 PBKDF2 rounds on the JS thread. It takes seconds on a phone, and it
+   * is meant to — that is the cost an attacker pays per guess. It happens once:
+   * the derived key is then cached behind Face ID.
+   */
+  const runPassphrase = async () => {
+    setErr(null);
+    setCode(null);
+    if (!pass.trim()) return;
+    setBusy(true);
+    try {
+      const result = mode === 'create' ? await setPassphrase(pass) : await unlockWithPassphrase(pass);
+      if (result.ok) {
+        haptics.success();
+        setPass('');
+        setShowPass(false);
+      } else {
+        haptics.error();
+        setErr(result.error ?? 'Could not unlock.');
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const save = async () => {
     if (!draft.trim()) return;
+    // `addEntry` re-reads the day itself. `today` above was captured at render,
+    // and a journal left open past midnight would otherwise rewrite yesterday.
     await addEntry(draft);
-    setDraft('');
     haptics.success();
   };
 
@@ -160,7 +212,7 @@ export function JournalScreen() {
         {unlocked ? (
           <>
             <Card>
-              <Text style={st.kicker}>TODAY</Text>
+              <Text style={st.kicker}>{todayEntry ? "TODAY · SAVED" : 'TODAY'}</Text>
               <TextInput
                 value={draft}
                 onChangeText={setDraft}
@@ -172,20 +224,26 @@ export function JournalScreen() {
               />
               <Pressable
                 onPress={() => void save()}
-                disabled={!draft.trim()}
-                style={({ pressed }) => [st.primaryBtn, !draft.trim() && { opacity: 0.35 }, pressed && { opacity: 0.7 }]}
+                disabled={!draft.trim() || draft.trim() === todayEntry?.text}
+                style={({ pressed }) => [
+                  st.primaryBtn,
+                  (!draft.trim() || draft.trim() === todayEntry?.text) && { opacity: 0.35 },
+                  pressed && { opacity: 0.7 },
+                ]}
               >
                 <Ionicons name="lock-closed-outline" size={15} color={c.bg} />
-                <Text style={st.primaryText}>Seal this entry</Text>
+                <Text style={st.primaryText}>{todayEntry ? "Update today's entry" : 'Seal this entry'}</Text>
               </Pressable>
             </Card>
 
-            {entries.map((e, i) => (
+            {entries
+              .filter((e) => e.day !== today)
+              .map((e, i) => (
               <Rise key={e.id} delay={Math.min(i, 8) * 22}>
                 <Card>
                   <View style={st.entryHead}>
                     <Text style={st.kicker}>
-                      {new Date(e.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} ·{' '}
+                      {new Date(e.day * 86_400_000).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} ·{' '}
                       {e.words} {e.words === 1 ? 'WORD' : 'WORDS'}
                     </Text>
                     <Press
@@ -210,27 +268,71 @@ export function JournalScreen() {
         ) : (
           <GlassSurface style={st.lockCard} fallbackColor={c.surface}>
             <Ionicons name="lock-closed-outline" size={26} color={c.ink3} />
-            <Text style={st.lockedTitle}>The journal is locked.</Text>
+            <Text style={st.lockedTitle}>
+              {mode === 'create' ? 'Choose a passphrase.' : 'The journal is locked.'}
+            </Text>
             <Text style={st.lockedHint}>
-              {sealedCount > 0
-                ? `${sealedCount} sealed ${sealedCount === 1 ? 'entry' : 'entries'}. Without your face they are noise — even to this app.`
-                : 'Only you can open it. Nothing here ever leaves the device unencrypted.'}
+              {mode === 'create'
+                ? 'The same passphrase opens this journal on your laptop. It is never uploaded, never recoverable — write it down somewhere real.'
+                : sealedCount > 0
+                  ? `${sealedCount} sealed ${sealedCount === 1 ? 'entry' : 'entries'}. Without the key they are noise — even to this app.`
+                  : 'Only you can open it. Nothing here ever leaves the device unencrypted.'}
             </Text>
 
-            <Pressable
-              onPress={() => void run()}
-              disabled={busy}
-              style={({ pressed }) => [st.primaryBtn, (pressed || busy) && { opacity: 0.7 }]}
-            >
-              {busy ? (
-                <ActivityIndicator color={c.bg} size="small" />
-              ) : (
-                <>
-                  <Ionicons name={IN_EXPO_GO ? 'keypad-outline' : 'scan-outline'} size={16} color={c.bg} />
-                  <Text style={st.primaryText}>{IN_EXPO_GO ? 'Unlock' : 'Unlock with Face ID'}</Text>
-                </>
-              )}
-            </Pressable>
+            {mode === 'faceid' ? (
+              <Pressable
+                onPress={() => void run()}
+                disabled={busy}
+                style={({ pressed }) => [st.primaryBtn, (pressed || busy) && { opacity: 0.7 }]}
+              >
+                {busy ? (
+                  <ActivityIndicator color={c.bg} size="small" />
+                ) : (
+                  <>
+                    <Ionicons name={IN_EXPO_GO ? 'keypad-outline' : 'scan-outline'} size={16} color={c.bg} />
+                    <Text style={st.primaryText}>{IN_EXPO_GO ? 'Unlock' : 'Unlock with Face ID'}</Text>
+                  </>
+                )}
+              </Pressable>
+            ) : (
+              <>
+                <TextInput
+                  value={pass}
+                  onChangeText={setPass}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  placeholder={mode === 'create' ? 'At least 8 characters' : 'Your journal passphrase'}
+                  placeholderTextColor={c.ink3}
+                  onSubmitEditing={() => void runPassphrase()}
+                  style={st.passInput}
+                />
+                <Pressable
+                  onPress={() => void runPassphrase()}
+                  disabled={busy || !pass.trim()}
+                  style={({ pressed }) => [
+                    st.primaryBtn,
+                    (busy || !pass.trim()) && { opacity: 0.35 },
+                    pressed && { opacity: 0.7 },
+                  ]}
+                >
+                  {busy ? (
+                    <ActivityIndicator color={c.bg} size="small" />
+                  ) : (
+                    <>
+                      <Ionicons name="key-outline" size={16} color={c.bg} />
+                      <Text style={st.primaryText}>{mode === 'create' ? 'Encrypt the journal' : 'Unlock'}</Text>
+                    </>
+                  )}
+                </Pressable>
+                {busy ? <Text style={st.diag}>deriving the key · this takes a few seconds, once</Text> : null}
+                {mode === 'passphrase' && journalCached ? (
+                  <Press haptic={false} onPress={() => setShowPass(false)}>
+                    <Text style={st.linkText}>Use Face ID instead</Text>
+                  </Press>
+                ) : null}
+              </>
+            )}
 
             {IN_EXPO_GO ? (
               <Text style={st.diag}>
@@ -280,7 +382,19 @@ export function SettingsScreen() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [device, setDevice] = useState<DeviceCode | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncNote, setSyncNote] = useState<SyncOutcome | null>(null);
   const cancelled = useRef(false);
+  const syncNow = useData((s) => s.syncNow);
+
+  const doSync = async () => {
+    setSyncing(true);
+    setSyncNote(null);
+    const outcome = await syncNow();
+    setSyncNote(outcome);
+    setSyncing(false);
+    outcome.ok ? haptics.success() : haptics.error();
+  };
 
   const g = glassDiagnostics();
   const hasClientId = clientId() !== null;
@@ -452,6 +566,37 @@ export function SettingsScreen() {
               ) : (
                 <Text style={st.note}>Token is in the Keychain. Reading it will prompt for Face ID.</Text>
               )}
+
+              <Pressable
+                onPress={() => void doSync()}
+                disabled={syncing}
+                style={({ pressed }) => [st.primaryBtn, (pressed || syncing) && { opacity: 0.7 }]}
+              >
+                {syncing ? (
+                  <ActivityIndicator color={c.bg} size="small" />
+                ) : (
+                  <>
+                    <Ionicons name="sync-outline" size={15} color={c.bg} />
+                    <Text style={st.primaryText}>Sync now</Text>
+                  </>
+                )}
+              </Pressable>
+
+              {syncNote ? (
+                <Text style={[st.note, !syncNote.ok && { color: c.red }]}>{syncNote.message}</Text>
+              ) : (
+                <Text style={st.note}>
+                  Notes, folders, review history, todos, watch-later and the encrypted journal — one commit per sync.
+                </Text>
+              )}
+              {syncNote?.legacyHeld ? (
+                <Text style={st.note}>
+                  {syncNote.legacyHeld} older {syncNote.legacyHeld === 1 ? 'entry was' : 'entries were'} written before
+                  the passphrase existed. Unlock the journal once to bring {syncNote.legacyHeld === 1 ? 'it' : 'them'}{' '}
+                  across.
+                </Text>
+              ) : null}
+
               <Pressable onPress={doDisconnect} style={({ pressed }) => [st.ghostBtn, pressed && { opacity: 0.6 }]}>
                 <Text style={st.ghostText}>Disconnect</Text>
               </Pressable>
@@ -578,6 +723,19 @@ export function SettingsScreen() {
 }
 
 const st = StyleSheet.create({
+  passInput: {
+    width: '100%',
+    borderWidth: 1,
+    borderColor: c.line,
+    borderRadius: radius.md,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: c.ink,
+    backgroundColor: c.surface2 ?? c.surface,
+    marginBottom: 10,
+  },
+  linkText: { ...t.footnote, color: c.accent, marginTop: 10, textAlign: 'center' },
   kicker: { ...t.caption2, fontFamily: mono, letterSpacing: 1.6, color: c.ink3 },
   body: { ...t.footnote, color: c.ink2, lineHeight: 19, marginTop: 8 },
   note: { ...t.caption1, color: c.ink3, lineHeight: 17, marginTop: 12 },

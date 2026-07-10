@@ -9,7 +9,13 @@
  *
  * Metro reaches outside the project root via `watchFolders` (see metro.config.js).
  *
- * Not re-exported (browser-only): lib/ui.ts, lib/crypto.ts, lib/scrape.ts.
+ * `sync`, `vaultSync` and `gitapi` are shared for the same reason as FSRS: if the
+ * two platforms ever disagreed about the wire format or the merge, a sync would
+ * quietly corrupt the vault instead of failing. `b64` is shared because the
+ * journal's ciphertext envelope must be byte-identical on both sides.
+ *
+ * Not re-exported (browser-only): lib/ui.ts, lib/crypto.ts, lib/scrape.ts —
+ * crypto.ts needs Web Crypto, which Hermes lacks; see mobile/src/crypto.ts.
  */
 
 export * as fsrs from '../src/lib/adaptive'
@@ -22,5 +28,10 @@ export * as loom from '../src/lib/loom'
 export * as weave from '../src/lib/weave'
 export * as history from '../src/lib/history'
 export * as templates from '../src/lib/templates'
+
+export * as sync from '../src/lib/sync'
+export * as vaultSync from '../src/lib/vaultSync'
+export * as gitapi from '../src/lib/gitapi'
+export * as b64 from '../src/lib/b64'
 
 export * from '../src/lib/types'

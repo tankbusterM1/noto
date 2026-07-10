@@ -11,6 +11,8 @@
  * recorded; `CURRENT_ITERATIONS` is used for newly-encrypted journals.
  */
 
+import { b64ToBytes, bytesToB64 } from './b64'
+
 const enc = new TextEncoder()
 const dec = new TextDecoder()
 
@@ -19,20 +21,21 @@ export interface Cipher {
   ct: string
 }
 
-function b64(buf: ArrayBuffer): string {
-  let s = ''
-  const bytes = new Uint8Array(buf)
-  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i])
-  return btoa(s)
-}
-
-function unb64(s: string): Uint8Array {
-  return Uint8Array.from(atob(s), (c) => c.charCodeAt(0))
-}
+/*
+ * The salt, iv and ct encodings are a cross-platform contract: the iOS app
+ * derives the same key and reads the same ciphertext. `lib/b64` rather than
+ * `btoa` because Hermes has no `btoa`, and a divergent encoder would make every
+ * entry written on one device unreadable on the other.
+ */
+const b64 = (buf: ArrayBuffer | Uint8Array) => bytesToB64(buf instanceof Uint8Array ? buf : new Uint8Array(buf))
+const unb64 = b64ToBytes
 
 export function randomSalt(): string {
-  return b64(crypto.getRandomValues(new Uint8Array(16)).buffer)
+  return b64(crypto.getRandomValues(new Uint8Array(16)))
 }
+
+/** The plaintext behind a verifier token. Both platforms encrypt exactly this. */
+export const VERIFIER = 'noto-journal-ok'
 
 /** Iteration count for vaults encrypted before the count was recorded. */
 export const DEFAULT_ITERATIONS = 150_000
@@ -59,15 +62,13 @@ export async function deriveKey(
 export async function encryptJSON(key: CryptoKey, value: unknown): Promise<Cipher> {
   const iv = crypto.getRandomValues(new Uint8Array(12))
   const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(JSON.stringify(value)))
-  return { iv: b64(iv.buffer), ct: b64(ct) }
+  return { iv: b64(iv), ct: b64(ct) }
 }
 
 export async function decryptJSON<T>(key: CryptoKey, cipher: Cipher): Promise<T> {
   const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(cipher.iv) }, key, unb64(cipher.ct))
   return JSON.parse(dec.decode(pt)) as T
 }
-
-const VERIFIER = 'noto-journal-ok'
 
 export async function makeVerifier(key: CryptoKey): Promise<Cipher> {
   return encryptJSON(key, VERIFIER)

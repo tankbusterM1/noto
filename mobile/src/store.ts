@@ -10,9 +10,27 @@ import {
   type WatchKind,
   type WatchRow,
 } from './db';
-import { open as openSealed, seal, unlockKey } from './crypto';
+import {
+  cacheKey,
+  cachedKey,
+  hasCachedKey,
+  checkVerifier,
+  CURRENT_ITERATIONS,
+  decryptJSON,
+  DEFAULT_ITERATIONS,
+  deriveKey,
+  destroyLegacyKey,
+  encryptJSON,
+  isLegacyEnvelope,
+  legacyKey,
+  makeVerifier,
+  openLegacy,
+  randomSalt,
+  type VaultCrypto,
+} from './crypto';
+import { runSync, type SyncOutcome } from './vault';
 import { cancelDigest, scheduleDigest, syncBadge } from './badge';
-import { dates, format, fsrs, markdown } from '../core';
+import { dates, format, fsrs, markdown, sync } from '../core';
 import type { Grade, HistEntry } from '../core';
 
 export interface Note {
@@ -74,10 +92,20 @@ interface State {
   journalUnlocked: boolean;
   /** How many sealed entries exist — visible even when locked. */
   journalCount: number;
+  /** Null until a passphrase exists anywhere in the vault. */
+  journalCrypto: VaultCrypto | null;
+  /** True when the derived key is cached, so Face ID alone opens the journal. */
+  journalCached: boolean;
+  /** Face ID path. False means "no cached key" — ask for the passphrase. */
   unlockJournal: () => Promise<boolean>;
+  /** Passphrase path: derive, verify, then cache behind Face ID. */
+  unlockJournalWithPassphrase: (pass: string) => Promise<{ ok: boolean; error?: string }>;
+  /** First passphrase for a vault that has none. Encrypts whatever is already here. */
+  setJournalPassphrase: (pass: string) => Promise<{ ok: boolean; error?: string }>;
   lockJournal: () => void;
   addJournalEntry: (text: string) => Promise<void>;
   removeJournalEntry: (id: string) => Promise<void>;
+  syncNow: () => Promise<SyncOutcome>;
   /** Daily local reminder naming what's waiting. */
   digestOn: boolean;
   hydrate: () => Promise<void>;
@@ -95,6 +123,8 @@ interface State {
   toggleWatch: (id: string) => Promise<void>;
   removeWatch: (id: string) => Promise<void>;
 }
+
+const WATCH_HUES = [358, 215, 165, 262, 32, 205];
 
 const toTodo = (r: TodoRow): Todo => ({ id: r.id, text: r.text, tag: r.tag, done: !!r.done });
 const toWatch = (r: WatchRow): WatchItem => ({
@@ -206,6 +236,78 @@ let vault: Vault | null = null;
  */
 let journalKey: Uint8Array | null = null;
 
+/**
+ * Rescue entries written before the journal used a passphrase.
+ *
+ * They are AES-GCM under a random Keychain key, hex-encoded, and their plaintext
+ * is a bare string rather than `{text, words}`. They are readable exactly once:
+ * now, while the old key still exists. Retiring that key without re-encrypting
+ * them first would destroy every one of them, silently, with nothing to show for
+ * it but an empty journal.
+ */
+async function migrateLegacyEntries(newKey: Uint8Array): Promise<number> {
+  if (!vault) return 0;
+  const rows = await vault.journal();
+  const legacy = rows.filter((r) => isLegacyEnvelope(r.iv));
+  if (!legacy.length) return 0;
+
+  const old = await legacyKey();
+  if (!old) return 0; // the key is gone; the ciphertext is already unrecoverable
+
+  // The day is the identity now, but a legacy vault could hold two entries for
+  // one day. Writing both to `j<day>` would silently destroy the first — and
+  // then we'd delete the only key that could have read it back.
+  const taken = new Set(rows.filter((r) => !isLegacyEnvelope(r.iv)).map((r) => r.id));
+
+  let moved = 0;
+  for (const r of legacy) {
+    const text = openLegacy(old, { iv: r.iv, ct: r.ct });
+    if (text === null) continue; // not ours, or tampered — leave it exactly as it is
+    const words = text.trim().split(/\s+/).filter(Boolean).length;
+
+    let id = sync.journalId(r.day);
+    for (let n = 2; taken.has(id); n++) id = `${sync.journalId(r.day)}-${n}`;
+    taken.add(id);
+
+    // Write the re-sealed copy BEFORE dropping the old row. A crash between the
+    // two must leave a duplicate, never a hole.
+    await vault.putJournal({
+      id,
+      day: r.day,
+      createdAt: r.createdAt,
+      updatedAt: Date.now(),
+      ...encryptJSON(newKey, { text, words }),
+    });
+    if (id !== r.id) await vault.deleteJournal(r.id);
+    moved++;
+  }
+
+  // Only once every legacy entry is re-sealed. One unreadable row and we keep
+  // the key: a duplicate is recoverable, a destroyed key is not.
+  if (moved === legacy.length) await destroyLegacyKey();
+  return moved;
+}
+
+/** Decrypt every entry we can and publish them. Blobs we can't open are skipped, not lost. */
+async function openJournal(key: Uint8Array): Promise<void> {
+  if (!vault) return;
+  journalKey = key;
+
+  const rows = await vault.journal();
+  const entries: JournalEntry[] = [];
+  for (const r of rows) {
+    const payload = decryptJSON<{ text: string; words: number }>(key, { iv: r.iv, ct: r.ct });
+    if (!payload || typeof payload.text !== 'string') continue; // wrong key or tampered — GCM caught it
+    entries.push({ id: r.id, day: r.day, text: payload.text, words: payload.words, createdAt: r.createdAt });
+  }
+  entries.sort((a, b) => b.day - a.day);
+
+  // The decrypt loop is async. If the user hit Lock while it ran, publishing now
+  // would put every plaintext entry back on screen behind a "locked" badge.
+  if (journalKey !== key) return;
+  useData.setState({ journal: entries, journalUnlocked: true, journalCount: rows.length });
+}
+
 export const useData = create<State>((set, get) => ({
   ready: false,
   notes: [],
@@ -215,11 +317,13 @@ export const useData = create<State>((set, get) => ({
   journal: [],
   journalUnlocked: false,
   journalCount: 0,
+  journalCrypto: null,
+  journalCached: false,
   digestOn: false,
 
   hydrate: async () => {
     vault = await openVault();
-    const [noteRows, srsRows, ledger, todoRows, watchRows, journalRows, digest] = await Promise.all([
+    const [noteRows, srsRows, ledger, todoRows, watchRows, journalRows, digest, cryptoRaw] = await Promise.all([
       vault.notes(),
       vault.srs(),
       vault.ledger(),
@@ -227,7 +331,16 @@ export const useData = create<State>((set, get) => ({
       vault.watch(),
       vault.journal(),
       vault.getMeta('digest'),
+      vault.getMeta('journalCrypto'),
     ]);
+
+    let journalCrypto: VaultCrypto | null = null;
+    try {
+      journalCrypto = cryptoRaw ? (JSON.parse(cryptoRaw) as VaultCrypto) : null;
+    } catch {
+      journalCrypto = null;
+    }
+
     set({
       ready: true,
       notes: noteRows.map(toNote),
@@ -238,27 +351,71 @@ export const useData = create<State>((set, get) => ({
       journal: [],
       journalUnlocked: false,
       journalCount: journalRows.length,
+      journalCrypto,
+      journalCached: journalCrypto ? await hasCachedKey(journalCrypto.salt) : false,
       digestOn: digest === '1',
     });
     void get().refreshSignals();
   },
 
-  /** Reading the Keychain key IS the Face ID prompt. Then we open the entries. */
+  /** Reading the cached key IS the Face ID prompt. No cache -> ask the passphrase. */
   unlockJournal: async () => {
-    if (!vault) return false;
-    const key = await unlockKey();
+    const jc = get().journalCrypto;
+    if (!vault || !jc) return false;
+    const key = await cachedKey(jc.salt);
     if (!key) return false;
-    journalKey = key;
-
-    const rows = await vault.journal();
-    const entries: JournalEntry[] = [];
-    for (const r of rows) {
-      const text = openSealed(key, { iv: r.iv, ct: r.ct });
-      if (text === null) continue; // wrong key or tampered — GCM caught it
-      entries.push({ id: r.id, day: r.day, text, words: text.trim().split(/\s+/).filter(Boolean).length, createdAt: r.createdAt });
-    }
-    set({ journal: entries, journalUnlocked: true, journalCount: rows.length });
+    await openJournal(key);
     return true;
+  },
+
+  /**
+   * Six hundred thousand hash rounds on the JS thread. It is slow on purpose —
+   * that cost is what a thief pays per guess — and it happens once per device,
+   * because the derived key is then cached behind Face ID.
+   */
+  unlockJournalWithPassphrase: async (pass) => {
+    const jc = get().journalCrypto;
+    if (!vault || !jc) return { ok: false, error: 'This vault has no passphrase yet.' };
+
+    const key = await deriveKey(pass, jc.salt, jc.iterations ?? DEFAULT_ITERATIONS);
+    if (!checkVerifier(key, jc.verifier)) return { ok: false, error: 'Wrong passphrase.' };
+
+    await cacheKey(key, jc.salt);
+    await migrateLegacyEntries(key);
+    await openJournal(key);
+    set({ journalCached: true });
+    return { ok: true };
+  },
+
+  /*
+   * Order matters more than it looks.
+   *
+   * `migrateLegacyEntries` re-encrypts every old entry under the new key and then
+   * destroys the random key that was the only way to read them. If the process
+   * dies before `journalCrypto` is written, the salt and verifier for the new key
+   * never existed: on relaunch the app sees a vault with no passphrase, offers to
+   * set one, mints a *different* salt — and every entry is lost for good.
+   *
+   * So the key parameters are made durable first. A crash after that leaves a
+   * journal that simply asks for the passphrase, which is the correct state.
+   */
+  setJournalPassphrase: async (pass) => {
+    if (!vault) return { ok: false, error: 'Not ready.' };
+    if (get().journalCrypto) return { ok: false, error: 'This vault already has a passphrase.' };
+    if (pass.trim().length < 8) return { ok: false, error: 'Use at least 8 characters.' };
+
+    const salt = randomSalt();
+    const iterations = CURRENT_ITERATIONS;
+    const key = await deriveKey(pass, salt, iterations);
+    const jc: VaultCrypto = { salt, iterations, verifier: makeVerifier(key) };
+
+    await vault.setMeta('journalCrypto', JSON.stringify(jc));
+    await cacheKey(key, salt);
+    set({ journalCrypto: jc, journalCached: true });
+
+    await migrateLegacyEntries(key);
+    await openJournal(key);
+    return { ok: true };
   },
 
   lockJournal: () => {
@@ -266,30 +423,53 @@ export const useData = create<State>((set, get) => ({
     set({ journal: [], journalUnlocked: false });
   },
 
+  /*
+   * One entry per day, exactly as on the desktop. The id is the day, so writing
+   * on the phone at noon and the laptop at midnight edits the SAME entry rather
+   * than leaving two copies of one Tuesday.
+   */
   addJournalEntry: async (text) => {
     if (!vault || !journalKey || !text.trim()) return;
     const clean = text.trim();
+    const words = clean.split(/\s+/).filter(Boolean).length;
+    const day = dates.todayEpochDay();
+    const id = sync.journalId(day);
+    const existing = get().journal.find((e) => e.id === id);
     const now = Date.now();
+
     const row: JournalRow = {
-      id: uid('j'),
-      day: dates.todayEpochDay(),
-      createdAt: now,
-      ...seal(journalKey, clean),
+      id,
+      day,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+      ...encryptJSON(journalKey, { text: clean, words }),
     };
     await vault.putJournal(row);
+
+    const entry: JournalEntry = { id, day, text: clean, words, createdAt: row.createdAt };
+    const rest = get().journal.filter((e) => e.id !== id);
     set({
-      journal: [
-        { id: row.id, day: row.day, text: clean, words: clean.split(/\s+/).filter(Boolean).length, createdAt: now },
-        ...get().journal,
-      ],
-      journalCount: get().journalCount + 1,
+      journal: [entry, ...rest].sort((a, b) => b.day - a.day),
+      journalCount: rest.length + 1,
     });
   },
 
   removeJournalEntry: async (id) => {
     if (!vault) return;
     await vault.deleteJournal(id);
+    await vault.tombstone(id, Date.now()); // or the laptop syncs it straight back
     set({ journal: get().journal.filter((e) => e.id !== id), journalCount: Math.max(0, get().journalCount - 1) });
+  },
+
+  syncNow: async () => {
+    const outcome = await runSync();
+    if (outcome.ok) {
+      await get().hydrate();
+      // Entries that arrived from the other device are still sealed; if the
+      // journal is open, decrypt them now rather than showing a stale list.
+      if (journalKey) await openJournal(journalKey);
+    }
+    return outcome;
   },
 
   /**
@@ -316,7 +496,7 @@ export const useData = create<State>((set, get) => ({
     const now = Date.now();
     const folders = await vault.folders();
     const folderId = folders[0]?.id ?? 'f_inbox';
-    if (!folders.length) await vault.putFolder({ id: folderId, name: 'Notes', parentId: null });
+    if (!folders.length) await vault.putFolder({ id: folderId, name: 'Notes', parentId: null, createdAt: now, updatedAt: now });
 
     const row: NoteRow = {
       id: uid('n'),
@@ -361,8 +541,13 @@ export const useData = create<State>((set, get) => ({
     const mem = fsrs.replayMemory(hist);
     const ivl = mem ? Math.max(1, Math.min(fsrs.MAX_IVL, fsrs.scheduleInterval(mem.stab))) : 1;
 
+    // "Again" means see it again today. Scheduling it `ivl` days out would hide
+    // the one note you just admitted you'd forgotten — and it would disagree with
+    // `replayLedger`, so the next sync would silently pull the date back anyway.
+    const dueDay = grade === 1 ? today : today + ivl;
+
     await vault.addLedger({ noteId: id, day: today, grade, ivl });
-    await vault.putSrs({ noteId: id, ease: prev?.ease ?? 2.5, ivl, dueDay: today + ivl });
+    await vault.putSrs({ noteId: id, ease: prev?.ease ?? 2.5, ivl, dueDay });
 
     const [srsRows, ledger] = await Promise.all([vault.srs(), vault.ledger()]);
     set({ memory: deriveMemory(ledger, srsRows) });
@@ -401,6 +586,7 @@ export const useData = create<State>((set, get) => ({
   removeTodo: async (id) => {
     if (!vault) return;
     await vault.deleteTodo(id);
+    await vault.tombstone(id, Date.now()); // else the laptop syncs it straight back
     set({ todos: get().todos.filter((t) => t.id !== id) });
     void get().refreshSignals();
   },
@@ -419,6 +605,12 @@ export const useData = create<State>((set, get) => ({
       mins,
       done: 0,
       addedAt: Date.now(),
+      updatedAt: Date.now(),
+      // The desktop's card renders these; inventing them here beats it rendering blanks.
+      hue: WATCH_HUES[Math.floor(Math.random() * WATCH_HUES.length)],
+      tags: [],
+      note: '',
+      added: 'just now',
     };
     await vault.putWatch(row);
     set({ watch: [toWatch(row), ...get().watch] });
@@ -438,6 +630,7 @@ export const useData = create<State>((set, get) => ({
       mins: cur.mins,
       done: cur.done ? 0 : 1,
       addedAt: cur.addedAt,
+      updatedAt: Date.now(),
     });
     const rows = await vault.watch();
     set({ watch: rows.map(toWatch) });
@@ -446,6 +639,7 @@ export const useData = create<State>((set, get) => ({
   removeWatch: async (id) => {
     if (!vault) return;
     await vault.deleteWatch(id);
+    await vault.tombstone(id, Date.now());
     set({ watch: get().watch.filter((w) => w.id !== id) });
   },
 }));

@@ -41,6 +41,9 @@ export interface FolderRow {
   id: string;
   name: string;
   parentId: string | null;
+  createdAt: number;
+  /** epoch ms — folders merge last-writer-wins, so a rename needs a time. */
+  updatedAt: number;
 }
 
 export interface SrsRow {
@@ -74,16 +77,21 @@ export interface TodoRow {
   done: number;
   createdAt: number;
   updatedAt: number;
+  /** What the desktop attached this todo to. Carried, never interpreted here. */
+  ref?: { type: 'note' | 'watch'; id: string };
 }
 
 /** Only ciphertext ever touches disk. There is no plaintext column, by design. */
 export interface JournalRow {
+  /** `j<epochDay>` — the day IS the identity, so both devices agree (see sync.journalId). */
   id: string;
   /** Absolute epoch-day, so entries age correctly across timezones. */
   day: number;
   iv: string;
   ct: string;
   createdAt: number;
+  /** The entry is rewritten as the day goes on; the later text wins a merge. */
+  updatedAt: number;
 }
 
 export type WatchKind = 'video' | 'article' | 'paper';
@@ -98,7 +106,31 @@ export interface WatchRow {
   mins: number;
   done: number;
   addedAt: number;
+  updatedAt: number;
+  /** Desktop-only fields, stored so the phone can't erase them on the way through. */
+  hue?: number;
+  tags?: string[];
+  note?: string;
+  thumb?: string;
+  added?: string;
 }
+
+/*
+ * Every row of every small collection, stored as the JSON the wire format uses.
+ *
+ * This is the table sync reads and writes. It exists because the phone has no
+ * Goals screen and no `watch.thumb`: if it stored only the columns it renders, a
+ * single toggle here would make it the last writer and quietly delete every
+ * field the laptop cares about. Storing the row verbatim means the phone can
+ * carry data it doesn't understand without damaging it.
+ */
+export interface ListRow {
+  id: string;
+  updatedAt: number;
+  [field: string]: unknown;
+}
+
+export type ListName = 'todos' | 'goals' | 'week' | 'rituals' | 'ranged' | 'watch';
 
 export interface Vault {
   init(): Promise<void>;
@@ -109,9 +141,17 @@ export interface Vault {
   tombstones(): Promise<TombstoneRow[]>;
   putNote(n: NoteRow): Promise<void>;
   putFolder(f: FolderRow): Promise<void>;
+  deleteFolder(id: string): Promise<void>;
   putSrs(s: SrsRow): Promise<void>;
   addLedger(l: LedgerRow): Promise<void>;
+  deleteNote(id: string): Promise<void>;
+  deleteSrs(id: string): Promise<void>;
   trashNote(id: string, at: number): Promise<void>;
+  /** A deletion any other device must honour. Outlives the row it buried. */
+  tombstone(id: string, at: number): Promise<void>;
+  listRows(name: ListName): Promise<ListRow[]>;
+  putListRow(name: ListName, row: ListRow): Promise<void>;
+  deleteListRow(name: ListName, id: string): Promise<void>;
   todos(): Promise<TodoRow[]>;
   putTodo(t: TodoRow): Promise<void>;
   deleteTodo(id: string): Promise<void>;
@@ -144,6 +184,9 @@ function randomSalt(): string {
   return Math.random().toString(36).slice(2, 6).padEnd(4, '0');
 }
 
+export { fromTodoRow, fromWatchRow, toTodoRow, toWatchRow } from './listRows';
+import { fromTodoRow, fromWatchRow, toTodoRow, toWatchRow } from './listRows';
+
 // ── SQLite (device) ───────────────────────────────────────────────────
 const DDL = `
 PRAGMA journal_mode = WAL;
@@ -174,8 +217,22 @@ CREATE TABLE IF NOT EXISTS watch (
 CREATE TABLE IF NOT EXISTS journal (
   id TEXT PRIMARY KEY NOT NULL, day INTEGER NOT NULL,
   iv TEXT NOT NULL, ct TEXT NOT NULL, createdAt INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS list_rows (
+  name TEXT NOT NULL, id TEXT NOT NULL, updatedAt INTEGER NOT NULL,
+  json TEXT NOT NULL, PRIMARY KEY (name, id));
 CREATE INDEX IF NOT EXISTS ledger_note ON ledger(noteId);
 `;
+
+/*
+ * Columns added after the first build shipped. SQLite has no `ADD COLUMN IF NOT
+ * EXISTS`, and it errors on a duplicate — which is exactly the "already migrated"
+ * case. Swallowing only that error keeps `init()` idempotent.
+ */
+const ADD_COLUMNS = [
+  'ALTER TABLE folders ADD COLUMN createdAt INTEGER NOT NULL DEFAULT 0',
+  'ALTER TABLE folders ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0',
+  'ALTER TABLE journal ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0',
+];
 
 type SqliteDb = {
   execAsync(sql: string): Promise<void>;
@@ -192,6 +249,35 @@ class SqliteVault implements Vault {
     const SQLite = await import('expo-sqlite');
     this.db = (await SQLite.openDatabaseAsync('noto.db')) as unknown as SqliteDb;
     await this.db.execAsync(DDL);
+
+    for (const sql of ADD_COLUMNS) {
+      try {
+        await this.db.execAsync(sql);
+      } catch {
+        /* column already there */
+      }
+    }
+    await this.adoptLegacyLists();
+  }
+
+  /** Move the old typed todo/watch tables into the verbatim store, once. */
+  private async adoptLegacyLists() {
+    const already = await this.db.getFirstAsync<{ n: number }>('SELECT COUNT(*) AS n FROM list_rows');
+    if (already && already.n > 0) return;
+
+    for (const t of await this.db.getAllAsync<TodoRow>('SELECT * FROM todos')) {
+      await this.putListRow('todos', {
+        id: t.id,
+        text: t.text,
+        done: !!t.done,
+        createdAt: t.createdAt,
+        updatedAt: t.updatedAt,
+        ...(t.tag ? { tag: t.tag } : {}),
+      });
+    }
+    for (const w of await this.db.getAllAsync<WatchRow>('SELECT * FROM watch')) {
+      await this.putListRow('watch', { ...w, done: !!w.done, updatedAt: w.addedAt });
+    }
   }
 
   notes = () => this.db.getAllAsync<NoteRow>('SELECT * FROM notes ORDER BY updatedAt DESC');
@@ -213,9 +299,10 @@ class SqliteVault implements Vault {
 
   async putFolder(f: FolderRow) {
     await this.db.runAsync(
-      `INSERT INTO folders (id,name,parentId) VALUES (?,?,?)
-       ON CONFLICT(id) DO UPDATE SET name=excluded.name, parentId=excluded.parentId`,
-      [f.id, f.name, f.parentId],
+      `INSERT INTO folders (id,name,parentId,createdAt,updatedAt) VALUES (?,?,?,?,?)
+       ON CONFLICT(id) DO UPDATE SET name=excluded.name, parentId=excluded.parentId,
+         updatedAt=excluded.updatedAt`,
+      [f.id, f.name, f.parentId, f.createdAt, f.updatedAt],
     );
   }
 
@@ -236,54 +323,83 @@ class SqliteVault implements Vault {
     ]);
   }
 
-  async trashNote(id: string, at: number) {
-    // The ledger rows stay: review history must survive a restore, and the
-    // append-only ledger is what makes sync conflict-free.
+  async deleteNote(id: string) {
     await this.db.runAsync('DELETE FROM notes WHERE id = ?', [id]);
+  }
+
+  async deleteFolder(id: string) {
+    await this.db.runAsync('DELETE FROM folders WHERE id = ?', [id]);
+  }
+
+  async deleteSrs(id: string) {
     await this.db.runAsync('DELETE FROM srs WHERE noteId = ?', [id]);
+  }
+
+  async tombstone(id: string, at: number) {
     await this.db.runAsync(
       'INSERT INTO tombstones (id,deletedAt,purgedAt) VALUES (?,?,NULL) ON CONFLICT(id) DO NOTHING',
       [id, at],
     );
   }
 
-  todos = () => this.db.getAllAsync<TodoRow>('SELECT * FROM todos ORDER BY done ASC, createdAt DESC');
+  async trashNote(id: string, at: number) {
+    // The ledger rows stay: review history must survive a restore, and the
+    // append-only ledger is what makes sync conflict-free.
+    await this.deleteNote(id);
+    await this.deleteSrs(id);
+    await this.tombstone(id, at);
+  }
 
-  async putTodo(t: TodoRow) {
+  // ── the verbatim list store ─────────────────────────────────────────
+  async listRows(name: ListName): Promise<ListRow[]> {
+    const rows = await this.db.getAllAsync<{ json: string }>('SELECT json FROM list_rows WHERE name = ?', [name]);
+    return rows.map((r) => JSON.parse(r.json) as ListRow);
+  }
+
+  async putListRow(name: ListName, row: ListRow) {
     await this.db.runAsync(
-      `INSERT INTO todos (id,text,tag,done,createdAt,updatedAt) VALUES (?,?,?,?,?,?)
-       ON CONFLICT(id) DO UPDATE SET text=excluded.text, tag=excluded.tag,
-         done=excluded.done, updatedAt=excluded.updatedAt`,
-      [t.id, t.text, t.tag, t.done, t.createdAt, t.updatedAt],
+      `INSERT INTO list_rows (name,id,updatedAt,json) VALUES (?,?,?,?)
+       ON CONFLICT(name,id) DO UPDATE SET updatedAt=excluded.updatedAt, json=excluded.json`,
+      [name, row.id, row.updatedAt, JSON.stringify(row)],
     );
   }
 
-  async deleteTodo(id: string) {
-    await this.db.runAsync('DELETE FROM todos WHERE id = ?', [id]);
+  async deleteListRow(name: ListName, id: string) {
+    await this.db.runAsync('DELETE FROM list_rows WHERE name = ? AND id = ?', [name, id]);
   }
 
-  watch = () => this.db.getAllAsync<WatchRow>('SELECT * FROM watch ORDER BY done ASC, addedAt DESC');
-
-  async putWatch(w: WatchRow) {
-    await this.db.runAsync(
-      `INSERT INTO watch (id,kind,title,source,url,mins,done,addedAt) VALUES (?,?,?,?,?,?,?,?)
-       ON CONFLICT(id) DO UPDATE SET kind=excluded.kind, title=excluded.title,
-         source=excluded.source, url=excluded.url, mins=excluded.mins, done=excluded.done`,
-      [w.id, w.kind, w.title, w.source, w.url, w.mins, w.done, w.addedAt],
-    );
+  async todos() {
+    return (await this.listRows('todos')).map(toTodoRow).sort((a, b) => a.done - b.done || b.createdAt - a.createdAt);
   }
 
-  async deleteWatch(id: string) {
-    await this.db.runAsync('DELETE FROM watch WHERE id = ?', [id]);
+  putTodo = (t: TodoRow) => this.mergeListRow('todos', fromTodoRow(t));
+  deleteTodo = (id: string) => this.deleteListRow('todos', id);
+
+  async watch() {
+    return (await this.listRows('watch')).map(toWatchRow).sort((a, b) => a.done - b.done || b.addedAt - a.addedAt);
   }
 
-  journal = () => this.db.getAllAsync<JournalRow>('SELECT * FROM journal ORDER BY createdAt DESC');
+  putWatch = (w: WatchRow) => this.mergeListRow('watch', fromWatchRow(w));
+  deleteWatch = (id: string) => this.deleteListRow('watch', id);
+
+  /** Read-modify-write, so writing the fields we know never drops the ones we don't. */
+  private async mergeListRow(name: ListName, patch: ListRow) {
+    const cur = (await this.db.getFirstAsync<{ json: string }>('SELECT json FROM list_rows WHERE name = ? AND id = ?', [
+      name,
+      patch.id,
+    ]))?.json;
+    const merged: ListRow = cur ? { ...(JSON.parse(cur) as ListRow), ...patch } : patch;
+    await this.putListRow(name, merged);
+  }
+
+  journal = () => this.db.getAllAsync<JournalRow>('SELECT * FROM journal ORDER BY day DESC');
 
   async putJournal(j: JournalRow) {
     await this.db.runAsync(
-      `INSERT INTO journal (id,day,iv,ct,createdAt) VALUES (?,?,?,?,?)
-       ON CONFLICT(id) DO UPDATE SET iv=excluded.iv, ct=excluded.ct, day=excluded.day`,
-      [j.id, j.day, j.iv, j.ct, j.createdAt],
+      `INSERT INTO journal (id,day,iv,ct,createdAt,updatedAt) VALUES (?,?,?,?,?,?)
+       ON CONFLICT(id) DO UPDATE SET iv=excluded.iv, ct=excluded.ct, day=excluded.day,
+         updatedAt=excluded.updatedAt`,
+      [j.id, j.day, j.iv, j.ct, j.createdAt, j.updatedAt],
     );
   }
 
@@ -312,10 +428,15 @@ class MemoryVault implements Vault {
   private l: LedgerRow[] = [];
   private tomb = new Map<string, TombstoneRow>();
   private m = new Map<string, string>();
-  private td = new Map<string, TodoRow>();
-  private wt = new Map<string, WatchRow>();
+  private lists = new Map<ListName, Map<string, ListRow>>();
   private jr = new Map<string, JournalRow>();
   private autoId = 1;
+
+  private bucket(name: ListName) {
+    let b = this.lists.get(name);
+    if (!b) this.lists.set(name, (b = new Map()));
+    return b;
+  }
 
   async init() {}
   async notes() {
@@ -345,31 +466,56 @@ class MemoryVault implements Vault {
   async addLedger(l: LedgerRow) {
     this.l.push({ ...l, id: this.autoId++ });
   }
-  async trashNote(id: string, at: number) {
+  async deleteNote(id: string) {
     this.n.delete(id);
+  }
+  async deleteFolder(id: string) {
+    this.f.delete(id);
+  }
+  async deleteSrs(id: string) {
     this.s.delete(id);
+  }
+  async tombstone(id: string, at: number) {
     if (!this.tomb.has(id)) this.tomb.set(id, { id, deletedAt: at, purgedAt: null });
   }
+  async trashNote(id: string, at: number) {
+    await this.deleteNote(id);
+    await this.deleteSrs(id);
+    await this.tombstone(id, at);
+  }
+  async listRows(name: ListName) {
+    return [...this.bucket(name).values()].map((r) => ({ ...r }));
+  }
+  async putListRow(name: ListName, row: ListRow) {
+    this.bucket(name).set(row.id, { ...row });
+  }
+  async deleteListRow(name: ListName, id: string) {
+    this.bucket(name).delete(id);
+  }
+  private mergeListRow(name: ListName, patch: ListRow) {
+    const cur = this.bucket(name).get(patch.id);
+    this.bucket(name).set(patch.id, cur ? { ...cur, ...patch } : { ...patch });
+  }
   async todos() {
-    return [...this.td.values()].sort((a, b) => a.done - b.done || b.createdAt - a.createdAt);
+    return (await this.listRows('todos')).map(toTodoRow).sort((a, b) => a.done - b.done || b.createdAt - a.createdAt);
   }
   async putTodo(t: TodoRow) {
-    this.td.set(t.id, { ...t });
+    this.mergeListRow('todos', fromTodoRow(t));
   }
   async deleteTodo(id: string) {
-    this.td.delete(id);
+    await this.deleteListRow('todos', id);
   }
   async watch() {
-    return [...this.wt.values()].sort((a, b) => a.done - b.done || b.addedAt - a.addedAt);
+    return (await this.listRows('watch')).map(toWatchRow).sort((a, b) => a.done - b.done || b.addedAt - a.addedAt);
   }
   async putWatch(w: WatchRow) {
-    this.wt.set(w.id, { ...w });
+    this.mergeListRow('watch', fromWatchRow(w));
   }
   async deleteWatch(id: string) {
-    this.wt.delete(id);
+    await this.deleteListRow('watch', id);
   }
   async journal() {
-    return [...this.jr.values()].sort((a, b) => b.createdAt - a.createdAt);
+    return [...this.jr.values()].sort((a, b) => b.day - a.day);
   }
   async putJournal(j: JournalRow) {
     this.jr.set(j.id, { ...j });
@@ -419,7 +565,7 @@ async function seedIfEmpty(v: Vault) {
   if (existing.length) return;
 
   const today = dates.todayEpochDay();
-  await v.putFolder({ id: SEED_FOLDER, name: 'Computer Science', parentId: null });
+  await v.putFolder({ id: SEED_FOLDER, name: 'Computer Science', parentId: null, createdAt: Date.now(), updatedAt: 0 });
 
   for (const seed of SEED_NOTES) {
     const id = uid('n');
