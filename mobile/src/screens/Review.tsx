@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { c, mono, serif, t } from '../theme';
+import { Press, Rise } from '../motion';
 import { Card, LargeTitle, Screen, useBottomInset } from '../ui';
 import { useData } from '../store';
 import type { Grade } from '../../core';
@@ -63,17 +64,19 @@ export function ReviewScreen() {
         ) : null}
 
         <View style={st.grades}>
-          {GRADES.map((g) => (
-            <Pressable
-              key={g.label}
-              onPress={async () => {
-                await review(current.id, g.g);
-                setDone((d) => d + 1);
-              }}
-              style={({ pressed }) => [st.grade, { borderColor: g.color }, pressed && { opacity: 0.6 }]}
-            >
-              <Text style={[st.gradeText, { color: g.color }]}>{g.label}</Text>
-            </Pressable>
+          {GRADES.map((g, i) => (
+            <Rise key={g.label} delay={60 + i * 45} style={{ flex: 1 }}>
+              <Press
+                scaleTo={0.9}
+                haptic
+                onPress={() => {
+                  void review(current.id, g.g).then(() => setDone((d) => d + 1));
+                }}
+                style={[st.grade, { borderColor: g.color }]}
+              >
+                <Text style={[st.gradeText, { color: g.color }]}>{g.label}</Text>
+              </Press>
+            </Rise>
           ))}
         </View>
       </ScrollView>

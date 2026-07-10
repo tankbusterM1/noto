@@ -1,5 +1,6 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { c, mono, serif, t } from '../theme';
+import { Rise } from '../motion';
 import { Card, LargeTitle, Screen, useBottomInset } from '../ui';
 import { dueCount, useData } from '../store';
 
@@ -42,28 +43,32 @@ export function TodayScreen() {
     <Screen>
       <LargeTitle kicker={today} title={greeting()} />
       <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: bottom, gap: 14 }}>
-        <Card>
-          <Text style={st.kicker}>MEMORY · SPACED REVIEW</Text>
-          <View style={st.statRow}>
-            <Stat value={String(due)} label="due today" />
-            <Stat value={String(inReview)} label="in review" />
-            <Stat value={String(notes.length)} label="notes" />
-          </View>
-          <Text style={st.hint}>
-            {due > 0
-              ? `${due} ${due === 1 ? 'note is' : 'notes are'} ready. Reviewing now costs less than relearning later.`
-              : 'Nothing due. Your ink is dark.'}
-          </Text>
-        </Card>
-
-        {resurface ? (
-          <Card>
-            <Text style={st.kicker}>RESURFACED</Text>
-            <Text style={st.resurfaceTitle}>{resurface.title}</Text>
+        <Rise delay={40}>
+          <Card glass>
+            <Text style={st.kicker}>MEMORY · SPACED REVIEW</Text>
+            <View style={st.statRow}>
+              <Stat value={String(due)} label="due today" />
+              <Stat value={String(inReview)} label="in review" />
+              <Stat value={String(notes.length)} label="notes" />
+            </View>
             <Text style={st.hint}>
-              Pulled from the vault at random — the notes you never review are the ones you quietly lose.
+              {due > 0
+                ? `${due} ${due === 1 ? 'note is' : 'notes are'} ready. Reviewing now costs less than relearning later.`
+                : 'Nothing due. Your ink is dark.'}
             </Text>
           </Card>
+        </Rise>
+
+        {resurface ? (
+          <Rise delay={110}>
+            <Card>
+              <Text style={st.kicker}>RESURFACED</Text>
+              <Text style={st.resurfaceTitle}>{resurface.title}</Text>
+              <Text style={st.hint}>
+                Pulled from the vault at random — the notes you never review are the ones you quietly lose.
+              </Text>
+            </Card>
+          </Rise>
         ) : null}
       </ScrollView>
     </Screen>

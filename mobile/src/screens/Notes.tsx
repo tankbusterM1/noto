@@ -1,8 +1,9 @@
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { c, inkOpacity, mono, serif, serifItalic, t } from '../theme';
+import { Press, Rise } from '../motion';
 import { LargeTitle, Pill, Screen, useBottomInset } from '../ui';
 import { editedAgo, snippet, useData, type Note, type NoteMemory } from '../store';
 import type { NotesStackParamList } from '../navTypes';
@@ -15,16 +16,14 @@ function dueLabel(m: NoteMemory | undefined): { label: string; tone: 'ink' | 'am
   return { label: `${m.due}d`, tone: 'green' };
 }
 
-function NoteRow({ note, memory }: { note: Note; memory?: NoteMemory }) {
+function NoteRow({ note, memory, index }: { note: Note; memory?: NoteMemory; index: number }) {
   const nav = useNavigation<Nav>();
   const ink = inkOpacity(memory?.recall ?? null);
   const due = dueLabel(memory);
 
   return (
-    <Pressable
-      onPress={() => nav.navigate('Note', { id: note.id })}
-      style={({ pressed }) => [st.row, pressed && { backgroundColor: c.surface2 }]}
-    >
+    <Rise delay={Math.min(index, 8) * 35}>
+      <Press onPress={() => nav.navigate('Note', { id: note.id })} scaleTo={0.975} style={st.row}>
       <View style={{ flex: 1, opacity: ink }}>
         <Text style={st.rowTitle} numberOfLines={1}>
           {note.title}
@@ -44,7 +43,8 @@ function NoteRow({ note, memory }: { note: Note; memory?: NoteMemory }) {
         </View>
       </View>
       <Ionicons name="chevron-forward" size={16} color={c.ink3} style={{ marginLeft: 10 }} />
-    </Pressable>
+      </Press>
+    </Rise>
   );
 }
 
@@ -66,15 +66,15 @@ export function NotesScreen() {
         kicker={`library · ${notes.length} ${notes.length === 1 ? 'note' : 'notes'}`}
         title="Notes"
         trailing={
-          <Pressable onPress={onNew} style={({ pressed }) => [st.newBtn, pressed && { opacity: 0.7 }]}>
+          <Press onPress={onNew} style={st.newBtn} scaleTo={0.88}>
             <Ionicons name="add" size={20} color={c.bg} />
-          </Pressable>
+          </Press>
         }
       />
       <FlatList
         data={notes}
         keyExtractor={(n) => n.id}
-        renderItem={({ item }) => <NoteRow note={item} memory={memory[item.id]} />}
+        renderItem={({ item, index }) => <NoteRow note={item} memory={memory[item.id]} index={index} />}
         ItemSeparatorComponent={() => <View style={st.sep} />}
         contentContainerStyle={{ paddingBottom: bottom }}
         ListEmptyComponent={

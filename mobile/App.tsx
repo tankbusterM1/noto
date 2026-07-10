@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { ReduceMotion, ReducedMotionConfig } from 'react-native-reanimated';
 import { NavigationContainer, DefaultTheme, type Theme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -97,6 +98,13 @@ function Boot() {
 export default function App() {
   return (
     <SafeAreaProvider>
+      {/*
+        Reanimated disables animations whenever the OS reports reduce-motion,
+        warning only in dev. That ambient kill switch is exactly what gutted the
+        desktop app's motion once before. Motion here is part of the design, so
+        we opt out globally; if it ever needs reducing it becomes a real setting.
+      */}
+      <ReducedMotionConfig mode={ReduceMotion.Never} />
       <Boot />
       <StatusBar style="dark" />
     </SafeAreaProvider>
