@@ -8,6 +8,7 @@ import { Session } from './Session'
 import { Journal } from './Journal'
 import { Todos } from './Todos'
 import { Watch } from './Watch'
+import { Trash } from './Trash'
 
 /** Maps the active screen to its component. */
 export function Router() {
@@ -31,5 +32,7 @@ export function Router() {
       return <Todos />
     case 'watch':
       return <Watch />
+    case 'trash':
+      return <Trash />
   }
 }
