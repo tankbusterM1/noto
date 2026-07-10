@@ -194,7 +194,8 @@ export async function runSync(): Promise<SyncOutcome> {
 
   const v = await openVault();
   const saved = (await savedRepo()) ?? (await v.getMeta(REPO_META));
-  const name = saved?.includes('/') ? saved.split('/')[1] : (saved ?? 'noto-vault');
+  const name = saved?.includes('/') ? saved.split('/')[1] : (saved ?? '');
+  if (!name) return { ok: false, message: 'Name the repo to sync into first.' };
 
   try {
     const repo = await gitapi.ensureRepo(tok, name);

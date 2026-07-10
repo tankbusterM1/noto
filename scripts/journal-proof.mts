@@ -6,14 +6,17 @@
  * `{text, words}` payload — and reads the entries back. If the two stacks ever
  * drift, this is where it shows, instead of on a phone with an empty journal.
  *
- *   npx tsx scripts/journal-proof.mts <token> <passphrase> [repo]
+ *   npx tsx scripts/journal-proof.mts <token> <passphrase> <repo>
+ *
+ * Read-only — but the repo is still named explicitly. Nothing here guesses which
+ * of your vaults to open.
  */
 import { ensureRepo, pull } from '../src/lib/gitapi.ts';
 import { filesToVault } from '../src/lib/sync.ts';
 import * as phone from '../mobile/src/journalCipher.ts';
 
-const [token, passphrase, repoName = 'noto-vault'] = process.argv.slice(2);
-if (!token || !passphrase) throw new Error('usage: journal-proof.mts <token> <passphrase> [repo]');
+const [token, passphrase, repoName] = process.argv.slice(2);
+if (!token || !passphrase || !repoName) throw new Error('usage: journal-proof.mts <token> <passphrase> <repo>');
 
 const repo = await ensureRepo(token, repoName);
 const vault = filesToVault((await pull(token, repo)).files);

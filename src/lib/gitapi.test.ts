@@ -67,13 +67,13 @@ describe('gh transport', () => {
 
   it('gives up after the last attempt and reports the real reason', async () => {
     replies(json({ message: 'bad gateway' }, 502))
-    await expect(settle(ensureRepo('t'))).rejects.toThrow('bad gateway')
+    await expect(settle(ensureRepo('t', 'noto-vault'))).rejects.toThrow('bad gateway')
     expect(fetchMock).toHaveBeenCalledTimes(3)
   })
 
   it('never retries a rejected token — the answer will not change', async () => {
     replies(json({ message: 'Bad credentials' }, 401))
-    await expect(settle(ensureRepo('t'))).rejects.toThrow(/not valid/)
+    await expect(settle(ensureRepo('t', 'noto-vault'))).rejects.toThrow(/not valid/)
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
@@ -81,7 +81,7 @@ describe('gh transport', () => {
    * retry loop clobber whatever the other device just pushed. */
   it('never retries a non-fast-forward, and marks it as a race', async () => {
     replies(json({ message: 'Update is not a fast forward' }, 422))
-    const err = await settle(ensureRepo('t')).catch((e: unknown) => e)
+    const err = await settle(ensureRepo('t', 'noto-vault')).catch((e: unknown) => e)
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(isRaceError(err)).toBe(true)
   })
@@ -173,6 +173,15 @@ describe('repoNameFrom', () => {
 })
 
 describe('ensureRepo, and saying what actually went wrong', () => {
+  /*
+   * There is no default repo name. A default is a guess about where to write
+   * someone's notes, and this code creates repos. Refuse before any network call.
+   */
+  it('refuses to guess a repo, and asks nothing of GitHub first', async () => {
+    await expect(settle(ensureRepo('t', ''))).rejects.toThrow(/No repo named/)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('adopts a repo the token can already see', async () => {
     replies(json({ login: 'me' }), json({ full_name: 'me/noto-vault' }))
     await expect(settle(ensureRepo('t', 'noto-vault'))).resolves.toEqual(REPO)

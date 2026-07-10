@@ -118,13 +118,22 @@ export async function getLogin(token: string): Promise<string> {
   return (await json<{ login: string }>(res)).login;
 }
 
-export const DEFAULT_REPO = 'noto-vault';
+/*
+ * There is deliberately NO default repo name.
+ *
+ * A default is a guess, and this code writes to whatever it guesses. Defaulting
+ * to `noto-vault` once sent a sync into a developer's scratch repo, and the
+ * inverse mistake — a default that happens to name someone's real vault — is the
+ * same bug pointed at the data instead of away from it. If nobody said which
+ * repo, we don't sync.
+ */
 
 /**
  * The repo name, from whatever the user pasted.
  *
  * People paste the browser URL, or `owner/name`, or the name alone. All three
  * mean the same repo, and the owner always comes from the token anyway.
+ * Returns '' when the input names no repo — callers must treat that as "stop".
  */
 export function repoNameFrom(input: string): string {
   const cleaned = input
@@ -143,7 +152,8 @@ export function repoNameFrom(input: string): string {
 }
 
 /** Creates the private vault repo, or adopts it if it already exists. */
-export async function ensureRepo(token: string, name = DEFAULT_REPO): Promise<Repo> {
+export async function ensureRepo(token: string, name: string): Promise<Repo> {
+  if (!name) throw new GitError('No repo named. Type the repo you want to sync into.', 400, '');
   const owner = await getLogin(token);
 
   const existing = await gh(token, `/repos/${owner}/${name}`, { tolerate: [404] });

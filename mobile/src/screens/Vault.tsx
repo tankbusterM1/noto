@@ -431,7 +431,8 @@ export function SettingsScreen() {
   };
 
   /** The repo the user typed, normalised. Empty box = the default name. */
-  const wantedRepo = () => gitapi.repoNameFrom(repo) || gitapi.DEFAULT_REPO;
+  /** '' when the box is empty. Nothing provisions or syncs until it isn't. */
+  const wantedRepo = () => gitapi.repoNameFrom(repo);
 
   /** One tap: make the private repo for them, no trip to github.com. */
   const doCreate = async () => {
@@ -636,7 +637,7 @@ export function SettingsScreen() {
 
                   <Pressable
                     onPress={() => void signIn()}
-                    disabled={busy || !hasClientId}
+                    disabled={busy || !hasClientId || !repo.trim()}
                     style={({ pressed }) => [
                       st.primaryBtn,
                       (busy || !hasClientId) && { opacity: 0.35 },
@@ -662,8 +663,7 @@ export function SettingsScreen() {
 
               {/* The repo name feeds BOTH the one-tap sign-in and the manual token. */}
               <Text style={st.body}>
-                Which private repo? Leave it blank for <Text style={{ fontFamily: mono }}>noto-vault</Text>. This name is
-                used by the button above too.
+                Which private repo? Noto never picks one for you. This name is used by the button above too.
               </Text>
 
               <TextInput
@@ -692,7 +692,7 @@ export function SettingsScreen() {
 
               <Pressable
                 onPress={doCreate}
-                disabled={busy || !tok}
+                disabled={busy || !tok || !repo.trim()}
                 style={({ pressed }) => [
                   st.primaryBtn,
                   { marginTop: 12 },

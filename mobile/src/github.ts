@@ -130,9 +130,11 @@ export async function connect(token: string, repoFullName: string): Promise<Conn
  * `auto_init: false` keeps it empty — an initial commit would force a merge on
  * the first sync push.
  */
-export async function createPrivateRepo(tokenValue: string, name = 'noto-vault'): Promise<ConnectResult> {
+export async function createPrivateRepo(tokenValue: string, name: string): Promise<ConnectResult> {
   const tok = tokenValue.trim();
   if (!tok) return { ok: false, error: 'Paste a token first.' };
+  // No default: a guessed repo name is a write to somewhere nobody asked for.
+  if (!name) return { ok: false, error: 'Name the repo to sync into first.' };
 
   let login: string;
   try {

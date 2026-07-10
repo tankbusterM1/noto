@@ -160,7 +160,8 @@ export function Settings() {
           <div style={label}>Sync · private GitHub repo</div>
           <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.55, marginBottom: 12 }}>
             Everything — notes, folders, review history, todos, watch later, and the <em>encrypted</em>{' '}
-            journal — is merged into the private repo named below, which Noto creates for you if it does not exist. Each sync is one commit. Journal entries are pushed as ciphertext
+            journal — is merged into the private repo you name below. Noto creates it if it doesn't exist,
+            and never picks one for you. Each sync is one commit. Journal entries are pushed as ciphertext
             only; if you haven't set a passphrase, they stay on this machine.
           </div>
           <div style={{ fontSize: 11.5, color: 'var(--ink3)', lineHeight: 1.5, marginBottom: 12 }}>
@@ -172,11 +173,11 @@ export function Settings() {
             <input
               value={repo}
               onChange={(e) => setRepo(e.target.value)}
-              placeholder="noto-vault"
+              placeholder="which repo? e.g. my-vault"
               spellCheck={false}
-              style={{ flex: 1, minWidth: 200, padding: '9px 12px', fontSize: 12.5, fontFamily: MONO, borderRadius: 9, border: '1px solid var(--ln)', background: 'var(--sf2)', color: 'var(--ink)' }}
+              style={{ flex: 1, minWidth: 200, padding: '9px 12px', fontSize: 12.5, fontFamily: MONO, borderRadius: 9, border: `1px solid ${repo.trim() ? 'var(--ln)' : 'var(--g1)'}`, background: 'var(--sf2)', color: 'var(--ink)' }}
             />
-            <span style={{ fontSize: 11, color: 'var(--ink3)', flexShrink: 0 }}>repo name, or paste its URL</span>
+            <span style={{ fontSize: 11, color: 'var(--ink3)', flexShrink: 0 }}>name, or paste its URL</span>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <input
@@ -186,7 +187,12 @@ export function Settings() {
               placeholder="GitHub token with access to that repo"
               style={{ flex: 1, minWidth: 200, padding: '9px 12px', fontSize: 12.5, fontFamily: 'inherit', borderRadius: 9, border: '1px solid var(--ln)', background: 'var(--sf2)', color: 'var(--ink)' }}
             />
-            <button className="border-hover" style={rowBtn} disabled={syncing} onClick={doSync}>
+            <button
+              className="border-hover"
+              style={{ ...rowBtn, ...(repo.trim() ? {} : { opacity: 0.4, cursor: 'not-allowed' }) }}
+              disabled={syncing || !repo.trim()}
+              onClick={doSync}
+            >
               {syncing ? 'Syncing…' : 'Sync now'}
             </button>
           </div>

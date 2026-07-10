@@ -23,18 +23,27 @@ import { syncVault } from '../src/lib/vaultSync.ts';
 import * as desktopCrypto from '../src/lib/crypto.ts';
 import * as phoneCrypto from '../mobile/src/journalCipher.ts';
 
-const token = process.argv[2];
-if (!token) throw new Error('usage: sync-smoke.mts <token> [repo]');
-
-const REPO_NAME = process.argv[3] ?? 'noto-vault-selftest';
-
 /*
- * This script WIPES the repo it runs against. `noto-vault` is the name both apps
- * create and sync into by default, so pointing the smoke test at it — by habit,
- * by a stray argument — would delete a real vault. Refuse, always.
+ * THIS SCRIPT ERASES THE REPO IT RUNS AGAINST.
+ *
+ * There is no default repo name, and there never should have been. A default is
+ * a guess about which of someone's repos is safe to destroy, and the earlier
+ * guard here guessed the wrong way round — it protected one specific name and
+ * left every other repo, including a live vault, wide open.
+ *
+ * So: the name is required, it must end in `-selftest`, and `--wipe` must be
+ * passed. Three separate things to get wrong before anything is deleted.
  */
-if (/^noto-vault$/i.test(REPO_NAME)) {
-  throw new Error(`Refusing to run: "${REPO_NAME}" is the live vault. This script erases the repo. Use a throwaway name.`);
+const [, , token, REPO_NAME, ...flags] = process.argv;
+
+if (!token || !REPO_NAME) {
+  throw new Error('usage: sync-smoke.mts <token> <repo-ending-in--selftest> --wipe');
+}
+if (!/-selftest$/i.test(REPO_NAME)) {
+  throw new Error(`Refusing to run: "${REPO_NAME}" is not a throwaway. This script ERASES the repo. Its name must end in "-selftest".`);
+}
+if (!flags.includes('--wipe')) {
+  throw new Error(`Refusing to run: this ERASES ${REPO_NAME}. Pass --wipe if that is what you want.`);
 }
 
 const PASSPHRASE = 'correct horse battery staple';
