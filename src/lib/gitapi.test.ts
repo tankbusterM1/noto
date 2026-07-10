@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { ensureRepo, GitError, isRaceError, pull, push } from './gitapi'
+import { ensureRepo, explainGitError, GitError, isRaceError, pull, push } from './gitapi'
 
 /*
  * `fetch` is faked so we can drive the answers GitHub gives at the worst moments:
@@ -135,6 +135,67 @@ describe('pull', () => {
 
     const blobCall = fetchMock.mock.calls.find((c) => urlOf(c).includes('/blobs/'))!
     expect((blobCall[1] as { headers: Record<string, string> }).headers.Accept).toBe('application/vnd.github.raw')
+  })
+})
+
+/*
+ * "Resource not accessible by personal access token" is GitHub's answer to at
+ * least three different mistakes, and it names none of them. These tests exist
+ * because the raw message sent a real user hunting in the wrong place.
+ */
+describe('ensureRepo, and saying what actually went wrong', () => {
+  it('adopts a repo the token can already see', async () => {
+    replies(json({ login: 'me' }), json({ full_name: 'me/noto-vault' }))
+    await expect(settle(ensureRepo('t', 'noto-vault'))).resolves.toEqual(REPO)
+  })
+
+  it('creates the repo when it genuinely does not exist', async () => {
+    replies(json({ login: 'me' }), json({}, 404), json({ full_name: 'me/noto-vault' }, 201))
+    await expect(settle(ensureRepo('t', 'noto-vault'))).resolves.toEqual(REPO)
+
+    const create = fetchMock.mock.calls.find((c) => urlOf(c).endsWith('/user/repos'))!
+    expect(JSON.parse((create[1] as { body: string }).body)).toMatchObject({ private: true, auto_init: false })
+  })
+
+  /*
+   * The trap. A fine-grained token 404s a private repo it wasn't granted — the
+   * same answer as "no such repo". We then try to create it, which fine-grained
+   * tokens also can't do, so GitHub says the repo can't be created. The user
+   * concludes the repo is missing. It isn't; the token just can't see it.
+   */
+  it('does not blame the repo when the token simply cannot see it', async () => {
+    replies(json({ login: 'me' }), json({}, 404), json({ message: 'Resource not accessible by personal access token' }, 403))
+
+    const err = await settle(ensureRepo('t', 'noto-vault')).catch((e: GitError) => e)
+    expect(err).toBeInstanceOf(GitError)
+    expect((err as GitError).message).toMatch(/Repository access/)
+    expect((err as GitError).message).toMatch(/create it yourself/)
+    expect(explainGitError(err)).toBe((err as GitError).message)
+  })
+
+  it('records which endpoint failed, so the message can be specific', async () => {
+    replies(json({ login: 'me' }), json({ message: 'nope' }, 403))
+    const err = await settle(ensureRepo('t', 'noto-vault')).catch((e: GitError) => e)
+    expect((err as GitError).path).toBe('/repos/me/noto-vault')
+  })
+
+  it('translates a write refusal into the permission to grant', () => {
+    const err = new GitError('Resource not accessible by personal access token', 403, '/repos/me/noto-vault/git/blobs')
+    expect(explainGitError(err, REPO)).toMatch(/Contents: Read and write/)
+  })
+
+  it('translates an invisible repo into the setting to change', () => {
+    const err = new GitError('Not Found', 404, '/repos/me/noto-vault/git/ref/heads/main')
+    expect(explainGitError(err, REPO)).toMatch(/only reaches repos you list/)
+  })
+
+  it('translates a bad token', () => {
+    expect(explainGitError(new GitError('Bad credentials', 401, '/user'))).toMatch(/expired, revoked, or mistyped/)
+  })
+
+  it('stays quiet about errors it has nothing useful to add to', () => {
+    expect(explainGitError(new GitError('boom', 500, '/x'))).toBeNull()
+    expect(explainGitError(new Error('not a GitError'))).toBeNull()
   })
 })
 

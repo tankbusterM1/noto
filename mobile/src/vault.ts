@@ -222,8 +222,8 @@ export async function runSync(): Promise<SyncOutcome> {
         : `Already up to date · ${notes} notes`,
     };
   } catch (e) {
-    const err = e as { status?: number; message?: string };
-    const why = err.status === 401 ? 'GitHub rejected the token.' : (err.message ?? 'Unknown error');
+    // GitHub's own wording never says which resource, nor what to grant.
+    const why = gitapi.explainGitError(e) ?? (e as Error).message ?? 'Unknown error';
     return { ok: false, message: `Sync failed — ${why}` };
   }
 }

@@ -27,11 +27,14 @@ export interface Repo {
 
 export class GitError extends Error {
   status: number;
+  /** The endpoint that failed. "Resource not accessible" means nothing without it. */
+  path: string;
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, path = '') {
     super(message);
     this.name = 'GitError';
     this.status = status;
+    this.path = path;
   }
 }
 
@@ -97,13 +100,13 @@ async function gh(token: string, path: string, init: Init = {}): Promise<Respons
       // GitHub occasionally answers with an empty body; the status is enough.
     }
 
-    const error = new GitError(detail, res.status);
+    const error = new GitError(detail, res.status, path);
     if (!RETRYABLE.has(res.status)) throw error;
     lastError = error;
   }
 
   if (lastError instanceof GitError) throw lastError;
-  throw new GitError('GitHub is unreachable.', 0);
+  throw new GitError('GitHub is unreachable.', 0, path);
 }
 
 const json = async <T>(res: Response): Promise<T> => (await res.json()) as T;
@@ -111,7 +114,7 @@ const json = async <T>(res: Response): Promise<T> => (await res.json()) as T;
 // ── account & repo ────────────────────────────────────────────────────
 export async function getLogin(token: string): Promise<string> {
   const res = await gh(token, '/user', { tolerate: [401, 404] });
-  if (!res.ok) throw new GitError('That token is not valid.', res.status);
+  if (!res.ok) throw new GitError('That token is not valid.', res.status, '/user');
   return (await json<{ login: string }>(res)).login;
 }
 
@@ -122,13 +125,50 @@ export async function ensureRepo(token: string, name = 'noto-vault'): Promise<Re
   const existing = await gh(token, `/repos/${owner}/${name}`, { tolerate: [404] });
   if (existing.status !== 404) return { owner, name };
 
-  // auto_init: false keeps the repo empty, so our first sync is its first commit
-  // and there's no README to merge around.
-  await gh(token, '/user/repos', {
+  /*
+   * A 404 here is ambiguous, and the ambiguity is the whole problem. It means
+   * either "no such repo" or "this token isn't allowed to see it" — GitHub
+   * refuses to distinguish, so a private repo the token wasn't granted looks
+   * exactly like one that doesn't exist. We then try to create it, and a
+   * fine-grained token can't do that either, so the user gets a 403 about repo
+   * creation for a repo that already exists. Say both possibilities out loud.
+   *
+   * auto_init: false keeps the repo empty, so our first sync is its first commit.
+   */
+  const created = await gh(token, '/user/repos', {
     method: 'POST',
+    tolerate: [403],
     body: { name, private: true, auto_init: false, description: 'Noto vault — encrypted journal, notes, review history.' },
   });
+
+  if (created.status === 403) {
+    throw new GitError(
+      `Can't reach ${owner}/${name}, and this token can't create it. ` +
+        `If the repo exists, the token needs access to it (fine-grained tokens 404 on repos they weren't granted — check "Repository access"). ` +
+        `If it doesn't exist, create it yourself on github.com: private, empty, no README.`,
+      403,
+      '/user/repos',
+    );
+  }
   return { owner, name };
+}
+
+/**
+ * Turn a transport failure into something a person can act on. GitHub's own
+ * wording — "Resource not accessible by personal access token" — never says
+ * which resource, or what to grant.
+ */
+export function explainGitError(e: unknown, repo?: Repo): string | null {
+  if (!(e instanceof GitError)) return null;
+  const where = repo ? `${repo.owner}/${repo.name}` : 'the vault repo';
+
+  if (e.status === 401) return 'GitHub rejected the token. It may be expired, revoked, or mistyped.';
+  if (e.status === 403 && e.path === '/user/repos') return e.message;
+  if (e.status === 403) return `The token can't write to ${where}. Give it "Contents: Read and write" on that repo.`;
+  if (e.status === 404 && e.path.startsWith('/repos/')) {
+    return `The token can't see ${where}. A fine-grained token only reaches repos you list under "Repository access".`;
+  }
+  return null;
 }
 
 // ── read ──────────────────────────────────────────────────────────────

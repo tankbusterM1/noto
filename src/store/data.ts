@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { db, folderCreatedAt, noteCreatedAt, repairForSync, type RevisionRow, type TrashRow } from '../data/db'
 import { deviceName, readVault, writeVault } from '../data/vault'
 import { journalId } from '../lib/sync'
-import { ensureRepo, GitError } from '../lib/gitapi'
+import { ensureRepo, explainGitError } from '../lib/gitapi'
 import { syncVault } from '../lib/vaultSync'
 import { seedDatabase } from '../data/seed'
 import { todayEpochDay, agoMs } from '../lib/dates'
@@ -1280,7 +1280,9 @@ export const useData = create<DataState>()((set, get) => ({
           : `Already up to date · ${notes} notes`,
       }
     } catch (e) {
-      const why = e instanceof GitError && e.status === 401 ? 'That token was rejected.' : (e as Error).message
+      // GitHub's own wording ("Resource not accessible…") never says which
+      // resource, nor what to grant. Translate what we can.
+      const why = explainGitError(e) ?? (e as Error).message
       return { ok: false, message: `Sync failed — ${why}` }
     }
   },
