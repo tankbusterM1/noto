@@ -2,26 +2,65 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { c, mono, radius, serif, serifItalic, t } from '../theme';
-import { GlassSurface, LIQUID_GLASS } from '../glass';
+import { GlassSurface, LIQUID_GLASS, glassDiagnostics } from '../glass';
 import { Card, LargeTitle, Screen, useBottomInset } from '../ui';
 import { deviceSalt } from '../db';
 import { connect, disconnect, savedRepo, type Connection } from '../github';
 
 /* ── Journal · Face ID ────────────────────────────────────────────────
- * The bug: authenticateAsync() defaults to `disableDeviceFallback: false`,
- * which maps to LAPolicyDeviceOwnerAuthentication — biometrics OR passcode, and
- * iOS often goes straight to the passcode sheet. Passing `disableDeviceFallback:
- * true` selects LAPolicyDeviceOwnerAuthenticationWithBiometrics, which is a real
- * Face ID prompt and nothing else.
+ * Two bugs were stacked here.
+ *
+ * 1. authenticateAsync() defaults to disableDeviceFallback:false, i.e.
+ *    LAPolicyDeviceOwnerAuthentication — biometrics OR passcode — and iOS often
+ *    goes straight to the passcode sheet. We pass disableDeviceFallback:true
+ *    (LAPolicyDeviceOwnerAuthenticationWithBiometrics): Face ID or nothing.
+ *
+ * 2. Every unmapped error was reported as "Face ID did not match", which is a
+ *    lie when the prompt never even appeared. The usual real cause is that iOS
+ *    denied the app permission to use Face ID (`not_available`) — it fails
+ *    instantly, with no animation. Now we surface the actual code.
  */
+interface Biometrics {
+  hardware: boolean;
+  enrolled: boolean;
+  face: boolean;
+  types: string;
+}
+
 export function JournalScreen() {
   const [unlocked, setUnlocked] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [code, setCode] = useState<string | null>(null);
+  const [bio, setBio] = useState<Biometrics | null>(null);
   const bottom = useBottomInset();
 
-  const unlock = async () => {
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    void (async () => {
+      const LA = await import('expo-local-authentication');
+      const types = await LA.supportedAuthenticationTypesAsync();
+      setBio({
+        hardware: await LA.hasHardwareAsync(),
+        enrolled: await LA.isEnrolledAsync(),
+        face: types.includes(LA.AuthenticationType.FACIAL_RECOGNITION),
+        types:
+          types
+            .map((x) =>
+              x === LA.AuthenticationType.FACIAL_RECOGNITION
+                ? 'face'
+                : x === LA.AuthenticationType.FINGERPRINT
+                  ? 'touch'
+                  : 'iris',
+            )
+            .join(', ') || 'none',
+      });
+    })();
+  }, []);
+
+  const run = async (biometricsOnly: boolean) => {
     setErr(null);
+    setCode(null);
     if (Platform.OS === 'web') {
       setErr('Face ID needs the real device — the browser preview has no biometrics.');
       return;
@@ -29,37 +68,49 @@ export function JournalScreen() {
     setBusy(true);
     try {
       const LA = await import('expo-local-authentication');
-
-      if (!(await LA.hasHardwareAsync())) {
-        setErr('This device has no biometric hardware.');
-        return;
-      }
-      const types = await LA.supportedAuthenticationTypesAsync();
-      const hasFace = types.includes(LA.AuthenticationType.FACIAL_RECOGNITION);
-      if (!(await LA.isEnrolledAsync())) {
-        setErr(
-          hasFace
-            ? 'Face ID exists but no face is enrolled. Settings › Face ID & Passcode.'
-            : 'No biometrics enrolled on this device.',
-        );
-        return;
-      }
-
       const res = await LA.authenticateAsync({
         promptMessage: 'Unlock your journal',
         cancelLabel: 'Cancel',
-        // Biometrics only — never silently degrade to the passcode sheet.
-        disableDeviceFallback: true,
+        disableDeviceFallback: biometricsOnly,
+        ...(biometricsOnly ? {} : { fallbackLabel: 'Use passcode' }),
       });
 
-      if (res.success) setUnlocked(true);
-      else if (res.error === 'user_cancel' || res.error === 'system_cancel') setErr(null);
-      else if (res.error === 'lockout')
-        setErr('Too many failed attempts. Lock and unlock your phone, then retry.');
-      else if (res.error === 'not_enrolled') setErr('No face enrolled. Settings › Face ID & Passcode.');
-      else setErr('Face ID did not match.');
-    } catch {
-      setErr('Biometrics unavailable in this runtime.');
+      if (res.success) {
+        setUnlocked(true);
+        return;
+      }
+
+      const e = 'error' in res ? String(res.error) : 'unknown';
+      setCode(e);
+
+      switch (e) {
+        case 'user_cancel':
+        case 'system_cancel':
+        case 'app_cancel':
+          setErr(null);
+          break;
+        case 'not_available':
+          setErr(
+            'iOS refused Face ID for this app — nothing was ever shown. Open Settings › Expo Go and turn Face ID ON, then retry.',
+          );
+          break;
+        case 'not_enrolled':
+          setErr('No face is enrolled. Settings › Face ID & Passcode.');
+          break;
+        case 'passcode_not_set':
+          setErr('Set a device passcode first; Face ID requires one.');
+          break;
+        case 'lockout':
+          setErr('Too many failed attempts. Lock and unlock your phone, then retry.');
+          break;
+        case 'authentication_failed':
+          setErr('Face ID ran but did not match.');
+          break;
+        default:
+          setErr(`Face ID failed before it could run (${e}).`);
+      }
+    } catch (ex) {
+      setErr(ex instanceof Error ? ex.message : 'Biometrics unavailable in this runtime.');
     } finally {
       setBusy(false);
     }
@@ -81,8 +132,9 @@ export function JournalScreen() {
             <Ionicons name="lock-closed-outline" size={26} color={c.ink3} />
             <Text style={st.lockedTitle}>The journal is locked.</Text>
             <Text style={st.lockedHint}>Only you can open it. Nothing here ever leaves the device unencrypted.</Text>
+
             <Pressable
-              onPress={unlock}
+              onPress={() => void run(true)}
               disabled={busy}
               style={({ pressed }) => [st.primaryBtn, (pressed || busy) && { opacity: 0.7 }]}
             >
@@ -95,7 +147,23 @@ export function JournalScreen() {
                 </>
               )}
             </Pressable>
+
             {err ? <Text style={st.err}>{err}</Text> : null}
+
+            {code && code !== 'user_cancel' ? (
+              <>
+                <Text style={st.diag}>error code: {code}</Text>
+                <Pressable onPress={() => void run(false)} style={({ pressed }) => [st.ghostBtn, pressed && { opacity: 0.6 }]}>
+                  <Text style={st.ghostTextMuted}>Use passcode instead</Text>
+                </Pressable>
+              </>
+            ) : null}
+
+            {bio ? (
+              <Text style={st.diag}>
+                hardware {bio.hardware ? 'yes' : 'no'} · enrolled {bio.enrolled ? 'yes' : 'no'} · {bio.types}
+              </Text>
+            ) : null}
           </GlassSurface>
         )}
       </ScrollView>
@@ -103,7 +171,7 @@ export function JournalScreen() {
   );
 }
 
-/* ── Settings · GitHub ───────────────────────────────────────────────── */
+/* ── Settings ─────────────────────────────────────────────────────────── */
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <View style={st.row}>
@@ -123,6 +191,8 @@ export function SettingsScreen() {
   const [linked, setLinked] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  const g = glassDiagnostics();
 
   useEffect(() => {
     void savedRepo().then(setLinked);
@@ -148,7 +218,6 @@ export function SettingsScreen() {
     setLinked(null);
   };
 
-  const connected = conn ?? (linked ? null : null);
   const isLinked = !!conn || !!linked;
 
   return (
@@ -163,9 +232,25 @@ export function SettingsScreen() {
           <View style={{ marginTop: 6 }}>
             <Row label="Storage" value={Platform.OS === 'web' ? 'memory (preview)' : 'sqlite'} />
             <Row label="Device id" value={deviceSalt()} />
-            <Row label="Liquid Glass" value={LIQUID_GLASS ? 'on (iOS 26)' : 'unavailable — using blur'} />
           </View>
           <Text style={st.note}>The device id salts every note id, so two devices can never mint the same one.</Text>
+        </Card>
+
+        <Card>
+          <Text style={st.kicker}>LIQUID GLASS</Text>
+          <View style={{ marginTop: 6 }}>
+            <Row label="Status" value={LIQUID_GLASS ? 'active' : 'falling back to blur'} />
+            <Row label="iOS version" value={g.osVersion} />
+            <Row label="Module loaded" value={g.moduleLoaded ? 'yes' : 'no'} />
+            <Row label="Glass API" value={g.apiAvailable ? 'available' : 'absent'} />
+            <Row label="Liquid available" value={g.liquidAvailable ? 'yes' : 'no'} />
+          </View>
+          <Text style={st.note}>
+            {LIQUID_GLASS
+              ? 'Real UIGlassEffect on the tab bar, editor toolbar and this card.'
+              : 'Liquid Glass needs iOS 26. Below that, iOS has no such material and we render the pre-26 blur instead — nothing is broken.'}
+            {g.loadError ? ` (module error: ${g.loadError})` : ''}
+          </Text>
         </Card>
 
         <Card>
@@ -237,7 +322,7 @@ export function SettingsScreen() {
 
               {err ? <Text style={st.err}>{err}</Text> : null}
               <Text style={st.note}>
-                Needs Contents: read & write. Pushing notes, the encrypted journal and the review ledger comes next —
+                Needs Contents: read &amp; write. Pushing notes, the encrypted journal and the review ledger comes next —
                 this step only proves the token works.
               </Text>
             </>
@@ -253,6 +338,7 @@ const st = StyleSheet.create({
   body: { ...t.footnote, color: c.ink2, lineHeight: 19, marginTop: 8 },
   note: { ...t.caption1, color: c.ink3, lineHeight: 17, marginTop: 12 },
   connected: { ...t.subhead, color: c.ink2, marginTop: 10 },
+  diag: { ...t.caption2, fontFamily: mono, color: c.ink3, marginTop: 10, textAlign: 'center' },
 
   lockCard: {
     alignItems: 'center',
@@ -285,10 +371,13 @@ const st = StyleSheet.create({
     borderColor: c.line,
     borderRadius: 12,
     paddingVertical: 11,
+    paddingHorizontal: 18,
     alignItems: 'center',
-    marginTop: 14,
+    marginTop: 12,
+    alignSelf: 'stretch',
   },
   ghostText: { ...t.footnote, fontWeight: '600', color: c.red },
+  ghostTextMuted: { ...t.footnote, fontWeight: '600', color: c.ink2 },
 
   input: {
     ...t.callout,

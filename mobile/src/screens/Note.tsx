@@ -161,7 +161,7 @@ export function NoteScreen({ route, navigation }: Props) {
   };
 
   const toolbar = (
-    <GlassSurface style={st.toolbar} fallbackColor={c.surface}>
+    <GlassSurface style={st.toolbar} fallbackColor={c.surface} interactive>
       <ToolButton label="B" font={serifBold} onPress={() => wrap('**')} />
       <ToolButton label="i" font={serifItalic} onPress={() => wrap('*')} />
       <ToolButton label="H" font={serifBold} onPress={() => prefixLine('## ')} />

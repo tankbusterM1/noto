@@ -10,34 +10,52 @@ import { BlurView } from 'expo-blur';
  *   web / android         ->  flat surface
  *
  * `isLiquidGlassAvailable()` is a RUNTIME check on purpose: some iOS 26 betas
- * ship without the API and calling into it crashes. It is also unreliable inside
- * Expo Go (expo/expo#39667), which is exactly why this degrades instead of
- * assuming. Don't "simplify" this by importing GlassView at the top level —
- * that breaks the web bundle.
+ * ship without the API and calling into it crashes. Don't hoist the import to
+ * the top level — that breaks the web bundle.
+ *
+ * `isInteractive` is the touch-reactive glass ("hover"). Per Expo's docs it can
+ * only be set ONCE on mount, so it must be a static prop, never toggled.
  */
-let glassAvailable = false;
-type GlassComponent = React.ComponentType<{
+type GlassProps = {
   style?: ViewStyle | ViewStyle[];
   glassEffectStyle?: 'clear' | 'regular';
   tintColor?: string;
   isInteractive?: boolean;
   children?: ReactNode;
-}>;
-let GlassViewImpl: GlassComponent | null = null;
+};
+
+let GlassViewImpl: React.ComponentType<GlassProps> | null = null;
+let liquidAvailable = false;
+let apiAvailable = false;
+let loadError: string | null = null;
 
 if (Platform.OS === 'ios') {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const mod = require('expo-glass-effect');
-    glassAvailable = typeof mod.isLiquidGlassAvailable === 'function' && mod.isLiquidGlassAvailable();
+    apiAvailable = typeof mod.isGlassEffectAPIAvailable === 'function' ? !!mod.isGlassEffectAPIAvailable() : false;
+    liquidAvailable = typeof mod.isLiquidGlassAvailable === 'function' ? !!mod.isLiquidGlassAvailable() : false;
     GlassViewImpl = mod.GlassView ?? null;
-  } catch {
-    glassAvailable = false;
+  } catch (e) {
+    loadError = e instanceof Error ? e.message : 'require failed';
   }
 }
 
 /** True only when the device can actually render Liquid Glass. */
-export const LIQUID_GLASS = glassAvailable && !!GlassViewImpl;
+export const LIQUID_GLASS = liquidAvailable && !!GlassViewImpl;
+
+/** Why glass is or isn't on — surfaced in Settings so nobody has to guess. */
+export function glassDiagnostics() {
+  return {
+    platform: Platform.OS,
+    osVersion: String(Platform.Version),
+    moduleLoaded: !!GlassViewImpl,
+    apiAvailable,
+    liquidAvailable,
+    active: LIQUID_GLASS,
+    loadError,
+  };
+}
 
 export function GlassSurface({
   children,
@@ -74,7 +92,22 @@ export function GlassSurface({
   return <View style={[style, fallbackColor ? { backgroundColor: fallbackColor } : null]}>{children}</View>;
 }
 
-/** Absolute-fill glass, for bar backgrounds. */
-export function GlassFill({ tint, fallbackColor }: { tint?: string; fallbackColor?: string }) {
-  return <GlassSurface style={StyleSheet.absoluteFill as ViewStyle} tint={tint} fallbackColor={fallbackColor} />;
+/** Absolute-fill glass, for bar backgrounds. `interactive` gives the touch-reactive material. */
+export function GlassFill({
+  tint,
+  fallbackColor,
+  interactive = false,
+}: {
+  tint?: string;
+  fallbackColor?: string;
+  interactive?: boolean;
+}) {
+  return (
+    <GlassSurface
+      style={StyleSheet.absoluteFill as ViewStyle}
+      tint={tint}
+      interactive={interactive}
+      fallbackColor={fallbackColor}
+    />
+  );
 }
