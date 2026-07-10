@@ -33,6 +33,10 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
+    "extra": {
+      "//": "OAuth device-flow client IDs are public by design — there is no secret, which is exactly why device flow suits an app that can't keep one. Safe to commit.",
+      "githubClientId": "Ov23li84CLmDgxmBHAWh"
+    },
     "plugins": [
       "expo-sqlite",
       "expo-secure-store",

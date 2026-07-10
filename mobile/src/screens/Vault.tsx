@@ -1,6 +1,18 @@
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Linking,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { c, mono, radius, serif, serifItalic, t } from '../theme';
 import { GlassSurface, LIQUID_GLASS, glassDiagnostics } from '../glass';
@@ -9,6 +21,7 @@ import { haptics, Press, Rise } from '../motion';
 import { deviceSalt } from '../db';
 import { useData } from '../store';
 import { connect, createPrivateRepo, disconnect, savedRepo, type Connection } from '../github';
+import { clientId, pollForToken, requestDeviceCode, type DeviceCode } from '../githubAuth';
 
 /**
  * Face ID is COMPILED INTO a binary, not requested at runtime: iOS only offers
@@ -266,11 +279,22 @@ export function SettingsScreen() {
   const [linked, setLinked] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [device, setDevice] = useState<DeviceCode | null>(null);
+  const cancelled = useRef(false);
 
   const g = glassDiagnostics();
+  const hasClientId = clientId() !== null;
 
   useEffect(() => {
     void savedRepo().then(setLinked);
+  }, []);
+
+  // Abandon an in-flight device-flow poll if the screen goes away, or it keeps
+  // hitting GitHub forever in the background.
+  useEffect(() => {
+    return () => {
+      cancelled.current = true;
+    };
   }, []);
 
   const finish = (res: Awaited<ReturnType<typeof connect>>) => {
@@ -297,6 +321,50 @@ export function SettingsScreen() {
     setBusy(true);
     setErr(null);
     finish(await createPrivateRepo(tok));
+  };
+
+  /**
+   * Device flow: GitHub gives a short code, the user approves it in Safari, we
+   * poll until a token comes back — then immediately provision the private repo,
+   * so "sign in" and "ready to sync" are a single action.
+   */
+  const signIn = async () => {
+    setErr(null);
+    setBusy(true);
+    const started = await requestDeviceCode();
+    setBusy(false);
+
+    if (!started.ok) {
+      haptics.error();
+      setErr(started.error);
+      return;
+    }
+
+    cancelled.current = false;
+    setDevice(started.data);
+    haptics.selection();
+    void Clipboard.setStringAsync(started.data.userCode);
+    void Linking.openURL(started.data.verificationUri);
+
+    const polled = await pollForToken(started.data, () => cancelled.current);
+    setDevice(null);
+
+    if (!polled.ok) {
+      if (!cancelled.current) {
+        haptics.error();
+        setErr(polled.error);
+      }
+      return;
+    }
+
+    setBusy(true);
+    finish(await createPrivateRepo(polled.token));
+  };
+
+  const cancelSignIn = () => {
+    cancelled.current = true;
+    setDevice(null);
+    haptics.light();
   };
 
   const doDisconnect = async () => {
@@ -390,9 +458,61 @@ export function SettingsScreen() {
             </>
           ) : (
             <>
+              {device ? (
+                <View style={st.deviceBox}>
+                  <Text style={st.note}>Enter this code on github.com — it&apos;s already on your clipboard.</Text>
+                  <Text style={st.deviceCode} selectable>
+                    {device.userCode}
+                  </Text>
+                  <ActivityIndicator size="small" color={c.ink3} style={{ marginTop: 6 }} />
+                  <Text style={st.note}>Waiting for you to approve…</Text>
+
+                  <Pressable
+                    onPress={() => void Linking.openURL(device.verificationUri)}
+                    style={({ pressed }) => [st.primaryBtn, pressed && { opacity: 0.7 }]}
+                  >
+                    <Ionicons name="open-outline" size={15} color={c.bg} />
+                    <Text style={st.primaryText}>Open GitHub again</Text>
+                  </Pressable>
+                  <Pressable onPress={cancelSignIn} style={({ pressed }) => [st.ghostBtn, pressed && { opacity: 0.6 }]}>
+                    <Text style={st.ghostTextMuted}>Cancel</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <>
+                  <Text style={st.body}>
+                    Sign in once. Noto creates a private <Text style={{ fontFamily: mono }}>noto-vault</Text> repo and
+                    seals the token in the Keychain behind Face ID.
+                  </Text>
+
+                  <Pressable
+                    onPress={() => void signIn()}
+                    disabled={busy || !hasClientId}
+                    style={({ pressed }) => [
+                      st.primaryBtn,
+                      (busy || !hasClientId) && { opacity: 0.35 },
+                      pressed && { opacity: 0.7 },
+                    ]}
+                  >
+                    {busy ? (
+                      <ActivityIndicator color={c.bg} size="small" />
+                    ) : (
+                      <>
+                        <Ionicons name="logo-github" size={16} color={c.bg} />
+                        <Text style={st.primaryText}>Sign in with GitHub</Text>
+                      </>
+                    )}
+                  </Pressable>
+
+                  {err ? <Text style={st.err}>{err}</Text> : null}
+                  <Text style={st.note}>No password, no token to paste. Or use a token manually below.</Text>
+                </>
+              )}
+
+              <View style={st.divider} />
+
               <Text style={st.body}>
-                A fine-grained token scoped to one private repo. It is checked against GitHub before it is saved, then
-                sealed in the Keychain behind Face ID.
+                Manual: a fine-grained token scoped to one private repo. Checked against GitHub before it is saved.
               </Text>
 
               <TextInput
@@ -529,6 +649,17 @@ const st = StyleSheet.create({
   rowLabel: { ...t.subhead, color: c.ink2 },
   rowValue: { ...t.subhead, fontFamily: mono, color: c.ink, flexShrink: 1 },
   switchRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
+  divider: { height: StyleSheet.hairlineWidth, backgroundColor: c.line, marginVertical: 18 },
+
+  deviceBox: { alignItems: 'center', paddingVertical: 8 },
+  deviceCode: {
+    fontFamily: mono,
+    fontSize: 30,
+    letterSpacing: 6,
+    color: c.ink,
+    marginTop: 12,
+    marginBottom: 4,
+  },
 
   lockBtn: {
     width: 34,
