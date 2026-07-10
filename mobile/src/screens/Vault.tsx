@@ -236,19 +236,21 @@ export function SettingsScreen() {
           <Text style={st.note}>The device id salts every note id, so two devices can never mint the same one.</Text>
         </Card>
 
-        <Card>
+        <Card glass>
           <Text style={st.kicker}>LIQUID GLASS</Text>
           <View style={{ marginTop: 6 }}>
             <Row label="Status" value={LIQUID_GLASS ? 'active' : 'falling back to blur'} />
             <Row label="iOS version" value={g.osVersion} />
             <Row label="Module loaded" value={g.moduleLoaded ? 'yes' : 'no'} />
-            <Row label="Glass API" value={g.apiAvailable ? 'available' : 'absent'} />
-            <Row label="Liquid available" value={g.liquidAvailable ? 'yes' : 'no'} />
+            <Row label="Design adopted" value={g.designAdopted ? 'yes' : 'no'} />
+            <Row label="Effect API (the gate)" value={g.effectApi ? 'present' : 'absent'} />
           </View>
           <Text style={st.note}>
             {LIQUID_GLASS
-              ? 'Real UIGlassEffect on the tab bar, editor toolbar and this card.'
-              : 'Liquid Glass needs iOS 26. Below that, iOS has no such material and we render the pre-26 blur instead — nothing is broken.'}
+              ? 'Real UIGlassEffect on the tab bar, the editor toolbar and this card.'
+              : g.designAdopted
+                ? 'iOS 26 adopts the Liquid Glass design, but UIGlassEffect is absent at runtime — this binary (Expo Go) was compiled against a pre-iOS-26 SDK, so the effect is not linked in. A development build enables it. Rendering blur instead.'
+                : 'Liquid Glass needs iOS 26. Below that, the material does not exist and we render the pre-26 blur.'}
             {g.loadError ? ` (module error: ${g.loadError})` : ''}
           </Text>
         </Card>

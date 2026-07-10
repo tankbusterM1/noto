@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { GlassSurface, LIQUID_GLASS } from './glass';
 import { c, radius, serif, mono, t, TAB_BAR_HEIGHT } from './theme';
 
 /**
@@ -35,7 +36,15 @@ export function LargeTitle({ kicker, title, trailing }: { kicker?: string; title
   );
 }
 
-export function Card({ children, style }: { children: ReactNode; style?: ViewStyle }) {
+/** `glass` opts into Liquid Glass where it's genuinely available; else a flat card. */
+export function Card({ children, style, glass }: { children: ReactNode; style?: ViewStyle; glass?: boolean }) {
+  if (glass && LIQUID_GLASS) {
+    return (
+      <GlassSurface style={[s.card, { backgroundColor: 'transparent' }, style] as ViewStyle[]}>
+        {children}
+      </GlassSurface>
+    );
+  }
   return <View style={[s.card, style]}>{children}</View>;
 }
 
@@ -81,6 +90,7 @@ export const s = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radius.lg,
     padding: 16,
+    overflow: 'hidden',
   },
   pill: {
     borderWidth: StyleSheet.hairlineWidth,

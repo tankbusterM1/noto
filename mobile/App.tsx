@@ -71,9 +71,10 @@ function Tabs() {
           borderTopWidth: LIQUID_GLASS ? 0 : StyleSheet.hairlineWidth,
           elevation: 0,
         },
-        // `interactive` is the touch-reactive Liquid Glass ("hover"). It can only
-        // be set once on mount, so it is a constant, never toggled.
-        tabBarBackground: () => <GlassFill tint={c.glassTint} fallbackColor={c.surface} interactive />,
+        // `interactive` is the touch-reactive Liquid Glass ("hover"); it can only
+        // be set once on mount, so it is a constant. No tintColor on purpose — a
+        // strong tint paints over the refraction and the glass reads as flat.
+        tabBarBackground: () => <GlassFill fallbackColor={c.surface} interactive />,
         tabBarLabel: LABELS[route.name],
         tabBarLabelStyle: { fontSize: 10, fontWeight: '600', marginTop: -2 },
         tabBarIcon: ({ color, focused }) => (
