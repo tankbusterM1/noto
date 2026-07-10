@@ -39,6 +39,8 @@ interface UIState {
   slim: boolean
   /** Sidebar fully visible? false = hidden (immersive full-screen writing). */
   sbOpen: boolean
+  /** Notes library's folder rail expanded? false = collapsed to a slim strip. */
+  railOpen: boolean
   accent: Accent
   inkFade: boolean
   /** Per-note reading mode (true = reading). Sticks until you flip it back. */
@@ -76,6 +78,8 @@ interface UIState {
   toggleSlim: () => void
   /** Show/hide the whole sidebar (⌘\ · Obsidian-style immersive mode). */
   toggleSidebar: () => void
+  /** Collapse/expand the folder rail inside the Notes library. */
+  toggleRail: () => void
   setAccent: (accent: Accent) => void
   setInkFade: (inkFade: boolean) => void
   /** Remember a note's reading/edit mode. */
@@ -134,6 +138,7 @@ export const useUI = create<UIState>()(
       dark: false,
       slim: false,
       sbOpen: true,
+      railOpen: true,
       accent: '#35518E',
       inkFade: true,
       noteMode: {},
@@ -164,6 +169,7 @@ export const useUI = create<UIState>()(
       toggleSlim: () => set((s) => ({ slim: !s.slim })),
       // Reopening always returns to the full-width sidebar (never slim).
       toggleSidebar: () => set((s) => (s.sbOpen ? { sbOpen: false } : { sbOpen: true, slim: false })),
+      toggleRail: () => set((s) => ({ railOpen: !s.railOpen })),
       setAccent: (accent) => set({ accent }),
       setInkFade: (inkFade) => set({ inkFade }),
       setNoteReading: (id, reading) => set((s) => ({ noteMode: { ...s.noteMode, [id]: reading } })),
@@ -225,6 +231,7 @@ export const useUI = create<UIState>()(
         dark: s.dark,
         slim: s.slim,
         sbOpen: s.sbOpen,
+        railOpen: s.railOpen,
         accent: s.accent,
         inkFade: s.inkFade,
         noteMode: s.noteMode,

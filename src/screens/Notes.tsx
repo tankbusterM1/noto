@@ -7,7 +7,7 @@ import { MONO, SERIF, kicker, rise } from '../lib/ui'
 import { NoteCard } from '../components/NoteCard'
 import { EmptyState } from '../components/EmptyState'
 import { ContextMenu, type MenuState } from '../components/ContextMenu'
-import { GridIcon, FolderIcon, TreeCaret, SearchIcon, PlusIcon, CloseIcon, TrashIcon, ReviewIcon } from '../components/icons'
+import { GridIcon, FolderIcon, TreeCaret, SearchIcon, PlusIcon, CloseIcon, TrashIcon, ReviewIcon, Caret } from '../components/icons'
 import type { Folder, Note } from '../lib/types'
 
 interface Row {
@@ -42,6 +42,8 @@ export function Notes() {
   const startRenameFolder = useUI((s) => s.startRenameFolder)
   const stopRenameFolder = useUI((s) => s.stopRenameFolder)
   const showToast = useUI((s) => s.showToast)
+  const railOpen = useUI((s) => s.railOpen)
+  const toggleRail = useUI((s) => s.toggleRail)
 
   const [menu, setMenu] = useState<MenuState | null>(null)
 
@@ -192,8 +194,43 @@ export function Notes() {
       </div>
 
       <div style={{ display: 'flex', gap: 28, alignItems: 'flex-start' }}>
-        {/* Folder tree */}
-        <div style={{ width: 216, flexShrink: 0 }} onContextMenu={bgMenu}>
+        {/* Folder rail — collapses to a slim strip, like the sidebar's wide↔icon
+            step. The choice persists (ui.railOpen), so the grid keeps the room. */}
+        <div
+          onContextMenu={railOpen ? bgMenu : undefined}
+          style={{
+            width: railOpen ? 216 : 36,
+            flexShrink: 0,
+            overflow: 'hidden',
+            transition: 'width 0.26s cubic-bezier(0.3,0.7,0.3,1)',
+          }}
+        >
+          {!railOpen && (
+            <span
+              className="tint"
+              onClick={toggleRail}
+              title="Show folders"
+              style={{ width: 32, height: 32, borderRadius: 9, border: '1px solid var(--ln)', background: 'var(--sf)', color: 'var(--ink3)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+            >
+              <FolderIcon size={14} />
+            </span>
+          )}
+          {railOpen && (
+          /* Inner column is a fixed 216 so the tree never squashes mid-animation. */
+          <div style={{ width: 216 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2px 9px' }}>
+            <span style={{ fontFamily: MONO, fontSize: 9.5, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--ink3)' }}>
+              folders
+            </span>
+            <span
+              className="tint"
+              onClick={toggleRail}
+              title="Collapse folders"
+              style={{ width: 22, height: 22, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--ink3)' }}
+            >
+              <Caret />
+            </span>
+          </div>
           <div
             className="tint"
             onClick={() => {
@@ -318,6 +355,8 @@ export function Notes() {
             <PlusIcon size={11} />
             New folder
           </div>
+          </div>
+          )}
         </div>
 
         {/* Folder contents */}
