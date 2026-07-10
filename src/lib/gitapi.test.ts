@@ -102,6 +102,20 @@ describe('pull', () => {
     expect(state.files.size).toBe(0)
   })
 
+  /*
+   * A repo whose files were all deleted has commits, but its tree is git's
+   * canonical empty tree (4b825dc…) — an object GitHub never wrote, so the trees
+   * API answers 404. Treating that as an error makes an emptied vault permanently
+   * unsyncable.
+   */
+  it('reads a repo whose files were all deleted — GitHub 404s the empty tree', async () => {
+    replies(json({ object: { sha: 'head' } }), json({ tree: { sha: '4b825dc642cb6eb9a060e54bf8d69288fbee4904' } }), json({}, 404))
+
+    const state = await settle(pull('t', REPO))
+    expect(state.headSha).toBe('head') // it HAS commits…
+    expect(state.files.size).toBe(0) // …and no files
+  })
+
   it('refuses a truncated tree rather than syncing a partial vault', async () => {
     replies(json({ object: { sha: 'head' } }), json({ tree: { sha: 'tree' } }), json({ truncated: true, tree: [] }))
 
@@ -136,7 +150,7 @@ describe('push', () => {
     fetchMock.mockImplementation((url: string, init?: { method?: string }) => {
       const u = String(url)
       const method = init?.method ?? 'GET'
-      if (method === 'PUT' && u.includes('/contents/README.md')) return json({ commit: { sha: 'root' } })()
+      if (method === 'PUT' && u.includes('/contents/')) return json({ commit: { sha: 'root' } })()
       if (method === 'POST' && u.endsWith('/git/blobs')) return json({ sha: 'blob1' })()
       if (method === 'GET' && u.includes('/git/commits/')) return json({ tree: { sha: 'headtree' } })()
       if (method === 'GET' && u.includes('/git/trees/')) return json({ truncated: false, tree: parentTree })()
@@ -182,8 +196,33 @@ describe('push', () => {
     expect(res.changed).toBe(true)
 
     const first = fetchMock.mock.calls[0]
-    expect(urlOf(first)).toContain('/contents/README.md')
+    expect(urlOf(first)).toContain('/contents/manifest.json')
     expect(methodOf(first)).toBe('PUT')
+  })
+
+  /*
+   * The seed file must be one the caller OWNS. Anything else is carried forward
+   * by every later commit, so a seeded README would sit in the repo forever —
+   * which is exactly what happened before.
+   */
+  it('seeds a file the vault owns, so the root commit leaves no residue', async () => {
+    route([])
+    const withManifest = new Map([['manifest.json', '{"schema": 2}\n']])
+
+    await settle(push('t', REPO, withManifest, null, 'msg', 'main', (p) => p === 'manifest.json'))
+
+    const seed = fetchMock.mock.calls[0]
+    expect(urlOf(seed)).toContain('/contents/manifest.json')
+    const body = JSON.parse((seed[1] as { body: string }).body) as { content: string }
+    expect(atob(body.content)).toBe('{"schema": 2}\n')
+
+    // …and nothing else was carried into the tree.
+    expect(treeBody().tree.map((e) => e.path)).toEqual(['manifest.json'])
+  })
+
+  it('refuses a non-ASCII seed rather than corrupting the first commit', async () => {
+    route([])
+    await expect(settle(push('t', REPO, new Map([['manifest.json', '{"a":"é"}']]), null, 'msg'))).rejects.toThrow(/ASCII/)
   })
 
   /*
@@ -214,6 +253,24 @@ describe('push', () => {
     await settle(push('t', REPO, files, 'parent', 'msg', 'main', () => false))
     const entry = treeBody().tree.find((e) => e.path === 'script.sh') as unknown as { mode: string }
     expect(entry.mode).toBe('100755')
+  })
+
+  it('pushes into a parent that has no files at all', async () => {
+    fetchMock.mockImplementation((url: string, init?: { method?: string }) => {
+      const u = String(url)
+      const method = init?.method ?? 'GET'
+      if (method === 'POST' && u.endsWith('/git/blobs')) return json({ sha: 'blob1' })()
+      if (method === 'GET' && u.includes('/git/commits/')) return json({ tree: { sha: '4b825dc' } })()
+      if (method === 'GET' && u.includes('/git/trees/')) return json({}, 404)() // the empty tree
+      if (method === 'POST' && u.endsWith('/git/trees')) return json({ sha: 'tree2' })()
+      if (method === 'POST' && u.endsWith('/git/commits')) return json({ sha: 'commit1' })()
+      if (method === 'PATCH' && u.endsWith('/git/refs/heads/main')) return json({ ok: true })()
+      throw new Error(`unrouted ${method} ${u}`)
+    })
+
+    const res = await settle(push('t', REPO, files, 'parent', 'msg'))
+    expect(res.changed).toBe(true)
+    expect(treeBody().tree.map((e) => e.path)).toEqual(['a.md'])
   })
 
   it('by default owns everything, so a caller that says nothing replaces the tree', async () => {

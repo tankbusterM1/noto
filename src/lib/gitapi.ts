@@ -18,6 +18,8 @@
  *     pulls, re-merges, and retries. A forced push would silently erase them.
  */
 
+import { bytesToB64 } from './b64';
+
 export interface Repo {
   owner: string;
   name: string;
@@ -147,10 +149,19 @@ export async function pull(token: string, repo: Repo, branch = 'main'): Promise<
   const headSha = (await json<{ object: { sha: string } }>(refRes)).object.sha;
   const commit = await json<{ tree: { sha: string } }>(await gh(token, `${base}/git/commits/${headSha}`));
 
+  /*
+   * A repo whose files have all been deleted has commits, but its tree is git's
+   * canonical EMPTY tree — and GitHub answers 404 for that object, because it was
+   * never written. Treating that as an error would make an emptied vault
+   * permanently unsyncable. It has commits and no files; that is what we return.
+   */
+  const treeRes = await gh(token, `${base}/git/trees/${commit.tree.sha}?recursive=1`, { tolerate: [404] });
+  if (!treeRes.ok) return { files: new Map(), headSha };
+
   const tree = await json<{
     truncated: boolean;
     tree: { path: string; type: string; sha: string }[];
-  }>(await gh(token, `${base}/git/trees/${commit.tree.sha}?recursive=1`));
+  }>(treeRes);
 
   if (tree.truncated) {
     // Silently syncing a partial tree would delete every file we didn't see.
@@ -181,22 +192,34 @@ export interface PushResult {
   changed: boolean;
 }
 
+/** ASCII-only base64. The Contents API demands base64, and Hermes has no TextEncoder. */
+function asciiToB64(text: string): string {
+  const bytes = new Uint8Array(text.length);
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code > 0x7f) throw new GitError('The seed file must be ASCII.', 500);
+    bytes[i] = code;
+  }
+  return bytesToB64(bytes);
+}
+
+/** A file the caller is guaranteed to own, so the first real commit replaces it. */
+const SEED_PATH = 'manifest.json';
+
 /*
  * The Git Data API rejects every call — even creating a blob — against a repo
  * with no commits: "Git Repository is empty" (409). The Contents API is the one
- * endpoint that works there, so we use it once to lay down a root commit. Its
- * README is dropped by the first real sync, since our trees carry no base_tree.
+ * endpoint that works there, so we use it once to lay down a root commit.
  *
- * The content is a pre-encoded constant: the Contents API demands base64, and
- * Hermes ships no TextEncoder to produce it from UTF-8 at runtime.
+ * It seeds `manifest.json`, not a README, and that choice is load-bearing. The
+ * commit tree carries forward every path the caller does NOT own — so a seeded
+ * README would never be replaceable, and would sit in the repo forever. A file
+ * the vault owns gets overwritten by the very next tree.
  */
-const README_B64 =
-  'IyBub3RvLXZhdWx0CgpFbmNyeXB0ZWQgdmF1bHQgc3luY2VkIGJ5IE5vdG8uIE1hbmFnZWQgYnkgdGhlIGFwcCDigJQgZG8gbm90IGVkaXQgYnkgaGFuZC4K';
-
-async function bootstrap(token: string, repo: Repo, branch: string): Promise<string> {
-  const res = await gh(token, `/repos/${repo.owner}/${repo.name}/contents/README.md`, {
+async function bootstrap(token: string, repo: Repo, branch: string, seed: string): Promise<string> {
+  const res = await gh(token, `/repos/${repo.owner}/${repo.name}/contents/${SEED_PATH}`, {
     method: 'PUT',
-    body: { message: 'init vault', content: README_B64, branch },
+    body: { message: 'init vault', content: asciiToB64(seed), branch },
   });
   return (await json<{ commit: { sha: string } }>(res)).commit.sha;
 }
@@ -225,7 +248,8 @@ export async function push(
   owns: (path: string) => boolean = () => true,
 ): Promise<PushResult> {
   const base = `/repos/${repo.owner}/${repo.name}`;
-  const parent = parentSha ?? (await bootstrap(token, repo, branch));
+  // Seed with a file we're about to write anyway, so the root commit leaves no residue.
+  const parent = parentSha ?? (await bootstrap(token, repo, branch, files.get(SEED_PATH) ?? '{}\n'));
 
   const paths = [...files.keys()].sort();
   const shas: string[] = new Array(paths.length);
@@ -247,10 +271,12 @@ export async function push(
 
   const head = await json<{ tree: { sha: string } }>(await gh(token, `${base}/git/commits/${parent}`));
 
-  // Everything the caller does not own, re-listed by sha so it survives.
-  const parentTree = await json<{ truncated: boolean; tree: TreeEntry[] }>(
-    await gh(token, `${base}/git/trees/${head.tree.sha}?recursive=1`),
-  );
+  // Everything the caller does not own, re-listed by sha so it survives. The 404
+  // is git's empty tree (see `pull`): a parent with no files carries nothing.
+  const treeRes = await gh(token, `${base}/git/trees/${head.tree.sha}?recursive=1`, { tolerate: [404] });
+  const parentTree = treeRes.ok
+    ? await json<{ truncated: boolean; tree: TreeEntry[] }>(treeRes)
+    : { truncated: false, tree: [] as TreeEntry[] };
   if (parentTree.truncated) throw new GitError('The vault is too large to rewrite in one commit.', 500);
 
   const carried = parentTree.tree
