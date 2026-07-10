@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ReduceMotion, ReducedMotionConfig } from 'react-native-reanimated';
@@ -95,10 +95,20 @@ function Boot() {
   const fontsReady = useAppFonts();
   const ready = useData((s) => s.ready);
   const hydrate = useData((s) => s.hydrate);
+  const refreshSignals = useData((s) => s.refreshSignals);
 
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
+
+  // Re-badge on foreground: todos may have been completed on another device, and
+  // the daily digest's body is frozen at schedule time, so it needs re-arming.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') void refreshSignals();
+    });
+    return () => sub.remove();
+  }, [refreshSignals]);
 
   // Render nothing typographic until Newsreader/JetBrains Mono land, or the
   // first frame flashes in the system font and reflows.

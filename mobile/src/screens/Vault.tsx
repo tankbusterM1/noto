@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { c, mono, radius, serif, serifItalic, t } from '../theme';
@@ -7,6 +7,7 @@ import { GlassSurface, LIQUID_GLASS, glassDiagnostics } from '../glass';
 import { Card, LargeTitle, Screen, useBottomInset } from '../ui';
 import { haptics } from '../motion';
 import { deviceSalt } from '../db';
+import { useData } from '../store';
 import { connect, createPrivateRepo, disconnect, savedRepo, type Connection } from '../github';
 
 /**
@@ -210,6 +211,9 @@ function Row({ label, value }: { label: string; value: string }) {
 
 export function SettingsScreen() {
   const bottom = useBottomInset();
+  const todos = useData((s) => s.todos);
+  const digestOn = useData((s) => s.digestOn);
+  const setDigest = useData((s) => s.setDigest);
   const [repo, setRepo] = useState('');
   const [tok, setTok] = useState('');
   const [conn, setConn] = useState<Connection | null>(null);
@@ -272,6 +276,31 @@ export function SettingsScreen() {
             <Row label="Runtime" value={Platform.OS === 'web' ? 'browser preview' : IN_EXPO_GO ? 'Expo Go' : 'dev build'} />
           </View>
           <Text style={st.note}>The device id salts every note id, so two devices can never mint the same one.</Text>
+        </Card>
+
+        <Card>
+          <Text style={st.kicker}>HOME SCREEN</Text>
+          <View style={st.switchRow}>
+            <View style={{ flex: 1, paddingRight: 14 }}>
+              <Text style={st.rowLabel}>Daily digest</Text>
+              <Text style={st.note}>
+                A 9am reminder naming what&apos;s waiting. The app icon always carries the open-todo count
+                {todos.filter((t) => !t.done).length > 0 ? ` (${todos.filter((t) => !t.done).length} now)` : ''}.
+              </Text>
+            </View>
+            <Switch
+              value={digestOn}
+              onValueChange={(v) => {
+                haptics.selection();
+                void setDigest(v);
+              }}
+              trackColor={{ true: c.amber, false: c.line }}
+            />
+          </View>
+          <Text style={st.note}>
+            A real WidgetKit widget needs an App Group, which Apple does not grant to free personal teams — that one
+            costs $99/yr. The badge and this reminder need no entitlement at all.
+          </Text>
         </Card>
 
         <Card glass>
@@ -453,4 +482,5 @@ const st = StyleSheet.create({
   },
   rowLabel: { ...t.subhead, color: c.ink2 },
   rowValue: { ...t.subhead, fontFamily: mono, color: c.ink, flexShrink: 1 },
+  switchRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
 });

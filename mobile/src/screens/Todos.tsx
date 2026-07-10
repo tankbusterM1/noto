@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { FlatList, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { c, mono, serifItalic, t } from '../theme';
+import { ensureNotificationPermission } from '../badge';
 import { haptics, Press, Rise } from '../motion';
 import { LargeTitle, Screen, useBottomInset } from '../ui';
 import { useData, type Todo } from '../store';
@@ -60,8 +61,15 @@ type Props = NativeStackScreenProps<TodayStackParamList, 'Todos'>;
 export function TodosScreen({ navigation }: Props) {
   const todos = useData((s) => s.todos);
   const addTodo = useData((s) => s.addTodo);
+  const refreshSignals = useData((s) => s.refreshSignals);
   const bottom = useBottomInset();
   const [draft, setDraft] = useState('');
+
+  // Ask for notification permission here rather than at first launch: by opening
+  // Todos the user has shown they want the badge, so the prompt has context.
+  useEffect(() => {
+    void ensureNotificationPermission().then(() => refreshSignals());
+  }, [refreshSignals]);
 
   const open = todos.filter((x) => !x.done).length;
 

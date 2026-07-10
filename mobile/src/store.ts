@@ -9,6 +9,7 @@ import {
   type WatchKind,
   type WatchRow,
 } from './db';
+import { cancelDigest, scheduleDigest, syncBadge } from './badge';
 import { dates, format, fsrs, markdown } from '../core';
 import type { Grade, HistEntry } from '../core';
 
@@ -58,7 +59,12 @@ interface State {
   memory: Record<string, NoteMemory>;
   todos: Todo[];
   watch: WatchItem[];
+  /** Daily local reminder naming what's waiting. */
+  digestOn: boolean;
   hydrate: () => Promise<void>;
+  setDigest: (on: boolean) => Promise<void>;
+  /** Push the open-todo count to the app icon (and re-arm the digest). */
+  refreshSignals: () => Promise<void>;
   createNote: (title?: string) => Promise<string>;
   saveNote: (id: string, patch: Partial<Pick<Note, 'title' | 'body' | 'tags'>>) => Promise<void>;
   deleteNote: (id: string) => Promise<void>;
@@ -180,15 +186,17 @@ export const useData = create<State>((set, get) => ({
   memory: {},
   todos: [],
   watch: [],
+  digestOn: false,
 
   hydrate: async () => {
     vault = await openVault();
-    const [noteRows, srsRows, ledger, todoRows, watchRows] = await Promise.all([
+    const [noteRows, srsRows, ledger, todoRows, watchRows, digest] = await Promise.all([
       vault.notes(),
       vault.srs(),
       vault.ledger(),
       vault.todos(),
       vault.watch(),
+      vault.getMeta('digest'),
     ]);
     set({
       ready: true,
@@ -196,7 +204,28 @@ export const useData = create<State>((set, get) => ({
       memory: deriveMemory(ledger, srsRows),
       todos: todoRows.map(toTodo),
       watch: watchRows.map(toWatch),
+      digestOn: digest === '1',
     });
+    void get().refreshSignals();
+  },
+
+  /**
+   * The badge is the free stand-in for a widget. Re-arm the digest too: its body
+   * is fixed at schedule time, so stale counts would fire tomorrow otherwise.
+   */
+  refreshSignals: async () => {
+    const s = get();
+    const open = s.todos.filter((t) => !t.done).length;
+    await syncBadge(open);
+    if (s.digestOn) await scheduleDigest(open, dueCount(s.memory));
+  },
+
+  setDigest: async (on) => {
+    if (!vault) return;
+    await vault.setMeta('digest', on ? '1' : '0');
+    set({ digestOn: on });
+    if (!on) await cancelDigest();
+    else await get().refreshSignals();
   },
 
   createNote: async (title = 'Untitled note') => {
@@ -264,6 +293,7 @@ export const useData = create<State>((set, get) => ({
     const row: TodoRow = { id: uid('t'), text, tag, done: 0, createdAt: now, updatedAt: now };
     await vault.putTodo(row);
     set({ todos: [toTodo(row), ...get().todos] });
+    void get().refreshSignals();
   },
 
   toggleTodo: async (id) => {
@@ -282,12 +312,14 @@ export const useData = create<State>((set, get) => ({
     // Re-read so ordering (open first) matches the DB, not just local state.
     const rows = await vault.todos();
     set({ todos: rows.map(toTodo) });
+    void get().refreshSignals();
   },
 
   removeTodo: async (id) => {
     if (!vault) return;
     await vault.deleteTodo(id);
     set({ todos: get().todos.filter((t) => t.id !== id) });
+    void get().refreshSignals();
   },
 
   addWatch: async (rawUrl) => {
