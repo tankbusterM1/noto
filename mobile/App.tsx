@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { ActivityIndicator, AppState, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { AppState, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ReduceMotion, ReducedMotionConfig } from 'react-native-reanimated';
@@ -9,6 +9,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { c } from './src/theme';
 import { useAppFonts } from './src/fonts';
+import { Launch } from './src/Launch';
 import { FloatingTabBar } from './src/FloatingTabBar';
 import { useData } from './src/store';
 import { NotesScreen } from './src/screens/Notes';
@@ -82,20 +83,12 @@ const navTheme: Theme = {
   },
 };
 
-function Booting({ label }: { label: string }) {
-  return (
-    <View style={st.boot}>
-      <ActivityIndicator color={c.ink3} />
-      <Text style={st.bootText}>{label}</Text>
-    </View>
-  );
-}
-
 function Boot() {
   const fontsReady = useAppFonts();
   const ready = useData((s) => s.ready);
   const hydrate = useData((s) => s.hydrate);
   const refreshSignals = useData((s) => s.refreshSignals);
+  const [launchGone, setLaunchGone] = useState(false);
 
   useEffect(() => {
     void hydrate();
@@ -110,15 +103,21 @@ function Boot() {
     return () => sub.remove();
   }, [refreshSignals]);
 
-  // Render nothing typographic until Newsreader/JetBrains Mono land, or the
-  // first frame flashes in the system font and reflows.
-  if (!fontsReady) return <Booting label="SETTING THE TYPE…" />;
-  if (!ready) return <Booting label="OPENING THE VAULT…" />;
+  // The launch animation plays over a paper background and lifts away to reveal
+  // the app, which mounts underneath the moment fonts + the vault are ready.
+  // Until both are ready it holds on the settled mark — no font flash, no
+  // half-mounted app. (This replaces the old text "booting" spinner.)
+  const bootComplete = fontsReady && ready;
 
   return (
-    <NavigationContainer theme={navTheme}>
-      <Tabs />
-    </NavigationContainer>
+    <View style={st.root}>
+      {bootComplete ? (
+        <NavigationContainer theme={navTheme}>
+          <Tabs />
+        </NavigationContainer>
+      ) : null}
+      {launchGone ? null : <Launch canLift={bootComplete} onDone={() => setLaunchGone(true)} />}
+    </View>
   );
 }
 
@@ -139,6 +138,5 @@ export default function App() {
 }
 
 const st = StyleSheet.create({
-  boot: { flex: 1, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center', gap: 14 },
-  bootText: { fontSize: 10, letterSpacing: 2, color: c.ink3 },
+  root: { flex: 1, backgroundColor: c.bg },
 });
