@@ -1,4 +1,5 @@
-import { Platform, type TextStyle } from 'react-native';
+import type { TextStyle } from 'react-native';
+import { MONO, MONO_BOLD, SERIF, SERIF_BOLD, SERIF_ITALIC, SERIF_MED } from './fonts';
 
 /**
  * iOS design tokens.
@@ -7,10 +8,9 @@ import { Platform, type TextStyle } from 'react-native';
  * Large Title 34 · Title1 28 · Title2 22 · Title3 20 · Headline 17 semibold ·
  * Body 17 · Callout 16 · Subhead 15 · Footnote 13 · Caption1 12 · Caption2 11.
  *
- * Colours deliberately keep Noto's paper/ink identity rather than stock UIKit
- * greys — it should feel like the desktop vault, not a default iOS app. We obey
- * Apple's *structure* (tab bar, large titles, grouped rows, safe areas) while
- * keeping our own *voice*.
+ * Colours and typefaces are the desktop vault's, not stock UIKit: we obey
+ * Apple's *structure* (tab bar, large titles, safe areas, Liquid Glass) while
+ * keeping Noto's *voice* (paper, ink, Newsreader, JetBrains Mono).
  */
 export const c = {
   bg: '#f4f1e9',
@@ -24,6 +24,8 @@ export const c = {
   accent: '#35518e',
   green: '#4a7350',
   red: '#a4402f',
+  /** Translucent paper for glass fallbacks. */
+  glassTint: 'rgba(250,248,242,0.62)',
 } as const;
 
 const w = (weight: TextStyle['fontWeight']) => weight;
@@ -42,8 +44,13 @@ export const t = {
   caption2: { fontSize: 11, fontWeight: w('400') },
 } satisfies Record<string, TextStyle>;
 
-export const serif = Platform.select({ ios: 'Georgia', default: 'Georgia' });
-export const mono = Platform.select({ ios: 'Menlo', default: 'Menlo' });
+// iOS ignores fontWeight on custom families — pick the family, not the weight.
+export const serif = SERIF_MED;
+export const serifRegular = SERIF;
+export const serifBold = SERIF_BOLD;
+export const serifItalic = SERIF_ITALIC;
+export const mono = MONO;
+export const monoBold = MONO_BOLD;
 
 export const radius = { sm: 8, md: 12, lg: 16, xl: 22 };
 

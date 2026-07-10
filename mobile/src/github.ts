@@ -1,0 +1,136 @@
+import { Platform } from 'react-native';
+import * as SecureStore from 'expo-secure-store';
+
+/*
+ * GitHub connection.
+ *
+ * The token is a fine-grained PAT scoped to ONE private repo. It lives in the
+ * iOS Keychain, and reading it requires biometry (`requireAuthentication`), so a
+ * stolen unlocked phone still can't exfiltrate it from another app.
+ *
+ * We validate before saving — a token that can't actually reach the repo is
+ * worse than no token, because it fails at sync time instead of setup time.
+ */
+
+const TOKEN_KEY = 'noto_github_pat';
+const REPO_KEY = 'noto_github_repo';
+
+export interface Connection {
+  login: string;
+  repo: string;
+  isPrivate: boolean;
+  /** False when the device couldn't give us a biometric-gated keychain slot. */
+  biometricLock: boolean;
+}
+
+export type ConnectResult = { ok: true; connection: Connection } | { ok: false; error: string };
+
+const api = (token: string) => ({
+  Authorization: `Bearer ${token}`,
+  Accept: 'application/vnd.github+json',
+  'X-GitHub-Api-Version': '2022-11-28',
+});
+
+/** Browser preview has no Keychain; keep it working without pretending it's secure. */
+const memory = new Map<string, string>();
+const webFallback = Platform.OS === 'web';
+
+async function setItem(key: string, value: string, biometric: boolean): Promise<boolean> {
+  if (webFallback) {
+    memory.set(key, value);
+    return false;
+  }
+  if (biometric) {
+    try {
+      await SecureStore.setItemAsync(key, value, {
+        requireAuthentication: true,
+        keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+      });
+      return true;
+    } catch {
+      // No passcode/biometry enrolled, or Expo Go refused the ACL. Fall through.
+    }
+  }
+  await SecureStore.setItemAsync(key, value, {
+    keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+  });
+  return false;
+}
+
+async function getItem(key: string): Promise<string | null> {
+  if (webFallback) return memory.get(key) ?? null;
+  try {
+    return await SecureStore.getItemAsync(key);
+  } catch {
+    return null;
+  }
+}
+
+async function delItem(key: string): Promise<void> {
+  if (webFallback) {
+    memory.delete(key);
+    return;
+  }
+  try {
+    await SecureStore.deleteItemAsync(key);
+  } catch {
+    /* already gone */
+  }
+}
+
+/** `owner/repo` -> verify the token can actually see it. */
+export async function connect(token: string, repoFullName: string): Promise<ConnectResult> {
+  const trimmedToken = token.trim();
+  const repo = repoFullName.trim().replace(/^https?:\/\/github\.com\//i, '').replace(/\.git$/i, '');
+
+  if (!trimmedToken) return { ok: false, error: 'Paste a token first.' };
+  if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) return { ok: false, error: 'Repo must look like owner/name.' };
+
+  let user: { login: string };
+  try {
+    const res = await fetch('https://api.github.com/user', { headers: api(trimmedToken) });
+    if (res.status === 401) return { ok: false, error: 'GitHub rejected the token (401). Is it expired?' };
+    if (!res.ok) return { ok: false, error: `GitHub said ${res.status} when checking the token.` };
+    user = (await res.json()) as { login: string };
+  } catch {
+    return { ok: false, error: 'No network. GitHub is unreachable.' };
+  }
+
+  try {
+    const res = await fetch(`https://api.github.com/repos/${repo}`, { headers: api(trimmedToken) });
+    if (res.status === 404) {
+      return { ok: false, error: `Can't see ${repo}. Either it doesn't exist or the token lacks access to it.` };
+    }
+    if (!res.ok) return { ok: false, error: `GitHub said ${res.status} when checking the repo.` };
+    const meta = (await res.json()) as { full_name: string; private: boolean; permissions?: { push?: boolean } };
+
+    if (meta.permissions && meta.permissions.push !== true) {
+      return { ok: false, error: 'That token is read-only. Sync needs write (Contents: read & write).' };
+    }
+
+    const biometricLock = await setItem(TOKEN_KEY, trimmedToken, true);
+    await setItem(REPO_KEY, meta.full_name, false);
+
+    return {
+      ok: true,
+      connection: { login: user.login, repo: meta.full_name, isPrivate: meta.private, biometricLock },
+    };
+  } catch {
+    return { ok: false, error: 'No network. GitHub is unreachable.' };
+  }
+}
+
+/** Which repo we're linked to (cheap — no biometric prompt). */
+export async function savedRepo(): Promise<string | null> {
+  return getItem(REPO_KEY);
+}
+
+/** Reading the token triggers the biometric prompt when it was stored with one. */
+export async function token(): Promise<string | null> {
+  return getItem(TOKEN_KEY);
+}
+
+export async function disconnect(): Promise<void> {
+  await delItem(TOKEN_KEY);
+  await delItem(REPO_KEY);
+}

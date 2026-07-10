@@ -5,12 +5,14 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import { NavigationContainer, DefaultTheme, type Theme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 
-import { c, mono, TAB_BAR_HEIGHT } from './src/theme';
+import { c, TAB_BAR_HEIGHT } from './src/theme';
+import { useAppFonts } from './src/fonts';
+import { GlassFill, LIQUID_GLASS } from './src/glass';
 import { useData } from './src/store';
-import { NotesScreen, NoteScreen } from './src/screens/Notes';
+import { NotesScreen } from './src/screens/Notes';
+import { NoteScreen } from './src/screens/Note';
 import { TodayScreen } from './src/screens/Today';
 import { ReviewScreen } from './src/screens/Review';
 import { JournalScreen, SettingsScreen } from './src/screens/Vault';
@@ -57,24 +59,19 @@ function Tabs() {
         headerShown: false,
         tabBarActiveTintColor: c.amber,
         tabBarInactiveTintColor: c.ink3,
-        // Translucent bar floating over content, the way iOS does it. Screens
-        // pad their own bottom via useBottomInset() so nothing hides beneath it.
+        // Floats over content on Liquid Glass / blur; screens pad via useBottomInset().
         tabBarStyle: {
           position: 'absolute',
           height: TAB_BAR_HEIGHT + insets.bottom,
           paddingBottom: insets.bottom,
           paddingTop: 6,
           backgroundColor: Platform.OS === 'ios' ? 'transparent' : c.surface,
+          // Liquid Glass provides its own edge; a hairline on top of it looks wrong.
           borderTopColor: c.line,
-          borderTopWidth: StyleSheet.hairlineWidth,
+          borderTopWidth: LIQUID_GLASS ? 0 : StyleSheet.hairlineWidth,
           elevation: 0,
         },
-        tabBarBackground: () =>
-          Platform.OS === 'ios' ? (
-            <BlurView intensity={72} tint="light" style={StyleSheet.absoluteFill} />
-          ) : (
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: c.surface }]} />
-          ),
+        tabBarBackground: () => <GlassFill tint={c.glassTint} fallbackColor={c.surface} />,
         tabBarLabel: LABELS[route.name],
         tabBarLabelStyle: { fontSize: 10, fontWeight: '600', marginTop: -2 },
         tabBarIcon: ({ color, focused }) => (
@@ -104,7 +101,17 @@ const navTheme: Theme = {
   },
 };
 
+function Booting({ label }: { label: string }) {
+  return (
+    <View style={st.boot}>
+      <ActivityIndicator color={c.ink3} />
+      <Text style={st.bootText}>{label}</Text>
+    </View>
+  );
+}
+
 function Boot() {
+  const fontsReady = useAppFonts();
   const ready = useData((s) => s.ready);
   const hydrate = useData((s) => s.hydrate);
 
@@ -112,14 +119,10 @@ function Boot() {
     void hydrate();
   }, [hydrate]);
 
-  if (!ready) {
-    return (
-      <View style={st.boot}>
-        <ActivityIndicator color={c.ink3} />
-        <Text style={st.bootText}>OPENING THE VAULT…</Text>
-      </View>
-    );
-  }
+  // Render nothing typographic until Newsreader/JetBrains Mono land, or the
+  // first frame flashes in the system font and reflows.
+  if (!fontsReady) return <Booting label="SETTING THE TYPE…" />;
+  if (!ready) return <Booting label="OPENING THE VAULT…" />;
 
   return (
     <NavigationContainer theme={navTheme}>
@@ -139,5 +142,5 @@ export default function App() {
 
 const st = StyleSheet.create({
   boot: { flex: 1, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center', gap: 14 },
-  bootText: { fontFamily: mono, fontSize: 10, letterSpacing: 2, color: c.ink3 },
+  bootText: { fontSize: 10, letterSpacing: 2, color: c.ink3 },
 });

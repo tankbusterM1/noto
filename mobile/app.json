@@ -36,7 +36,8 @@
         {
           "faceIDPermission": "Noto uses Face ID to unlock your encrypted journal."
         }
-      ]
+      ],
+      "expo-font"
     ]
   }
 }
