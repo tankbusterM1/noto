@@ -54,8 +54,13 @@ export const monoBold = MONO_BOLD;
 
 export const radius = { sm: 8, md: 12, lg: 16, xl: 22 };
 
-/** HIG: tab-bar content is 49pt tall; the home-indicator inset is added below it. */
-export const TAB_BAR_HEIGHT = 49;
+/**
+ * Liquid Glass floating tab bar (iOS 26 HIG): a 62pt pill hovering FLOAT_GAP
+ * above the home indicator, detached from the screen edges — not the old
+ * edge-to-edge 49pt bar. Content scrolls behind it.
+ */
+export const TAB_BAR_HEIGHT = 62;
+export const FLOAT_GAP = 8;
 
 /**
  * Noto's signature: a note's ink fades as its memory decays, and re-inks on

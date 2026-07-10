@@ -1,11 +1,24 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { c, mono, radius, serif, serifItalic, t } from '../theme';
 import { GlassSurface, LIQUID_GLASS, glassDiagnostics } from '../glass';
 import { Card, LargeTitle, Screen, useBottomInset } from '../ui';
 import { deviceSalt } from '../db';
 import { connect, disconnect, savedRepo, type Connection } from '../github';
+
+/**
+ * Face ID is COMPILED INTO a binary, not requested at runtime: iOS only offers
+ * the Face ID consent prompt to apps whose Info.plist carries
+ * NSFaceIDUsageDescription. Expo Go's binary doesn't (expo/expo#21694), so
+ * inside Expo Go the biometric policy fails before any UI — there is no
+ * permission for the user OR the app to grant. iOS's stand-in is the passcode
+ * sheet. Our app.json already configures faceIDPermission, so an installed
+ * build of Noto gets the real prompt.
+ */
+const IN_EXPO_GO =
+  Platform.OS !== 'web' && Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 
 /* ── Journal · Face ID ────────────────────────────────────────────────
  * Two bugs were stacked here.
@@ -134,7 +147,7 @@ export function JournalScreen() {
             <Text style={st.lockedHint}>Only you can open it. Nothing here ever leaves the device unencrypted.</Text>
 
             <Pressable
-              onPress={() => void run(true)}
+              onPress={() => void run(!IN_EXPO_GO)}
               disabled={busy}
               style={({ pressed }) => [st.primaryBtn, (pressed || busy) && { opacity: 0.7 }]}
             >
@@ -142,26 +155,37 @@ export function JournalScreen() {
                 <ActivityIndicator color={c.bg} size="small" />
               ) : (
                 <>
-                  <Ionicons name="scan-outline" size={16} color={c.bg} />
-                  <Text style={st.primaryText}>Unlock with Face ID</Text>
+                  <Ionicons name={IN_EXPO_GO ? 'keypad-outline' : 'scan-outline'} size={16} color={c.bg} />
+                  <Text style={st.primaryText}>{IN_EXPO_GO ? 'Unlock with passcode' : 'Unlock with Face ID'}</Text>
                 </>
               )}
             </Pressable>
+
+            {IN_EXPO_GO ? (
+              <Text style={st.diag}>
+                Expo Go can’t show Face ID — Apple bakes that permission into an app’s binary at build time, and Expo
+                Go’s doesn’t carry it. The passcode sheet is iOS’s stand-in here; the installed build of Noto uses real
+                Face ID.
+              </Text>
+            ) : null}
 
             {err ? <Text style={st.err}>{err}</Text> : null}
 
             {code && code !== 'user_cancel' ? (
               <>
                 <Text style={st.diag}>error code: {code}</Text>
-                <Pressable onPress={() => void run(false)} style={({ pressed }) => [st.ghostBtn, pressed && { opacity: 0.6 }]}>
-                  <Text style={st.ghostTextMuted}>Use passcode instead</Text>
-                </Pressable>
+                {!IN_EXPO_GO ? (
+                  <Pressable onPress={() => void run(false)} style={({ pressed }) => [st.ghostBtn, pressed && { opacity: 0.6 }]}>
+                    <Text style={st.ghostTextMuted}>Use passcode instead</Text>
+                  </Pressable>
+                ) : null}
               </>
             ) : null}
 
             {bio ? (
               <Text style={st.diag}>
-                hardware {bio.hardware ? 'yes' : 'no'} · enrolled {bio.enrolled ? 'yes' : 'no'} · {bio.types}
+                {IN_EXPO_GO ? 'expo go · ' : 'dev build · '}hardware {bio.hardware ? 'yes' : 'no'} · enrolled{' '}
+                {bio.enrolled ? 'yes' : 'no'} · {bio.types}
               </Text>
             ) : null}
           </GlassSurface>
@@ -232,6 +256,7 @@ export function SettingsScreen() {
           <View style={{ marginTop: 6 }}>
             <Row label="Storage" value={Platform.OS === 'web' ? 'memory (preview)' : 'sqlite'} />
             <Row label="Device id" value={deviceSalt()} />
+            <Row label="Runtime" value={Platform.OS === 'web' ? 'browser preview' : IN_EXPO_GO ? 'Expo Go' : 'dev build'} />
           </View>
           <Text style={st.note}>The device id salts every note id, so two devices can never mint the same one.</Text>
         </Card>

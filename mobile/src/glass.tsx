@@ -36,6 +36,11 @@ type GlassProps = {
 };
 
 let GlassViewImpl: React.ComponentType<GlassProps> | null = null;
+let GlassContainerImpl: React.ComponentType<{
+  spacing?: number;
+  style?: ViewStyle | ViewStyle[];
+  children?: ReactNode;
+}> | null = null;
 let designAdopted = false;
 let effectApi = false;
 let loadError: string | null = null;
@@ -47,6 +52,7 @@ if (Platform.OS === 'ios') {
     designAdopted = typeof mod.isLiquidGlassAvailable === 'function' ? !!mod.isLiquidGlassAvailable() : false;
     effectApi = typeof mod.isGlassEffectAPIAvailable === 'function' ? !!mod.isGlassEffectAPIAvailable() : false;
     GlassViewImpl = mod.GlassView ?? null;
+    GlassContainerImpl = mod.GlassContainer ?? null;
   } catch (e) {
     loadError = e instanceof Error ? e.message : 'require failed';
   }
@@ -109,6 +115,31 @@ export function GlassSurface({
   }
 
   return <View style={[style, fallbackColor ? { backgroundColor: fallbackColor } : null]}>{children}</View>;
+}
+
+/**
+ * Groups nearby glass surfaces so they SAMPLE and MERGE like one fluid body —
+ * the Liquid Glass signature (a circular button "kissing" the pill next to it).
+ * Real GlassContainer when the effect API exists; otherwise a plain row.
+ */
+export function GlassGroup({
+  children,
+  style,
+  spacing = 20,
+}: {
+  children?: ReactNode;
+  style?: ViewStyle | ViewStyle[];
+  spacing?: number;
+}) {
+  if (LIQUID_GLASS && GlassContainerImpl) {
+    const GC = GlassContainerImpl;
+    return (
+      <GC spacing={spacing} style={style}>
+        {children}
+      </GC>
+    );
+  }
+  return <View style={style}>{children}</View>;
 }
 
 /** Absolute-fill glass, for bar backgrounds. `interactive` = touch-reactive material. */

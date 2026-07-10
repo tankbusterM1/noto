@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GlassSurface, LIQUID_GLASS } from './glass';
-import { c, radius, serif, mono, t, TAB_BAR_HEIGHT } from './theme';
+import { c, radius, serif, mono, t, TAB_BAR_HEIGHT, FLOAT_GAP } from './theme';
 
 /**
  * Safe-area aware screen container.
@@ -16,10 +16,10 @@ export function Screen({ children, style }: { children: ReactNode; style?: ViewS
   return <View style={[s.screen, { paddingTop: insets.top }, style]}>{children}</View>;
 }
 
-/** Bottom padding so content clears the tab bar + home indicator. */
+/** Bottom padding so content clears the floating pill + its gap + the home indicator. */
 export function useBottomInset(): number {
   const insets = useSafeAreaInsets();
-  return TAB_BAR_HEIGHT + insets.bottom + 12;
+  return Math.max(insets.bottom, 12) + FLOAT_GAP + TAB_BAR_HEIGHT + 18;
 }
 
 export function LargeTitle({ kicker, title, trailing }: { kicker?: string; title: string; trailing?: ReactNode }) {

@@ -1,15 +1,14 @@
 import { useEffect } from 'react';
-import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer, DefaultTheme, type Theme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { Ionicons } from '@expo/vector-icons';
 
-import { c, TAB_BAR_HEIGHT } from './src/theme';
+import { c } from './src/theme';
 import { useAppFonts } from './src/fonts';
-import { GlassFill, LIQUID_GLASS } from './src/glass';
+import { FloatingTabBar } from './src/FloatingTabBar';
 import { useData } from './src/store';
 import { NotesScreen } from './src/screens/Notes';
 import { NoteScreen } from './src/screens/Note';
@@ -17,25 +16,6 @@ import { TodayScreen } from './src/screens/Today';
 import { ReviewScreen } from './src/screens/Review';
 import { JournalScreen, SettingsScreen } from './src/screens/Vault';
 import type { NotesStackParamList, TabParamList } from './src/navTypes';
-
-type IconName = React.ComponentProps<typeof Ionicons>['name'];
-
-/** HIG: 3–5 tabs, filled glyph when selected, outline when not. */
-const ICONS: Record<keyof TabParamList, [IconName, IconName]> = {
-  Today: ['sunny-outline', 'sunny'],
-  NotesTab: ['document-text-outline', 'document-text'],
-  Review: ['albums-outline', 'albums'],
-  Journal: ['book-outline', 'book'],
-  Settings: ['settings-outline', 'settings'],
-};
-
-const LABELS: Record<keyof TabParamList, string> = {
-  Today: 'Today',
-  NotesTab: 'Notes',
-  Review: 'Review',
-  Journal: 'Journal',
-  Settings: 'Settings',
-};
 
 const Stack = createNativeStackNavigator<NotesStackParamList>();
 
@@ -50,37 +30,17 @@ function NotesStack() {
 
 const Tab = createBottomTabNavigator<TabParamList>();
 
+/**
+ * The tab bar is the custom Liquid Glass floating pill (src/FloatingTabBar) —
+ * a detached pill + circular "new note" accessory, per the iOS 26 design
+ * language. Screens keep their own bottom padding via useBottomInset(), since
+ * content scrolls behind the floating bar.
+ */
 function Tabs() {
-  const insets = useSafeAreaInsets();
-
   return (
     <Tab.Navigator
-      screenOptions={({ route }) => ({
-        headerShown: false,
-        tabBarActiveTintColor: c.amber,
-        tabBarInactiveTintColor: c.ink3,
-        // Floats over content on Liquid Glass / blur; screens pad via useBottomInset().
-        tabBarStyle: {
-          position: 'absolute',
-          height: TAB_BAR_HEIGHT + insets.bottom,
-          paddingBottom: insets.bottom,
-          paddingTop: 6,
-          backgroundColor: Platform.OS === 'ios' ? 'transparent' : c.surface,
-          // Liquid Glass provides its own edge; a hairline on top of it looks wrong.
-          borderTopColor: c.line,
-          borderTopWidth: LIQUID_GLASS ? 0 : StyleSheet.hairlineWidth,
-          elevation: 0,
-        },
-        // `interactive` is the touch-reactive Liquid Glass ("hover"); it can only
-        // be set once on mount, so it is a constant. No tintColor on purpose — a
-        // strong tint paints over the refraction and the glass reads as flat.
-        tabBarBackground: () => <GlassFill fallbackColor={c.surface} interactive />,
-        tabBarLabel: LABELS[route.name],
-        tabBarLabelStyle: { fontSize: 10, fontWeight: '600', marginTop: -2 },
-        tabBarIcon: ({ color, focused }) => (
-          <Ionicons name={ICONS[route.name][focused ? 1 : 0]} size={23} color={color} />
-        ),
-      })}
+      tabBar={(props) => <FloatingTabBar {...props} />}
+      screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: c.bg } }}
     >
       <Tab.Screen name="Today" component={TodayScreen} />
       <Tab.Screen name="NotesTab" component={NotesStack} />
