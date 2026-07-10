@@ -11,7 +11,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { GlassGroup, GlassSurface } from './glass';
-import { PRESS_IN, SPRING, tapFeedback } from './motion';
+import { haptics, PRESS_IN, SPRING } from './motion';
 import { c, FLOAT_GAP, TAB_BAR_HEIGHT } from './theme';
 import { useData } from './store';
 import type { TabParamList } from './navTypes';
@@ -49,7 +49,14 @@ const LABELS: Record<keyof TabParamList, string> = {
 const ROW_PAD = 6;
 /** Must match st.wrap / st.group below — the pill's width is derived from these. */
 const EDGE = 14;
-const GAP = 10;
+/**
+ * Gap between the pill and the accessory circle. Must stay LARGER than
+ * GLASS_MERGE_AT, or GlassContainer fuses them into one blob with an ugly
+ * concave seam (what shipped: gap 10 vs merge threshold 24). Apple keeps them
+ * as two distinct bodies — Music, News, App Store all do.
+ */
+const GAP = 12;
+const GLASS_MERGE_AT = 0;
 
 function TabItem({
   name,
@@ -86,7 +93,9 @@ function TabItem({
         press.value = withSpring(1, SPRING);
       }}
       onPress={() => {
-        if (!focused) tapFeedback();
+        // selectionAsync is the crisp UIKit "moved between segments" tick —
+        // an impact buzz for navigation feels heavy-handed.
+        if (!focused) haptics.selection();
         onPress();
       }}
       onLongPress={onLongPress}
@@ -122,7 +131,7 @@ function NewNoteButton({ onPress }: { onPress: () => void }) {
         press.value = withSpring(1, SPRING);
       }}
       onPress={() => {
-        tapFeedback('medium');
+        haptics.medium();
         spin.value = withSequence(withTiming(90, { duration: 180 }), withTiming(0, { duration: 0 }));
         onPress();
       }}
@@ -166,7 +175,7 @@ export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
 
   return (
     <View pointerEvents="box-none" style={[st.wrap, { bottom: Math.max(insets.bottom, 12) + FLOAT_GAP }]}>
-      <GlassGroup spacing={24} style={st.group}>
+      <GlassGroup spacing={GLASS_MERGE_AT} style={st.group}>
         {/* Shadow lives on the un-clipped wrapper: the glass surface clips for
             its radius, and a clipped view swallows its own shadow. */}
         <View style={st.pillShadow}>

@@ -1,5 +1,14 @@
 import { create } from 'zustand';
-import { openVault, uid, type LedgerRow, type NoteRow, type Vault } from './db';
+import {
+  openVault,
+  uid,
+  type LedgerRow,
+  type NoteRow,
+  type TodoRow,
+  type Vault,
+  type WatchKind,
+  type WatchRow,
+} from './db';
 import { dates, format, fsrs, markdown } from '../core';
 import type { Grade, HistEntry } from '../core';
 
@@ -25,15 +34,97 @@ export interface NoteMemory {
   recall: number | null;
 }
 
+export interface Todo {
+  id: string;
+  text: string;
+  tag: string | null;
+  done: boolean;
+}
+
+export interface WatchItem {
+  id: string;
+  kind: WatchKind;
+  title: string;
+  source: string;
+  url: string;
+  mins: number;
+  done: boolean;
+  addedAt: number;
+}
+
 interface State {
   ready: boolean;
   notes: Note[];
   memory: Record<string, NoteMemory>;
+  todos: Todo[];
+  watch: WatchItem[];
   hydrate: () => Promise<void>;
   createNote: (title?: string) => Promise<string>;
   saveNote: (id: string, patch: Partial<Pick<Note, 'title' | 'body' | 'tags'>>) => Promise<void>;
   deleteNote: (id: string) => Promise<void>;
   review: (id: string, grade: Grade) => Promise<void>;
+  addTodo: (raw: string) => Promise<void>;
+  toggleTodo: (id: string) => Promise<void>;
+  removeTodo: (id: string) => Promise<void>;
+  addWatch: (url: string) => Promise<string | null>;
+  toggleWatch: (id: string) => Promise<void>;
+  removeWatch: (id: string) => Promise<void>;
+}
+
+const toTodo = (r: TodoRow): Todo => ({ id: r.id, text: r.text, tag: r.tag, done: !!r.done });
+const toWatch = (r: WatchRow): WatchItem => ({
+  id: r.id,
+  kind: r.kind,
+  title: r.title,
+  source: r.source,
+  url: r.url,
+  mins: r.mins,
+  done: !!r.done,
+  addedAt: r.addedAt,
+});
+
+/** `buy milk #errand` -> { text: 'buy milk', tag: 'errand' } — same rule as desktop. */
+function extractTag(raw: string): { text: string; tag: string | null } {
+  const m = raw.match(/#([a-z0-9][a-z0-9-]*)/i);
+  if (!m) return { text: raw.trim(), tag: null };
+  const text = raw.replace(m[0], '').replace(/\s+/g, ' ').trim() || raw.trim();
+  return { text, tag: m[1].toLowerCase() };
+}
+
+function classify(url: string): WatchKind {
+  const u = url.toLowerCase();
+  if (/youtube\.com|youtu\.be|vimeo\.com|twitch\.tv/.test(u)) return 'video';
+  if (/arxiv\.org|\.pdf($|\?)|doi\.org|acm\.org|ieee\.org/.test(u)) return 'paper';
+  return 'article';
+}
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return url.slice(0, 40);
+  }
+}
+
+/**
+ * Fetch a title for a pasted link. React Native's fetch has no CORS wall, so
+ * unlike the web app we can hit noembed directly — no proxy. Any failure is
+ * non-fatal: we fall back to the hostname rather than refusing to save.
+ */
+async function lookupTitle(url: string, signalMs = 6000): Promise<{ title: string; mins: number }> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), signalMs);
+  try {
+    const res = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(url)}`, { signal: ctrl.signal });
+    if (!res.ok) throw new Error(String(res.status));
+    const j = (await res.json()) as { title?: string; error?: string; duration?: number };
+    if (j.error || !j.title) throw new Error(j.error ?? 'no title');
+    return { title: j.title, mins: j.duration ? Math.round(j.duration / 60) : 0 };
+  } catch {
+    return { title: hostOf(url), mins: 0 };
+  } finally {
+    clearTimeout(t);
+  }
 }
 
 const toNote = (r: NoteRow): Note => ({
@@ -87,14 +178,24 @@ export const useData = create<State>((set, get) => ({
   ready: false,
   notes: [],
   memory: {},
+  todos: [],
+  watch: [],
 
   hydrate: async () => {
     vault = await openVault();
-    const [noteRows, srsRows, ledger] = await Promise.all([vault.notes(), vault.srs(), vault.ledger()]);
+    const [noteRows, srsRows, ledger, todoRows, watchRows] = await Promise.all([
+      vault.notes(),
+      vault.srs(),
+      vault.ledger(),
+      vault.todos(),
+      vault.watch(),
+    ]);
     set({
       ready: true,
       notes: noteRows.map(toNote),
       memory: deriveMemory(ledger, srsRows),
+      todos: todoRows.map(toTodo),
+      watch: watchRows.map(toWatch),
     });
   },
 
@@ -153,6 +254,84 @@ export const useData = create<State>((set, get) => ({
 
     const [srsRows, ledger] = await Promise.all([vault.srs(), vault.ledger()]);
     set({ memory: deriveMemory(ledger, srsRows) });
+  },
+
+  addTodo: async (raw) => {
+    if (!vault || !raw.trim()) return;
+    const { text, tag } = extractTag(raw);
+    if (!text) return;
+    const now = Date.now();
+    const row: TodoRow = { id: uid('t'), text, tag, done: 0, createdAt: now, updatedAt: now };
+    await vault.putTodo(row);
+    set({ todos: [toTodo(row), ...get().todos] });
+  },
+
+  toggleTodo: async (id) => {
+    if (!vault) return;
+    const cur = get().todos.find((t) => t.id === id);
+    if (!cur) return;
+    const next = { ...cur, done: !cur.done };
+    await vault.putTodo({
+      id: next.id,
+      text: next.text,
+      tag: next.tag,
+      done: next.done ? 1 : 0,
+      createdAt: 0,
+      updatedAt: Date.now(),
+    });
+    // Re-read so ordering (open first) matches the DB, not just local state.
+    const rows = await vault.todos();
+    set({ todos: rows.map(toTodo) });
+  },
+
+  removeTodo: async (id) => {
+    if (!vault) return;
+    await vault.deleteTodo(id);
+    set({ todos: get().todos.filter((t) => t.id !== id) });
+  },
+
+  addWatch: async (rawUrl) => {
+    if (!vault) return null;
+    const url = rawUrl.trim();
+    if (!/^https?:\/\//i.test(url)) return null;
+    const { title, mins } = await lookupTitle(url);
+    const row: WatchRow = {
+      id: uid('w'),
+      kind: classify(url),
+      title,
+      source: hostOf(url),
+      url,
+      mins,
+      done: 0,
+      addedAt: Date.now(),
+    };
+    await vault.putWatch(row);
+    set({ watch: [toWatch(row), ...get().watch] });
+    return row.id;
+  },
+
+  toggleWatch: async (id) => {
+    if (!vault) return;
+    const cur = get().watch.find((w) => w.id === id);
+    if (!cur) return;
+    await vault.putWatch({
+      id: cur.id,
+      kind: cur.kind,
+      title: cur.title,
+      source: cur.source,
+      url: cur.url,
+      mins: cur.mins,
+      done: cur.done ? 0 : 1,
+      addedAt: cur.addedAt,
+    });
+    const rows = await vault.watch();
+    set({ watch: rows.map(toWatch) });
+  },
+
+  removeWatch: async (id) => {
+    if (!vault) return;
+    await vault.deleteWatch(id);
+    set({ watch: get().watch.filter((w) => w.id !== id) });
   },
 }));
 

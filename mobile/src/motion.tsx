@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Platform, Pressable, type ViewStyle } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import Animated, {
+  Easing,
   FadeInDown,
   ReduceMotion,
   useAnimatedStyle,
@@ -32,10 +33,29 @@ export const SPRING: WithSpringConfig = { damping: 18, stiffness: 240, mass: 0.7
 export const SPRING_SOFT: WithSpringConfig = { damping: 20, stiffness: 150, mass: 0.9, reduceMotion: NEVER };
 export const PRESS_IN: WithSpringConfig = { damping: 16, stiffness: 420, mass: 0.5, reduceMotion: NEVER };
 
+/*
+ * Haptics, matched to meaning rather than one buzz for everything:
+ *   selection -> moving between tabs (the crisp UIKit tick)
+ *   impact    -> committing something (new note, grading)
+ *   notify    -> an outcome (review recorded, destructive action)
+ */
+const safe = (p: Promise<void>) => void p.catch(() => {});
+
+export const haptics = {
+  selection: () => (Platform.OS === 'web' ? undefined : safe(Haptics.selectionAsync())),
+  light: () => (Platform.OS === 'web' ? undefined : safe(Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light))),
+  medium: () => (Platform.OS === 'web' ? undefined : safe(Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium))),
+  heavy: () => (Platform.OS === 'web' ? undefined : safe(Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy))),
+  rigid: () => (Platform.OS === 'web' ? undefined : safe(Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Rigid))),
+  soft: () => (Platform.OS === 'web' ? undefined : safe(Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft))),
+  success: () => (Platform.OS === 'web' ? undefined : safe(Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success))),
+  warning: () => (Platform.OS === 'web' ? undefined : safe(Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning))),
+  error: () => (Platform.OS === 'web' ? undefined : safe(Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error))),
+};
+
 export function tapFeedback(strength: 'light' | 'medium' = 'light') {
-  if (Platform.OS !== 'ios') return;
-  const style = strength === 'light' ? Haptics.ImpactFeedbackStyle.Light : Haptics.ImpactFeedbackStyle.Medium;
-  void Haptics.impactAsync(style).catch(() => {});
+  if (strength === 'light') haptics.light();
+  else haptics.medium();
 }
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -91,7 +111,11 @@ export function Press({
   );
 }
 
-/** Content that rises into place. Stagger lists by passing an increasing delay. */
+/**
+ * Content that settles into place. Deliberately NOT a spring: a bouncy entrance
+ * on every card reads as a toy. This is a short ease-out over a 10pt rise —
+ * FadeInDown's 25pt default travel plus `.springify()` was the jiggle.
+ */
 export function Rise({
   children,
   delay = 0,
@@ -103,7 +127,11 @@ export function Rise({
 }) {
   return (
     <Animated.View
-      entering={FadeInDown.delay(delay).duration(340).springify().damping(19).reduceMotion(NEVER)}
+      entering={FadeInDown.delay(delay)
+        .duration(260)
+        .easing(Easing.out(Easing.cubic))
+        .withInitialValues({ transform: [{ translateY: 10 }] })
+        .reduceMotion(NEVER)}
       style={style}
     >
       {children}

@@ -14,18 +14,35 @@ import { useData } from './src/store';
 import { NotesScreen } from './src/screens/Notes';
 import { NoteScreen } from './src/screens/Note';
 import { TodayScreen } from './src/screens/Today';
+import { TodosScreen } from './src/screens/Todos';
+import { WatchScreen } from './src/screens/Watch';
 import { ReviewScreen } from './src/screens/Review';
 import { JournalScreen, SettingsScreen } from './src/screens/Vault';
-import type { NotesStackParamList, TabParamList } from './src/navTypes';
+import type { NotesStackParamList, TabParamList, TodayStackParamList } from './src/navTypes';
+
+const stackOptions = { headerShown: false, contentStyle: { backgroundColor: c.bg } } as const;
 
 const Stack = createNativeStackNavigator<NotesStackParamList>();
 
 function NotesStack() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.bg } }}>
+    <Stack.Navigator screenOptions={stackOptions}>
       <Stack.Screen name="NotesList" component={NotesScreen} />
       <Stack.Screen name="Note" component={NoteScreen} />
     </Stack.Navigator>
+  );
+}
+
+const TodayNav = createNativeStackNavigator<TodayStackParamList>();
+
+/** Todos + Watch Later push from Today — the tab bar is full at Apple's five. */
+function TodayStack() {
+  return (
+    <TodayNav.Navigator screenOptions={stackOptions}>
+      <TodayNav.Screen name="TodayHome" component={TodayScreen} />
+      <TodayNav.Screen name="Todos" component={TodosScreen} />
+      <TodayNav.Screen name="Watch" component={WatchScreen} />
+    </TodayNav.Navigator>
   );
 }
 
@@ -43,7 +60,7 @@ function Tabs() {
       tabBar={(props) => <FloatingTabBar {...props} />}
       screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: c.bg } }}
     >
-      <Tab.Screen name="Today" component={TodayScreen} />
+      <Tab.Screen name="Today" component={TodayStack} />
       <Tab.Screen name="NotesTab" component={NotesStack} />
       <Tab.Screen name="Review" component={ReviewScreen} />
       <Tab.Screen name="Journal" component={JournalScreen} />

@@ -120,6 +120,56 @@ export async function connect(token: string, repoFullName: string): Promise<Conn
   }
 }
 
+/**
+ * Create the private vault repo for the user, so they never touch github.com.
+ * `auto_init: false` keeps it empty — an initial commit would force a merge on
+ * the first sync push.
+ */
+export async function createPrivateRepo(tokenValue: string, name = 'noto-vault'): Promise<ConnectResult> {
+  const tok = tokenValue.trim();
+  if (!tok) return { ok: false, error: 'Paste a token first.' };
+
+  let login: string;
+  try {
+    const me = await fetch('https://api.github.com/user', { headers: api(tok) });
+    if (me.status === 401) return { ok: false, error: 'GitHub rejected the token (401).' };
+    if (!me.ok) return { ok: false, error: `GitHub said ${me.status}.` };
+    login = ((await me.json()) as { login: string }).login;
+  } catch {
+    return { ok: false, error: 'No network. GitHub is unreachable.' };
+  }
+
+  try {
+    const res = await fetch('https://api.github.com/user/repos', {
+      method: 'POST',
+      headers: { ...api(tok), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name,
+        private: true,
+        auto_init: false,
+        description: 'Noto vault — notes, encrypted journal, and the review ledger.',
+      }),
+    });
+
+    if (res.status === 422) {
+      // Already exists: adopt it rather than failing.
+      return connect(tok, `${login}/${name}`);
+    }
+    if (res.status === 403) {
+      return { ok: false, error: 'Token lacks permission to create repos. It needs Administration: read & write.' };
+    }
+    if (res.status !== 201) return { ok: false, error: `Could not create the repo (${res.status}).` };
+
+    const repo = (await res.json()) as { full_name: string; private: boolean };
+    const biometricLock = await setItem(TOKEN_KEY, tok, true);
+    await setItem(REPO_KEY, repo.full_name, false);
+
+    return { ok: true, connection: { login, repo: repo.full_name, isPrivate: repo.private, biometricLock } };
+  } catch {
+    return { ok: false, error: 'No network. GitHub is unreachable.' };
+  }
+}
+
 /** Which repo we're linked to (cheap — no biometric prompt). */
 export async function savedRepo(): Promise<string | null> {
   return getItem(REPO_KEY);

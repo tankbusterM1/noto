@@ -66,6 +66,30 @@ export interface TombstoneRow {
   purgedAt: number | null;
 }
 
+export interface TodoRow {
+  id: string;
+  text: string;
+  tag: string | null;
+  /** 0/1 — SQLite has no boolean. */
+  done: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export type WatchKind = 'video' | 'article' | 'paper';
+
+export interface WatchRow {
+  id: string;
+  kind: WatchKind;
+  title: string;
+  source: string;
+  url: string;
+  /** 0 = unknown; we don't fake a duration we couldn't read. */
+  mins: number;
+  done: number;
+  addedAt: number;
+}
+
 export interface Vault {
   init(): Promise<void>;
   notes(): Promise<NoteRow[]>;
@@ -78,6 +102,12 @@ export interface Vault {
   putSrs(s: SrsRow): Promise<void>;
   addLedger(l: LedgerRow): Promise<void>;
   trashNote(id: string, at: number): Promise<void>;
+  todos(): Promise<TodoRow[]>;
+  putTodo(t: TodoRow): Promise<void>;
+  deleteTodo(id: string): Promise<void>;
+  watch(): Promise<WatchRow[]>;
+  putWatch(w: WatchRow): Promise<void>;
+  deleteWatch(id: string): Promise<void>;
   getMeta(key: string): Promise<string | null>;
   setMeta(key: string, value: string): Promise<void>;
 }
@@ -120,6 +150,14 @@ CREATE TABLE IF NOT EXISTS tombstones (
   id TEXT PRIMARY KEY NOT NULL, deletedAt INTEGER NOT NULL, purgedAt INTEGER);
 CREATE TABLE IF NOT EXISTS meta (
   key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS todos (
+  id TEXT PRIMARY KEY NOT NULL, text TEXT NOT NULL, tag TEXT,
+  done INTEGER NOT NULL DEFAULT 0,
+  createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS watch (
+  id TEXT PRIMARY KEY NOT NULL, kind TEXT NOT NULL, title TEXT NOT NULL,
+  source TEXT NOT NULL, url TEXT NOT NULL, mins INTEGER NOT NULL DEFAULT 0,
+  done INTEGER NOT NULL DEFAULT 0, addedAt INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS ledger_note ON ledger(noteId);
 `;
 
@@ -193,6 +231,36 @@ class SqliteVault implements Vault {
     );
   }
 
+  todos = () => this.db.getAllAsync<TodoRow>('SELECT * FROM todos ORDER BY done ASC, createdAt DESC');
+
+  async putTodo(t: TodoRow) {
+    await this.db.runAsync(
+      `INSERT INTO todos (id,text,tag,done,createdAt,updatedAt) VALUES (?,?,?,?,?,?)
+       ON CONFLICT(id) DO UPDATE SET text=excluded.text, tag=excluded.tag,
+         done=excluded.done, updatedAt=excluded.updatedAt`,
+      [t.id, t.text, t.tag, t.done, t.createdAt, t.updatedAt],
+    );
+  }
+
+  async deleteTodo(id: string) {
+    await this.db.runAsync('DELETE FROM todos WHERE id = ?', [id]);
+  }
+
+  watch = () => this.db.getAllAsync<WatchRow>('SELECT * FROM watch ORDER BY done ASC, addedAt DESC');
+
+  async putWatch(w: WatchRow) {
+    await this.db.runAsync(
+      `INSERT INTO watch (id,kind,title,source,url,mins,done,addedAt) VALUES (?,?,?,?,?,?,?,?)
+       ON CONFLICT(id) DO UPDATE SET kind=excluded.kind, title=excluded.title,
+         source=excluded.source, url=excluded.url, mins=excluded.mins, done=excluded.done`,
+      [w.id, w.kind, w.title, w.source, w.url, w.mins, w.done, w.addedAt],
+    );
+  }
+
+  async deleteWatch(id: string) {
+    await this.db.runAsync('DELETE FROM watch WHERE id = ?', [id]);
+  }
+
   async getMeta(key: string) {
     const row = await this.db.getFirstAsync<{ value: string }>('SELECT value FROM meta WHERE key = ?', [key]);
     return row?.value ?? null;
@@ -214,6 +282,8 @@ class MemoryVault implements Vault {
   private l: LedgerRow[] = [];
   private tomb = new Map<string, TombstoneRow>();
   private m = new Map<string, string>();
+  private td = new Map<string, TodoRow>();
+  private wt = new Map<string, WatchRow>();
   private autoId = 1;
 
   async init() {}
@@ -248,6 +318,24 @@ class MemoryVault implements Vault {
     this.n.delete(id);
     this.s.delete(id);
     if (!this.tomb.has(id)) this.tomb.set(id, { id, deletedAt: at, purgedAt: null });
+  }
+  async todos() {
+    return [...this.td.values()].sort((a, b) => a.done - b.done || b.createdAt - a.createdAt);
+  }
+  async putTodo(t: TodoRow) {
+    this.td.set(t.id, { ...t });
+  }
+  async deleteTodo(id: string) {
+    this.td.delete(id);
+  }
+  async watch() {
+    return [...this.wt.values()].sort((a, b) => a.done - b.done || b.addedAt - a.addedAt);
+  }
+  async putWatch(w: WatchRow) {
+    this.wt.set(w.id, { ...w });
+  }
+  async deleteWatch(id: string) {
+    this.wt.delete(id);
   }
   async getMeta(key: string) {
     return this.m.get(key) ?? null;

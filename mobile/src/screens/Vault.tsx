@@ -5,8 +5,9 @@ import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { c, mono, radius, serif, serifItalic, t } from '../theme';
 import { GlassSurface, LIQUID_GLASS, glassDiagnostics } from '../glass';
 import { Card, LargeTitle, Screen, useBottomInset } from '../ui';
+import { haptics } from '../motion';
 import { deviceSalt } from '../db';
-import { connect, disconnect, savedRepo, type Connection } from '../github';
+import { connect, createPrivateRepo, disconnect, savedRepo, type Connection } from '../github';
 
 /**
  * Face ID is COMPILED INTO a binary, not requested at runtime: iOS only offers
@@ -222,18 +223,30 @@ export function SettingsScreen() {
     void savedRepo().then(setLinked);
   }, []);
 
-  const doConnect = async () => {
-    setBusy(true);
-    setErr(null);
-    const res = await connect(tok, repo);
+  const finish = (res: Awaited<ReturnType<typeof connect>>) => {
     setBusy(false);
     if (res.ok) {
+      haptics.success();
       setConn(res.connection);
       setLinked(res.connection.repo);
       setTok('');
     } else {
+      haptics.error();
       setErr(res.error);
     }
+  };
+
+  const doConnect = async () => {
+    setBusy(true);
+    setErr(null);
+    finish(await connect(tok, repo));
+  };
+
+  /** One tap: make the private repo for them, no trip to github.com. */
+  const doCreate = async () => {
+    setBusy(true);
+    setErr(null);
+    finish(await createPrivateRepo(tok));
   };
 
   const doDisconnect = async () => {
@@ -328,12 +341,12 @@ export function SettingsScreen() {
               />
 
               <Pressable
-                onPress={doConnect}
-                disabled={busy || !repo || !tok}
+                onPress={doCreate}
+                disabled={busy || !tok}
                 style={({ pressed }) => [
                   st.primaryBtn,
                   { marginTop: 12 },
-                  (busy || !repo || !tok) && { opacity: 0.35 },
+                  (busy || !tok) && { opacity: 0.35 },
                   pressed && { opacity: 0.7 },
                 ]}
               >
@@ -342,15 +355,24 @@ export function SettingsScreen() {
                 ) : (
                   <>
                     <Ionicons name="logo-github" size={15} color={c.bg} />
-                    <Text style={st.primaryText}>Connect private repo</Text>
+                    <Text style={st.primaryText}>Create private vault repo</Text>
                   </>
                 )}
               </Pressable>
 
+              <Pressable
+                onPress={doConnect}
+                disabled={busy || !repo || !tok}
+                style={({ pressed }) => [st.ghostBtn, (busy || !repo || !tok) && { opacity: 0.35 }, pressed && { opacity: 0.6 }]}
+              >
+                <Text style={st.ghostTextMuted}>Or link the repo above</Text>
+              </Pressable>
+
               {err ? <Text style={st.err}>{err}</Text> : null}
               <Text style={st.note}>
-                Needs Contents: read &amp; write. Pushing notes, the encrypted journal and the review ledger comes next —
-                this step only proves the token works.
+                Create makes a private <Text style={{ fontFamily: mono }}>noto-vault</Text> for you — no trip to
+                github.com. Needs Contents + Administration: read &amp; write. Pushing notes, the encrypted journal and
+                the review ledger comes next; this step only proves the token works.
               </Text>
             </>
           )}
