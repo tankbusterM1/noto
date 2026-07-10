@@ -1,0 +1,52 @@
+{
+  "expo": {
+    "name": "Noto",
+    "slug": "noto",
+    "scheme": "noto",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#f4f1e9",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#f4f1e9"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.noto.vault",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Noto uses Face ID to unlock your encrypted journal. Nothing leaves this device."
+      }
+    },
+    "android": {
+      "package": "com.noto.vault",
+      "adaptiveIcon": {
+        "backgroundColor": "#f4f1e9",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "//": "OAuth device-flow client IDs are public by design — there is no secret, which is exactly why device flow suits an app that can't keep one. Safe to commit.",
+      "githubClientId": "Ov23li84CLmDgxmBHAWh"
+    },
+    "plugins": [
+      "expo-sqlite",
+      "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Noto uses Face ID to unlock your encrypted journal."
+        }
+      ],
+      "expo-font"
+    ]
+  }
+}

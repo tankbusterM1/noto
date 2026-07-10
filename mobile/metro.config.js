@@ -27,4 +27,13 @@ const config = getDefaultConfig(projectRoot)
 
 config.watchFolders = [coreDir]
 
+/*
+ * `design-handoff/` holds VERBATIM COPIES of the app's source, for a designer to
+ * read. Those copies duplicate filenames (App.tsx, theme.ts, every screen) and
+ * their relative imports don't resolve from that location — so Metro must not
+ * bundle or watch them, or it hits resolution errors and haste collisions.
+ */
+const handoff = path.resolve(projectRoot, 'design-handoff')
+config.resolver.blockList = [new RegExp(`^${handoff.replace(/[\\/]/g, '[\\\\/]')}[\\\\/].*`)]
+
 module.exports = config
