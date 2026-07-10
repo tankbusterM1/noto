@@ -150,10 +150,15 @@ export function Settings() {
           {/* Sync — one private repo, shared with the phone. */}
           <div style={label}>Sync · private GitHub repo</div>
           <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.55, marginBottom: 12 }}>
-            Notes, folders, review history and the <em>encrypted</em> journal are merged into a private
-            repo named <code style={{ fontSize: 11.5 }}>noto-vault</code>, which Noto creates for you. Each
-            sync is one commit. Journal entries are pushed as ciphertext only — if you haven't set a
-            passphrase, they stay on this machine.
+            Everything — notes, folders, review history, todos, watch later, and the <em>encrypted</em>{' '}
+            journal — is merged into a private repo named <code style={{ fontSize: 11.5 }}>noto-vault</code>,
+            which Noto creates for you. Each sync is one commit. Journal entries are pushed as ciphertext
+            only; if you haven't set a passphrase, they stay on this machine.
+          </div>
+          <div style={{ fontSize: 11.5, color: 'var(--ink3)', lineHeight: 1.5, marginBottom: 12 }}>
+            The token is kept in this browser's database, unencrypted — a browser has no keychain. Anyone
+            with your computer and your account can read it. Scope it to this one repo, and revoke it if the
+            machine is shared. (On iPhone it's sealed in the Keychain behind Face ID.)
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <input

@@ -27,6 +27,16 @@ const token = process.argv[2];
 if (!token) throw new Error('usage: sync-smoke.mts <token> [repo]');
 
 const REPO_NAME = process.argv[3] ?? 'noto-vault-selftest';
+
+/*
+ * This script WIPES the repo it runs against. `noto-vault` is the name both apps
+ * create and sync into by default, so pointing the smoke test at it — by habit,
+ * by a stray argument — would delete a real vault. Refuse, always.
+ */
+if (/^noto-vault$/i.test(REPO_NAME)) {
+  throw new Error(`Refusing to run: "${REPO_NAME}" is the live vault. This script erases the repo. Use a throwaway name.`);
+}
+
 const PASSPHRASE = 'correct horse battery staple';
 const ITERATIONS = 1000; // the shipped 600k is the same code, 600x slower
 
