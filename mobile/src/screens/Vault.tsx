@@ -5,7 +5,7 @@ import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { c, mono, radius, serif, serifItalic, t } from '../theme';
 import { GlassSurface, LIQUID_GLASS, glassDiagnostics } from '../glass';
 import { Card, LargeTitle, Screen, useBottomInset } from '../ui';
-import { haptics } from '../motion';
+import { haptics, Press, Rise } from '../motion';
 import { deviceSalt } from '../db';
 import { useData } from '../store';
 import { connect, createPrivateRepo, disconnect, savedRepo, type Connection } from '../github';
@@ -43,11 +43,19 @@ interface Biometrics {
 }
 
 export function JournalScreen() {
-  const [unlocked, setUnlocked] = useState(false);
+  const unlocked = useData((s) => s.journalUnlocked);
+  const entries = useData((s) => s.journal);
+  const sealedCount = useData((s) => s.journalCount);
+  const unlockJournal = useData((s) => s.unlockJournal);
+  const lockJournal = useData((s) => s.lockJournal);
+  const addEntry = useData((s) => s.addJournalEntry);
+  const removeEntry = useData((s) => s.removeJournalEntry);
+
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [code, setCode] = useState<string | null>(null);
   const [bio, setBio] = useState<Biometrics | null>(null);
+  const [draft, setDraft] = useState('');
   const bottom = useBottomInset();
 
   useEffect(() => {
@@ -73,83 +81,131 @@ export function JournalScreen() {
     })();
   }, []);
 
-  const run = async (biometricsOnly: boolean) => {
+  /*
+   * One prompt, not two. Reading the Keychain key is itself the Face ID
+   * challenge (the item carries a biometric ACL), so calling
+   * LocalAuthentication first would show the sheet twice for one unlock.
+   * expo-local-authentication is kept only for the capability read-out below.
+   */
+  const run = async () => {
     setErr(null);
     setCode(null);
     if (Platform.OS === 'web') {
-      setErr('Face ID needs the real device — the browser preview has no biometrics.');
+      setErr('Face ID needs the real device — the browser preview has no Keychain.');
       return;
     }
     setBusy(true);
     try {
-      const LA = await import('expo-local-authentication');
-      const res = await LA.authenticateAsync({
-        promptMessage: 'Unlock your journal',
-        cancelLabel: 'Cancel',
-        disableDeviceFallback: biometricsOnly,
-        ...(biometricsOnly ? {} : { fallbackLabel: 'Use passcode' }),
-      });
-
-      if (res.success) {
-        setUnlocked(true);
+      if (await unlockJournal()) {
+        haptics.success();
         return;
       }
-
-      const e = 'error' in res ? String(res.error) : 'unknown';
-      setCode(e);
-
-      switch (e) {
-        case 'user_cancel':
-        case 'system_cancel':
-        case 'app_cancel':
-          setErr(null);
-          break;
-        case 'not_available':
-          setErr(
-            'iOS refused Face ID for this app — nothing was ever shown. Open Settings › Expo Go and turn Face ID ON, then retry.',
-          );
-          break;
-        case 'not_enrolled':
-          setErr('No face is enrolled. Settings › Face ID & Passcode.');
-          break;
-        case 'passcode_not_set':
-          setErr('Set a device passcode first; Face ID requires one.');
-          break;
-        case 'lockout':
-          setErr('Too many failed attempts. Lock and unlock your phone, then retry.');
-          break;
-        case 'authentication_failed':
-          setErr('Face ID ran but did not match.');
-          break;
-        default:
-          setErr(`Face ID failed before it could run (${e}).`);
-      }
+      haptics.error();
+      setCode('keychain_unlock_failed');
+      if (bio && !bio.hardware) setErr('This device has no biometric hardware.');
+      else if (bio && !bio.enrolled) setErr('No face is enrolled. Settings › Face ID & Passcode.');
+      else setErr('Cancelled, or Face ID could not release the key.');
     } catch (ex) {
-      setErr(ex instanceof Error ? ex.message : 'Biometrics unavailable in this runtime.');
+      setErr(ex instanceof Error ? ex.message : 'Keychain unavailable in this runtime.');
     } finally {
       setBusy(false);
     }
   };
 
+  const save = async () => {
+    if (!draft.trim()) return;
+    await addEntry(draft);
+    setDraft('');
+    haptics.success();
+  };
+
   return (
     <Screen>
-      <LargeTitle kicker="encrypted at rest" title="Journal" />
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: bottom, gap: 14 }}>
+      <LargeTitle
+        kicker={unlocked ? `${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}` : 'encrypted at rest'}
+        title="Journal"
+        trailing={
+          unlocked ? (
+            <Press
+              scaleTo={0.88}
+              haptic={false}
+              onPress={() => {
+                haptics.light();
+                lockJournal();
+              }}
+              style={st.lockBtn}
+            >
+              <Ionicons name="lock-closed" size={16} color={c.bg} />
+            </Press>
+          ) : undefined
+        }
+      />
+      <ScrollView
+        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: bottom, gap: 14 }}
+        keyboardShouldPersistTaps="handled"
+      >
         {unlocked ? (
-          <Card>
-            <Text style={st.kicker}>TODAY</Text>
-            <Text style={st.body}>
-              Unlocked. Entries stay on this device, encrypted with a key held in the Keychain behind Face ID.
-            </Text>
-          </Card>
+          <>
+            <Card>
+              <Text style={st.kicker}>TODAY</Text>
+              <TextInput
+                value={draft}
+                onChangeText={setDraft}
+                multiline
+                textAlignVertical="top"
+                placeholder="Write it down. Nobody else can read this."
+                placeholderTextColor={c.ink3}
+                style={st.composer}
+              />
+              <Pressable
+                onPress={() => void save()}
+                disabled={!draft.trim()}
+                style={({ pressed }) => [st.primaryBtn, !draft.trim() && { opacity: 0.35 }, pressed && { opacity: 0.7 }]}
+              >
+                <Ionicons name="lock-closed-outline" size={15} color={c.bg} />
+                <Text style={st.primaryText}>Seal this entry</Text>
+              </Pressable>
+            </Card>
+
+            {entries.map((e, i) => (
+              <Rise key={e.id} delay={Math.min(i, 8) * 22}>
+                <Card>
+                  <View style={st.entryHead}>
+                    <Text style={st.kicker}>
+                      {new Date(e.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} ·{' '}
+                      {e.words} {e.words === 1 ? 'WORD' : 'WORDS'}
+                    </Text>
+                    <Press
+                      scaleTo={0.85}
+                      haptic={false}
+                      hitSlop={10}
+                      onPress={() => {
+                        haptics.warning();
+                        void removeEntry(e.id);
+                      }}
+                    >
+                      <Ionicons name="close" size={15} color={c.ink3} />
+                    </Press>
+                  </View>
+                  <Text style={st.entryText}>{e.text}</Text>
+                </Card>
+              </Rise>
+            ))}
+
+            {entries.length === 0 ? <Text style={st.emptyJournal}>Nothing written yet.</Text> : null}
+          </>
         ) : (
           <GlassSurface style={st.lockCard} fallbackColor={c.surface}>
             <Ionicons name="lock-closed-outline" size={26} color={c.ink3} />
             <Text style={st.lockedTitle}>The journal is locked.</Text>
-            <Text style={st.lockedHint}>Only you can open it. Nothing here ever leaves the device unencrypted.</Text>
+            <Text style={st.lockedHint}>
+              {sealedCount > 0
+                ? `${sealedCount} sealed ${sealedCount === 1 ? 'entry' : 'entries'}. Without your face they are noise — even to this app.`
+                : 'Only you can open it. Nothing here ever leaves the device unencrypted.'}
+            </Text>
 
             <Pressable
-              onPress={() => void run(!IN_EXPO_GO)}
+              onPress={() => void run()}
               disabled={busy}
               style={({ pressed }) => [st.primaryBtn, (pressed || busy) && { opacity: 0.7 }]}
             >
@@ -158,7 +214,7 @@ export function JournalScreen() {
               ) : (
                 <>
                   <Ionicons name={IN_EXPO_GO ? 'keypad-outline' : 'scan-outline'} size={16} color={c.bg} />
-                  <Text style={st.primaryText}>{IN_EXPO_GO ? 'Unlock with passcode' : 'Unlock with Face ID'}</Text>
+                  <Text style={st.primaryText}>{IN_EXPO_GO ? 'Unlock' : 'Unlock with Face ID'}</Text>
                 </>
               )}
             </Pressable>
@@ -166,23 +222,13 @@ export function JournalScreen() {
             {IN_EXPO_GO ? (
               <Text style={st.diag}>
                 Expo Go can’t show Face ID — Apple bakes that permission into an app’s binary at build time, and Expo
-                Go’s doesn’t carry it. The passcode sheet is iOS’s stand-in here; the installed build of Noto uses real
-                Face ID.
+                Go’s doesn’t carry it. Here the key is stored without a biometric lock; the installed build seals it
+                behind Face ID.
               </Text>
             ) : null}
 
             {err ? <Text style={st.err}>{err}</Text> : null}
-
-            {code && code !== 'user_cancel' ? (
-              <>
-                <Text style={st.diag}>error code: {code}</Text>
-                {!IN_EXPO_GO ? (
-                  <Pressable onPress={() => void run(false)} style={({ pressed }) => [st.ghostBtn, pressed && { opacity: 0.6 }]}>
-                    <Text style={st.ghostTextMuted}>Use passcode instead</Text>
-                  </Pressable>
-                ) : null}
-              </>
-            ) : null}
+            {code && code !== 'user_cancel' ? <Text style={st.diag}>error code: {code}</Text> : null}
 
             {bio ? (
               <Text style={st.diag}>
@@ -483,4 +529,25 @@ const st = StyleSheet.create({
   rowLabel: { ...t.subhead, color: c.ink2 },
   rowValue: { ...t.subhead, fontFamily: mono, color: c.ink, flexShrink: 1 },
   switchRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
+
+  lockBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: c.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  composer: {
+    ...t.body,
+    fontFamily: serif,
+    color: c.ink,
+    lineHeight: 26,
+    minHeight: 120,
+    marginTop: 10,
+    paddingTop: 0,
+  },
+  entryHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  entryText: { ...t.body, fontFamily: serif, color: c.ink, lineHeight: 26, marginTop: 10 },
+  emptyJournal: { ...t.subhead, fontFamily: serifItalic, color: c.ink3, textAlign: 'center', paddingTop: 24 },
 });

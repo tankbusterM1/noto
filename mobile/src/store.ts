@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import {
   openVault,
   uid,
+  type JournalRow,
   type LedgerRow,
   type NoteRow,
   type TodoRow,
@@ -9,6 +10,7 @@ import {
   type WatchKind,
   type WatchRow,
 } from './db';
+import { open as openSealed, seal, unlockKey } from './crypto';
 import { cancelDigest, scheduleDigest, syncBadge } from './badge';
 import { dates, format, fsrs, markdown } from '../core';
 import type { Grade, HistEntry } from '../core';
@@ -53,12 +55,29 @@ export interface WatchItem {
   addedAt: number;
 }
 
+export interface JournalEntry {
+  id: string;
+  day: number;
+  text: string;
+  words: number;
+  createdAt: number;
+}
+
 interface State {
   ready: boolean;
   notes: Note[];
   memory: Record<string, NoteMemory>;
   todos: Todo[];
   watch: WatchItem[];
+  /** Decrypted, in memory only, and only while unlocked. */
+  journal: JournalEntry[];
+  journalUnlocked: boolean;
+  /** How many sealed entries exist — visible even when locked. */
+  journalCount: number;
+  unlockJournal: () => Promise<boolean>;
+  lockJournal: () => void;
+  addJournalEntry: (text: string) => Promise<void>;
+  removeJournalEntry: (id: string) => Promise<void>;
   /** Daily local reminder naming what's waiting. */
   digestOn: boolean;
   hydrate: () => Promise<void>;
@@ -180,22 +199,33 @@ function deriveMemory(ledger: LedgerRow[], srsRows: { noteId: string; ease: numb
 
 let vault: Vault | null = null;
 
+/**
+ * The journal key never enters the zustand store: state gets serialised by
+ * devtools, logged, and inspected. It lives here, in module scope, and dies with
+ * the process. Locking clears it and every decrypted string alongside it.
+ */
+let journalKey: Uint8Array | null = null;
+
 export const useData = create<State>((set, get) => ({
   ready: false,
   notes: [],
   memory: {},
   todos: [],
   watch: [],
+  journal: [],
+  journalUnlocked: false,
+  journalCount: 0,
   digestOn: false,
 
   hydrate: async () => {
     vault = await openVault();
-    const [noteRows, srsRows, ledger, todoRows, watchRows, digest] = await Promise.all([
+    const [noteRows, srsRows, ledger, todoRows, watchRows, journalRows, digest] = await Promise.all([
       vault.notes(),
       vault.srs(),
       vault.ledger(),
       vault.todos(),
       vault.watch(),
+      vault.journal(),
       vault.getMeta('digest'),
     ]);
     set({
@@ -204,9 +234,62 @@ export const useData = create<State>((set, get) => ({
       memory: deriveMemory(ledger, srsRows),
       todos: todoRows.map(toTodo),
       watch: watchRows.map(toWatch),
+      // Sealed rows are counted, never opened, until Face ID hands us the key.
+      journal: [],
+      journalUnlocked: false,
+      journalCount: journalRows.length,
       digestOn: digest === '1',
     });
     void get().refreshSignals();
+  },
+
+  /** Reading the Keychain key IS the Face ID prompt. Then we open the entries. */
+  unlockJournal: async () => {
+    if (!vault) return false;
+    const key = await unlockKey();
+    if (!key) return false;
+    journalKey = key;
+
+    const rows = await vault.journal();
+    const entries: JournalEntry[] = [];
+    for (const r of rows) {
+      const text = openSealed(key, { iv: r.iv, ct: r.ct });
+      if (text === null) continue; // wrong key or tampered — GCM caught it
+      entries.push({ id: r.id, day: r.day, text, words: text.trim().split(/\s+/).filter(Boolean).length, createdAt: r.createdAt });
+    }
+    set({ journal: entries, journalUnlocked: true, journalCount: rows.length });
+    return true;
+  },
+
+  lockJournal: () => {
+    journalKey = null;
+    set({ journal: [], journalUnlocked: false });
+  },
+
+  addJournalEntry: async (text) => {
+    if (!vault || !journalKey || !text.trim()) return;
+    const clean = text.trim();
+    const now = Date.now();
+    const row: JournalRow = {
+      id: uid('j'),
+      day: dates.todayEpochDay(),
+      createdAt: now,
+      ...seal(journalKey, clean),
+    };
+    await vault.putJournal(row);
+    set({
+      journal: [
+        { id: row.id, day: row.day, text: clean, words: clean.split(/\s+/).filter(Boolean).length, createdAt: now },
+        ...get().journal,
+      ],
+      journalCount: get().journalCount + 1,
+    });
+  },
+
+  removeJournalEntry: async (id) => {
+    if (!vault) return;
+    await vault.deleteJournal(id);
+    set({ journal: get().journal.filter((e) => e.id !== id), journalCount: Math.max(0, get().journalCount - 1) });
   },
 
   /**

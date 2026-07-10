@@ -76,6 +76,16 @@ export interface TodoRow {
   updatedAt: number;
 }
 
+/** Only ciphertext ever touches disk. There is no plaintext column, by design. */
+export interface JournalRow {
+  id: string;
+  /** Absolute epoch-day, so entries age correctly across timezones. */
+  day: number;
+  iv: string;
+  ct: string;
+  createdAt: number;
+}
+
 export type WatchKind = 'video' | 'article' | 'paper';
 
 export interface WatchRow {
@@ -108,6 +118,9 @@ export interface Vault {
   watch(): Promise<WatchRow[]>;
   putWatch(w: WatchRow): Promise<void>;
   deleteWatch(id: string): Promise<void>;
+  journal(): Promise<JournalRow[]>;
+  putJournal(j: JournalRow): Promise<void>;
+  deleteJournal(id: string): Promise<void>;
   getMeta(key: string): Promise<string | null>;
   setMeta(key: string, value: string): Promise<void>;
 }
@@ -158,6 +171,9 @@ CREATE TABLE IF NOT EXISTS watch (
   id TEXT PRIMARY KEY NOT NULL, kind TEXT NOT NULL, title TEXT NOT NULL,
   source TEXT NOT NULL, url TEXT NOT NULL, mins INTEGER NOT NULL DEFAULT 0,
   done INTEGER NOT NULL DEFAULT 0, addedAt INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS journal (
+  id TEXT PRIMARY KEY NOT NULL, day INTEGER NOT NULL,
+  iv TEXT NOT NULL, ct TEXT NOT NULL, createdAt INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS ledger_note ON ledger(noteId);
 `;
 
@@ -261,6 +277,20 @@ class SqliteVault implements Vault {
     await this.db.runAsync('DELETE FROM watch WHERE id = ?', [id]);
   }
 
+  journal = () => this.db.getAllAsync<JournalRow>('SELECT * FROM journal ORDER BY createdAt DESC');
+
+  async putJournal(j: JournalRow) {
+    await this.db.runAsync(
+      `INSERT INTO journal (id,day,iv,ct,createdAt) VALUES (?,?,?,?,?)
+       ON CONFLICT(id) DO UPDATE SET iv=excluded.iv, ct=excluded.ct, day=excluded.day`,
+      [j.id, j.day, j.iv, j.ct, j.createdAt],
+    );
+  }
+
+  async deleteJournal(id: string) {
+    await this.db.runAsync('DELETE FROM journal WHERE id = ?', [id]);
+  }
+
   async getMeta(key: string) {
     const row = await this.db.getFirstAsync<{ value: string }>('SELECT value FROM meta WHERE key = ?', [key]);
     return row?.value ?? null;
@@ -284,6 +314,7 @@ class MemoryVault implements Vault {
   private m = new Map<string, string>();
   private td = new Map<string, TodoRow>();
   private wt = new Map<string, WatchRow>();
+  private jr = new Map<string, JournalRow>();
   private autoId = 1;
 
   async init() {}
@@ -336,6 +367,15 @@ class MemoryVault implements Vault {
   }
   async deleteWatch(id: string) {
     this.wt.delete(id);
+  }
+  async journal() {
+    return [...this.jr.values()].sort((a, b) => b.createdAt - a.createdAt);
+  }
+  async putJournal(j: JournalRow) {
+    this.jr.set(j.id, { ...j });
+  }
+  async deleteJournal(id: string) {
+    this.jr.delete(id);
   }
   async getMeta(key: string) {
     return this.m.get(key) ?? null;
