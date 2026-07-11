@@ -34,28 +34,91 @@ export const SPRING_SOFT: WithSpringConfig = { damping: 20, stiffness: 150, mass
 export const PRESS_IN: WithSpringConfig = { damping: 16, stiffness: 420, mass: 0.5, reduceMotion: NEVER };
 
 /*
- * Haptics, matched to meaning rather than one buzz for everything:
- *   selection -> moving between tabs (the crisp UIKit tick)
- *   impact    -> committing something (new note, grading)
- *   notify    -> an outcome (review recorded, destructive action)
+ * Haptics.
+ *
+ * The single-buzz version felt weak because almost everything used the lightest
+ * impact and nothing was *choreographed*. Premium iOS apps layer taps into short
+ * patterns — a landing has a thud, a success has a bounce, a big moment builds.
+ *
+ * Two layers here: `fire()` is the atom map onto UIKit's feedback generators;
+ * `seq()` chains atoms a few milliseconds apart into a felt gesture. The named
+ * verbs below are what the app actually calls, so intent lives at the call site.
  */
 const safe = (p: Promise<void>) => void p.catch(() => {});
 
+type Atom = 'selection' | 'light' | 'medium' | 'heavy' | 'rigid' | 'soft' | 'success' | 'warning' | 'error';
+
+function fire(a: Atom) {
+  if (Platform.OS === 'web') return;
+  switch (a) {
+    case 'selection':
+      return safe(Haptics.selectionAsync());
+    case 'success':
+      return safe(Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success));
+    case 'warning':
+      return safe(Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning));
+    case 'error':
+      return safe(Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error));
+    default: {
+      const style = {
+        light: Haptics.ImpactFeedbackStyle.Light,
+        medium: Haptics.ImpactFeedbackStyle.Medium,
+        heavy: Haptics.ImpactFeedbackStyle.Heavy,
+        rigid: Haptics.ImpactFeedbackStyle.Rigid,
+        soft: Haptics.ImpactFeedbackStyle.Soft,
+      }[a];
+      return safe(Haptics.impactAsync(style));
+    }
+  }
+}
+
+/** Fire a pattern: [atom, ms-since-previous]. The first delay is from now. */
+function seq(steps: Array<[Atom, number]>) {
+  if (Platform.OS === 'web') return;
+  let t = 0;
+  for (const [atom, gap] of steps) {
+    t += gap;
+    if (t === 0) fire(atom);
+    else setTimeout(() => fire(atom), t);
+  }
+}
+
 export const haptics = {
-  selection: () => (Platform.OS === 'web' ? undefined : safe(Haptics.selectionAsync())),
-  light: () => (Platform.OS === 'web' ? undefined : safe(Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light))),
-  medium: () => (Platform.OS === 'web' ? undefined : safe(Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium))),
-  heavy: () => (Platform.OS === 'web' ? undefined : safe(Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy))),
-  rigid: () => (Platform.OS === 'web' ? undefined : safe(Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Rigid))),
-  soft: () => (Platform.OS === 'web' ? undefined : safe(Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft))),
-  success: () => (Platform.OS === 'web' ? undefined : safe(Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success))),
-  warning: () => (Platform.OS === 'web' ? undefined : safe(Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning))),
-  error: () => (Platform.OS === 'web' ? undefined : safe(Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error))),
+  // Atoms — kept for existing call sites and precise control.
+  selection: () => fire('selection'),
+  light: () => fire('light'),
+  medium: () => fire('medium'),
+  heavy: () => fire('heavy'),
+  rigid: () => fire('rigid'),
+  soft: () => fire('soft'),
+  success: () => fire('success'),
+  warning: () => fire('warning'),
+  error: () => fire('error'),
+
+  // Verbs — the choreographed feels the app uses.
+  /** A crisp press. Rigid reads sharper than Light — this is the new default tap. */
+  tap: () => fire('rigid'),
+  /** Moving between tabs / segments — the true UIKit tick. */
+  tick: () => fire('selection'),
+  /** A weighty commit: new note, add. Two beats so it lands, not just clicks. */
+  commit: () => seq([['heavy', 0], ['rigid', 45]]),
+  /** A satisfying confirmation: a knock, then the system success chord. */
+  confirm: () => seq([['rigid', 0], ['success', 55]]),
+  /** The signature review "re-ink" — a short crescendo, light into heavy. */
+  reink: () => seq([['light', 0], ['medium', 70], ['heavy', 150]]),
+  /** Something landing — a soft cushion under a hard tap. */
+  drop: () => seq([['soft', 0], ['heavy', 0]]),
+  /** A gentle-but-clear "careful": warning chord after a rigid knock. */
+  warn: () => seq([['rigid', 0], ['warning', 60]]),
+  /** A refusal / failure: a heavy double into the error chord. */
+  fail: () => seq([['heavy', 0], ['heavy', 70], ['error', 60]]),
 };
 
 export function tapFeedback(strength: 'light' | 'medium' = 'light') {
-  if (strength === 'light') haptics.light();
-  else haptics.medium();
+  // "light" is the default button press — now a crisp rigid rather than the
+  // faint Light impact, which is what made the app feel unresponsive.
+  if (strength === 'light') fire('rigid');
+  else fire('heavy');
 }
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);

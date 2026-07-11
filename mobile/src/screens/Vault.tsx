@@ -375,6 +375,8 @@ export function SettingsScreen() {
   const todos = useData((s) => s.todos);
   const digestOn = useData((s) => s.digestOn);
   const setDigest = useData((s) => s.setDigest);
+  const autoSyncOn = useData((s) => s.autoSyncOn);
+  const setAutoSync = useData((s) => s.setAutoSync);
   const [repo, setRepo] = useState('');
   const [tok, setTok] = useState('');
   const [conn, setConn] = useState<Connection | null>(null);
@@ -601,6 +603,21 @@ export function SettingsScreen() {
                   across.
                 </Text>
               ) : null}
+
+              <View style={[st.switchRow, { marginTop: 6 }]}>
+                <View style={{ flex: 1, paddingRight: 14 }}>
+                  <Text style={st.rowLabel}>Auto-sync</Text>
+                  <Text style={st.note}>Sync in the background after you make changes.</Text>
+                </View>
+                <Switch
+                  value={autoSyncOn}
+                  onValueChange={(v) => {
+                    haptics.selection();
+                    void setAutoSync(v);
+                  }}
+                  trackColor={{ true: c.amber, false: c.line }}
+                />
+              </View>
 
               <Pressable onPress={doDisconnect} style={({ pressed }) => [st.ghostBtn, pressed && { opacity: 0.6 }]}>
                 <Text style={st.ghostText}>Disconnect</Text>

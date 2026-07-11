@@ -181,6 +181,64 @@ describe('mergeVaults', () => {
     expect(merged.folders).toHaveLength(1)
   })
 
+  /*
+   * The mobile "delete folder" flow: it rehomes the folder's notes into another
+   * folder (bumping their updatedAt) BEFORE tombstoning the folder. After sync,
+   * the other device — which still had the note in the old folder — must end up
+   * with the folder gone and the note safely in its new home, never orphaned.
+   */
+  it('deleting a folder rehomes its notes on the other device, losing nothing', () => {
+    const deleter = v({
+      folders: [{ id: 'f_keep', name: 'Keep', parentId: null, createdAt: 1, updatedAt: 1 }],
+      notes: [note('n1', 500, { folderId: 'f_keep' })], // rehomed + bumped
+      tombstones: [{ id: 'f_old', deletedAt: 400 }],
+    })
+    const other = v({
+      folders: [
+        { id: 'f_keep', name: 'Keep', parentId: null, createdAt: 1, updatedAt: 1 },
+        { id: 'f_old', name: 'Old', parentId: null, createdAt: 2, updatedAt: 2 },
+      ],
+      notes: [note('n1', 100, { folderId: 'f_old' })], // still in the doomed folder
+    })
+    const merged = mergeVaults(deleter, other).vault
+    expect(merged.folders.map((f) => f.id)).toEqual(['f_keep']) // the folder is gone
+    expect(merged.notes).toHaveLength(1) // the note is NOT lost
+    expect(merged.notes[0].folderId).toBe('f_keep') // and it followed to its new home
+  })
+
+  /*
+   * The orphan the merge must heal: a note the deleting device never saw — created
+   * in the doomed folder on the OTHER device — has no rehome record, so only the
+   * merge can save it. It must land in a surviving folder, never point at a ghost.
+   */
+  it('rehomes a note that was orphaned by a folder deleted on another device', () => {
+    const deleter = v({
+      folders: [{ id: 'f_keep', name: 'Keep', parentId: null, createdAt: 1, updatedAt: 1 }],
+      tombstones: [{ id: 'f_old', deletedAt: 400 }],
+    })
+    const other = v({
+      folders: [
+        { id: 'f_keep', name: 'Keep', parentId: null, createdAt: 1, updatedAt: 1 },
+        { id: 'f_old', name: 'Old', parentId: null, createdAt: 2, updatedAt: 2 },
+      ],
+      notes: [note('n_new', 300, { folderId: 'f_old' })], // deleter never saw this one
+    })
+    const a = mergeVaults(deleter, other).vault
+    const b = mergeVaults(other, deleter).vault
+    expect(a.notes[0].folderId).toBe('f_keep')
+    expect(a.folders.some((f) => f.id === 'f_old')).toBe(false)
+    expect(a).toEqual(b) // still commutative after the repair
+  })
+
+  it('synthesises a home when every folder was deleted at once, keeping the invariant', () => {
+    const merged = mergeVaults(
+      v({ notes: [note('n1', 300, { folderId: 'fA' })], tombstones: [{ id: 'fA', deletedAt: 400 }] }),
+      v({ notes: [note('n1', 300, { folderId: 'fA' })], tombstones: [{ id: 'fB', deletedAt: 400 }] }),
+    ).vault
+    expect(merged.folders).toHaveLength(1) // never zero folders while notes exist
+    expect(merged.notes[0].folderId).toBe(merged.folders[0].id)
+  })
+
   it('keeps a note in review even when it has no review history yet', () => {
     const merged = mergeVaults(v({ notes: [note('n1', 1)] }), v({ srs: [{ noteId: 'n1', ease: 2.5, ivl: 0, dueDay: 20 }] }))
     expect(merged.vault.srs).toHaveLength(1)

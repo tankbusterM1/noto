@@ -117,7 +117,7 @@ export function TodayScreen({ navigation }: Props) {
 
         {resurface ? (
           <Rise delay={130}>
-            <Card>
+            <Card glass>
               <Text style={st.kicker}>RESURFACED</Text>
               <Text style={st.resurfaceTitle}>{resurface.title}</Text>
               <Text style={st.hint}>

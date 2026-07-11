@@ -169,6 +169,9 @@ export interface Manifest {
   schema: number;
 }
 
+/** The folder a merge falls back to when every real folder was deleted at once. */
+export const DEFAULT_FOLDER: SyncFolder = { id: 'f_default', name: 'Notes', parentId: null, createdAt: 0, updatedAt: 0 };
+
 export const emptyVault = (): Vault => ({
   notes: [],
   folders: [],
@@ -331,6 +334,31 @@ export function mergeVaults(local: Vault, remote: Vault): { vault: Vault; stats:
   for (const [id, deletedAt] of tombs) {
     const f = folders.get(id);
     if (f && f.updatedAt <= deletedAt) folders.delete(id);
+  }
+
+  /*
+   * Rehome orphans, here, so it heals on every device.
+   *
+   * A folder can be deleted on one device while another still holds notes in it
+   * (or creates one there before syncing). The folder tombstone removes the
+   * folder but carries no rehome target, so those notes would point at a folder
+   * that no longer exists — invisible under every folder, recoverable only from
+   * "All". The repair is deterministic (earliest-created surviving folder, tie
+   * broken by id), so both sides compute the identical result and the merge
+   * stays commutative. If EVERY folder was deleted at once, a canonical default
+   * is synthesised so a note always has a home and the vault always has a folder.
+   */
+  const liveFolderIds = new Set(folders.keys());
+  const needsHome = [...notes.values()].some((n) => !liveFolderIds.has(n.folderId));
+  if (needsHome) {
+    if (folders.size === 0) {
+      folders.set(DEFAULT_FOLDER.id, { ...DEFAULT_FOLDER });
+      liveFolderIds.add(DEFAULT_FOLDER.id);
+    }
+    const home = [...folders.values()].sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id))[0].id;
+    for (const [id, n] of notes) {
+      if (!liveFolderIds.has(n.folderId)) notes.set(id, { ...n, folderId: home });
+    }
   }
 
   // 2. The ledger is append-only, so union by identity. No conflicts, ever.

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { GlassSurface, LIQUID_GLASS } from './glass';
+import { GlassSurface } from './glass';
 import { c, radius, serif, mono, t, TAB_BAR_HEIGHT, FLOAT_GAP } from './theme';
 
 /**
@@ -36,13 +36,24 @@ export function LargeTitle({ kicker, title, trailing }: { kicker?: string; title
   );
 }
 
-/** `glass` opts into Liquid Glass where it's genuinely available; else a flat card. */
+/*
+ * `glass` renders the card as Liquid Glass — real UIGlassEffect on iOS 26, a
+ * blur on older iOS, a translucent paper card on web/Android. The soft drop
+ * shadow lives on an OUTER wrapper because the glass surface clips to its radius
+ * and a clipped view swallows its own shadow (same trick as the tab bar). The
+ * thin top line fakes the inset highlight RN can't draw.
+ */
+const GLASS_CARD_BG = 'rgba(250,248,242,0.9)';
+
 export function Card({ children, style, glass }: { children: ReactNode; style?: ViewStyle; glass?: boolean }) {
-  if (glass && LIQUID_GLASS) {
+  if (glass) {
     return (
-      <GlassSurface style={[s.card, { backgroundColor: 'transparent' }, style] as ViewStyle[]}>
-        {children}
-      </GlassSurface>
+      <View style={[s.cardShadow, style]}>
+        <GlassSurface style={s.glassInner} fallbackColor={GLASS_CARD_BG}>
+          <View style={s.cardHighlight} pointerEvents="none" />
+          {children}
+        </GlassSurface>
+      </View>
     );
   }
   return <View style={[s.card, style]}>{children}</View>;
@@ -91,6 +102,33 @@ export const s = StyleSheet.create({
     borderRadius: radius.lg,
     padding: 16,
     overflow: 'hidden',
+  },
+  // Glass card: shadow on the un-clipped wrapper, material + highlight inside.
+  cardShadow: {
+    borderRadius: radius.lg,
+    shadowColor: '#18130a',
+    shadowOpacity: 0.1,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 10 },
+  },
+  glassInner: {
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+    padding: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(227,221,207,0.85)',
+    // A translucent paper fill — the design's glass cards are frosted paper, not
+    // clear glass. It also guarantees a visible surface on the blur/flat fallback
+    // paths (older iOS, Expo Go, web), which a fill-less blur would leave empty.
+    backgroundColor: 'rgba(250,248,242,0.55)',
+  },
+  cardHighlight: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.6)',
   },
   pill: {
     borderWidth: StyleSheet.hairlineWidth,

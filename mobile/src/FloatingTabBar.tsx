@@ -131,7 +131,7 @@ function NewNoteButton({ onPress }: { onPress: () => void }) {
         press.value = withSpring(1, SPRING);
       }}
       onPress={() => {
-        haptics.medium();
+        haptics.commit();
         spin.value = withSequence(withTiming(90, { duration: 180 }), withTiming(0, { duration: 0 }));
         onPress();
       }}
@@ -210,10 +210,11 @@ export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
 
 const R = TAB_BAR_HEIGHT / 2;
 
+// The design's floating-bar shadow: a soft lift off the paper, not a hard edge.
 const shadow = {
   shadowColor: '#18130a',
   shadowOpacity: 0.16,
-  shadowRadius: 18,
+  shadowRadius: 24,
   shadowOffset: { width: 0, height: 10 },
   elevation: 12,
 } as const;

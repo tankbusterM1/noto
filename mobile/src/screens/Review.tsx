@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { c, mono, serif, t } from '../theme';
-import { Press, Rise } from '../motion';
+import { haptics, Press, Rise } from '../motion';
 import { Card, LargeTitle, Screen, useBottomInset } from '../ui';
 import { useData } from '../store';
 import type { Grade } from '../../core';
@@ -52,7 +52,7 @@ export function ReviewScreen() {
     <Screen>
       <LargeTitle kicker={`${queue.length} due · ${done} done`} title="Review" />
       <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: bottom }}>
-        <Card>
+        <Card glass>
           <Text style={st.noteTitle}>{current.title}</Text>
           <Text style={st.body}>{current.body}</Text>
         </Card>
@@ -68,9 +68,17 @@ export function ReviewScreen() {
             <Rise key={g.label} delay={60 + i * 45} style={{ flex: 1 }}>
               <Press
                 scaleTo={0.9}
-                haptic
+                haptic={false}
                 onPress={() => {
-                  void review(current.id, g.g).then(() => setDone((d) => d + 1));
+                  // Each grade has its own feel; "Easy" earns the re-ink crescendo.
+                  if (g.g === 1) haptics.warn();
+                  else if (g.g === 2) haptics.rigid();
+                  else if (g.g === 3) haptics.confirm();
+                  else haptics.reink();
+                  review(current.id, g.g).then(
+                    () => setDone((d) => d + 1),
+                    () => haptics.error(), // the optimistic haptic already fired; own the failure
+                  );
                 }}
                 style={[st.grade, { borderColor: g.color }]}
               >

@@ -147,9 +147,10 @@ export function Launch({ canLift, onDone }: { canLift: boolean; onDone: () => vo
       ),
     );
 
-    // The land haptic, timed to the dot's first touch.
-    const medium = setTimeout(() => haptics.medium(), LAND);
-    return () => clearTimeout(medium);
+    // The land haptic, timed to the dot's first touch — a soft cushion under a
+    // hard tap, so the dot "lands" rather than merely clicks.
+    const land = setTimeout(() => haptics.drop(), LAND);
+    return () => clearTimeout(land);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

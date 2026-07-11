@@ -27,6 +27,8 @@ export interface SyncOutcome {
   message: string;
   /** Journal entries not uploaded because they're still in the legacy format. */
   legacyHeld?: number;
+  /** The repo's journal uses a different passphrase — auto-sync must stop retrying. */
+  conflict?: boolean;
 }
 
 async function deviceName(v: Vault): Promise<string> {
@@ -207,6 +209,7 @@ export async function runSync(): Promise<SyncOutcome> {
     if (result.cryptoConflict) {
       return {
         ok: false,
+        conflict: true,
         legacyHeld,
         message: 'This vault was encrypted with a different journal passphrase. Nothing was synced.',
       };

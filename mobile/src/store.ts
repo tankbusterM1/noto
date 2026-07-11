@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import {
   openVault,
   uid,
+  type FolderRow,
   type JournalRow,
   type LedgerRow,
   type NoteRow,
@@ -41,6 +42,13 @@ export interface Note {
   body: string;
   createdAt: number;
   updatedAt: number;
+}
+
+export interface Folder {
+  id: string;
+  name: string;
+  parentId: string | null;
+  createdAt: number;
 }
 
 export interface NoteMemory {
@@ -84,6 +92,8 @@ export interface JournalEntry {
 interface State {
   ready: boolean;
   notes: Note[];
+  /** Note folders — the same tree the desktop keeps; every note has a folderId. */
+  folders: Folder[];
   memory: Record<string, NoteMemory>;
   todos: Todo[];
   watch: WatchItem[];
@@ -106,15 +116,24 @@ interface State {
   addJournalEntry: (text: string) => Promise<void>;
   removeJournalEntry: (id: string) => Promise<void>;
   syncNow: () => Promise<SyncOutcome>;
+  /** Sync automatically in the background after you make changes. */
+  autoSyncOn: boolean;
+  setAutoSync: (on: boolean) => Promise<void>;
   /** Daily local reminder naming what's waiting. */
   digestOn: boolean;
   hydrate: () => Promise<void>;
   setDigest: (on: boolean) => Promise<void>;
   /** Push the open-todo count to the app icon (and re-arm the digest). */
   refreshSignals: () => Promise<void>;
-  createNote: (title?: string) => Promise<string>;
+  createNote: (title?: string, folderId?: string) => Promise<string>;
   saveNote: (id: string, patch: Partial<Pick<Note, 'title' | 'body' | 'tags'>>) => Promise<void>;
   deleteNote: (id: string) => Promise<void>;
+  /** Move a note into another folder. */
+  moveNote: (id: string, folderId: string) => Promise<void>;
+  createFolder: (name: string) => Promise<string>;
+  renameFolder: (id: string, name: string) => Promise<void>;
+  /** Delete a folder; its notes move to another folder — never orphaned or lost. */
+  deleteFolder: (id: string) => Promise<void>;
   review: (id: string, grade: Grade) => Promise<void>;
   addTodo: (raw: string) => Promise<void>;
   toggleTodo: (id: string) => Promise<void>;
@@ -127,6 +146,18 @@ interface State {
 const WATCH_HUES = [358, 215, 165, 262, 32, 205];
 
 const toTodo = (r: TodoRow): Todo => ({ id: r.id, text: r.text, tag: r.tag, done: !!r.done });
+const toFolder = (r: FolderRow): Folder => ({ id: r.id, name: r.name, parentId: r.parentId, createdAt: r.createdAt });
+
+/** A store Note back into the row shape the vault stores (tags are JSON on disk). */
+const noteToRow = (n: Note): NoteRow => ({
+  id: n.id,
+  title: n.title,
+  folderId: n.folderId,
+  tags: JSON.stringify(n.tags),
+  body: n.body,
+  createdAt: n.createdAt,
+  updatedAt: n.updatedAt,
+});
 const toWatch = (r: WatchRow): WatchItem => ({
   id: r.id,
   kind: r.kind,
@@ -311,6 +342,7 @@ async function openJournal(key: Uint8Array): Promise<void> {
 export const useData = create<State>((set, get) => ({
   ready: false,
   notes: [],
+  folders: [],
   memory: {},
   todos: [],
   watch: [],
@@ -319,12 +351,14 @@ export const useData = create<State>((set, get) => ({
   journalCount: 0,
   journalCrypto: null,
   journalCached: false,
+  autoSyncOn: true,
   digestOn: false,
 
   hydrate: async () => {
     vault = await openVault();
-    const [noteRows, srsRows, ledger, todoRows, watchRows, journalRows, digest, cryptoRaw] = await Promise.all([
+    const [noteRows, folderRows, srsRows, ledger, todoRows, watchRows, journalRows, digest, cryptoRaw] = await Promise.all([
       vault.notes(),
+      vault.folders(),
       vault.srs(),
       vault.ledger(),
       vault.todos(),
@@ -344,6 +378,7 @@ export const useData = create<State>((set, get) => ({
     set({
       ready: true,
       notes: noteRows.map(toNote),
+      folders: folderRows.map(toFolder).sort((a, b) => a.createdAt - b.createdAt),
       memory: deriveMemory(ledger, srsRows),
       todos: todoRows.map(toTodo),
       watch: watchRows.map(toWatch),
@@ -353,9 +388,16 @@ export const useData = create<State>((set, get) => ({
       journalCount: journalRows.length,
       journalCrypto,
       journalCached: journalCrypto ? await hasCachedKey(journalCrypto.salt) : false,
+      // Auto-sync defaults ON; only an explicit '0' turns it off.
+      autoSyncOn: (await vault.getMeta('autoSync')) !== '0',
       digestOn: digest === '1',
     });
     void get().refreshSignals();
+  },
+
+  setAutoSync: async (on) => {
+    if (vault) await vault.setMeta('autoSync', on ? '1' : '0');
+    set({ autoSyncOn: on });
   },
 
   /** Reading the cached key IS the Face ID prompt. No cache -> ask the passphrase. */
@@ -462,14 +504,32 @@ export const useData = create<State>((set, get) => ({
   },
 
   syncNow: async () => {
-    const outcome = await runSync();
-    if (outcome.ok) {
-      await get().hydrate();
-      // Entries that arrived from the other device are still sealed; if the
-      // journal is open, decrypt them now rather than showing a stale list.
-      if (journalKey) await openJournal(journalKey);
-    }
-    return outcome;
+    // One sync at a time — manual and auto share this lock, so a background sync
+    // and a Sync-now tap can never run two concurrent pushes.
+    if (syncInFlight) return syncInFlight;
+    syncInFlight = (async () => {
+      // `suspend` for the whole sync: the hydrate below changes state, and without
+      // this its own changes would re-arm the auto-sync timer into a loop.
+      suspend = true;
+      try {
+        const outcome = await runSync();
+        lastSyncAt = Date.now(); // resets the auto-sync clock, manual or automatic
+        // A passphrase conflict can't fix itself — stop auto-retrying it every
+        // minute; a successful sync clears the block.
+        autoBlocked = !!outcome.conflict;
+        if (outcome.ok) {
+          await get().hydrate();
+          // Entries that arrived from the other device are still sealed; if the
+          // journal is open, decrypt them now rather than showing a stale list.
+          if (journalKey) await openJournal(journalKey);
+        }
+        return outcome;
+      } finally {
+        suspend = false;
+        syncInFlight = null;
+      }
+    })();
+    return syncInFlight;
   },
 
   /**
@@ -491,25 +551,74 @@ export const useData = create<State>((set, get) => ({
     else await get().refreshSignals();
   },
 
-  createNote: async (title = 'Untitled note') => {
+  createNote: async (title = 'Untitled note', folderId?) => {
     if (!vault) return '';
     const now = Date.now();
-    const folders = await vault.folders();
-    const folderId = folders[0]?.id ?? 'f_inbox';
-    if (!folders.length) await vault.putFolder({ id: folderId, name: 'Notes', parentId: null, createdAt: now, updatedAt: now });
+    const known = get().folders;
 
-    const row: NoteRow = {
-      id: uid('n'),
-      title,
-      folderId,
-      tags: '[]',
-      body: '',
-      createdAt: now,
-      updatedAt: now,
-    };
+    // Put it in the requested folder if that folder exists, else the first one,
+    // else a freshly-minted default so a brand-new vault always has a home.
+    let target = folderId && known.some((f) => f.id === folderId) ? folderId : known[0]?.id;
+    if (!target) {
+      target = 'f_inbox';
+      await vault.putFolder({ id: target, name: 'Notes', parentId: null, createdAt: now, updatedAt: now });
+      set({ folders: [{ id: target, name: 'Notes', parentId: null, createdAt: now }] });
+    }
+
+    const row: NoteRow = { id: uid('n'), title, folderId: target, tags: '[]', body: '', createdAt: now, updatedAt: now };
     await vault.putNote(row);
     set({ notes: [toNote(row), ...get().notes] });
     return row.id;
+  },
+
+  moveNote: async (id, folderId) => {
+    if (!vault) return;
+    const cur = get().notes.find((n) => n.id === id);
+    if (!cur || cur.folderId === folderId) return;
+    const next: Note = { ...cur, folderId, updatedAt: Date.now() };
+    await vault.putNote(noteToRow(next));
+    set({ notes: get().notes.map((n) => (n.id === id ? next : n)) });
+  },
+
+  createFolder: async (name) => {
+    if (!vault) return '';
+    const clean = name.trim() || 'New folder';
+    const now = Date.now();
+    const id = uid('f');
+    await vault.putFolder({ id, name: clean, parentId: null, createdAt: now, updatedAt: now });
+    set({ folders: [...get().folders, { id, name: clean, parentId: null, createdAt: now }] });
+    return id;
+  },
+
+  renameFolder: async (id, name) => {
+    if (!vault) return;
+    const clean = name.trim();
+    const cur = get().folders.find((f) => f.id === id);
+    if (!clean || !cur) return;
+    await vault.putFolder({ id, name: clean, parentId: cur.parentId, createdAt: cur.createdAt, updatedAt: Date.now() });
+    set({ folders: get().folders.map((f) => (f.id === id ? { ...f, name: clean } : f)) });
+  },
+
+  deleteFolder: async (id) => {
+    if (!vault) return;
+    const remaining = get().folders.filter((f) => f.id !== id);
+    // Never delete the last folder — a note must always have a home.
+    if (remaining.length === 0) return;
+
+    const now = Date.now();
+    const fallback = remaining[0].id;
+    // Rehome this folder's notes BEFORE deleting it, so nothing is orphaned.
+    const orphans = get().notes.filter((n) => n.folderId === id);
+    for (const n of orphans) {
+      await vault.putNote(noteToRow({ ...n, folderId: fallback, updatedAt: now }));
+    }
+    await vault.deleteFolder(id);
+    await vault.tombstone(id, now); // the delete must propagate to the other devices
+
+    set({
+      folders: remaining,
+      notes: get().notes.map((n) => (n.folderId === id ? { ...n, folderId: fallback, updatedAt: now } : n)),
+    });
   },
 
   saveNote: async (id, patch) => {
@@ -643,6 +752,64 @@ export const useData = create<State>((set, get) => ({
     set({ watch: get().watch.filter((w) => w.id !== id) });
   },
 }));
+
+/*
+ * Auto-sync.
+ *
+ * When you make changes, a background sync is scheduled — debounced, so a burst
+ * of edits settles into ONE sync rather than a storm of commits, and rate-capped
+ * so it never runs more than once a minute.
+ *
+ * The loop it must avoid: sync -> hydrate -> state changes -> schedule -> sync…
+ * `suspend` is raised for the whole duration of an auto-sync, so the state
+ * changes its own hydrate produces do not re-arm the timer. The subscription
+ * fires only on genuine user edits.
+ */
+let autoTimer: ReturnType<typeof setTimeout> | null = null;
+let syncInFlight: Promise<SyncOutcome> | null = null;
+let suspend = false;
+// A crypto-conflict blocks auto-retries until a manual sync resolves it.
+let autoBlocked = false;
+// Seeded to "now" so the initial hydrate on launch does NOT trigger a sync 12s
+// after every start — the first auto-sync waits out the min-gap like any other.
+let lastSyncAt = Date.now();
+
+const AUTO_DEBOUNCE = 12_000; // let a burst of edits settle
+const AUTO_MIN_GAP = 60_000; // and never sync more than once a minute
+
+async function runAutoSync() {
+  autoTimer = null;
+  if (autoBlocked || !useData.getState().autoSyncOn) return;
+
+  const since = Date.now() - lastSyncAt;
+  if (since < AUTO_MIN_GAP) {
+    autoTimer = setTimeout(runAutoSync, AUTO_MIN_GAP - since); // too soon — wait it out
+    return;
+  }
+  // syncNow carries the mutex + suspend and no-ops cleanly when unconnected.
+  await useData.getState().syncNow();
+}
+
+function scheduleAutoSync() {
+  if (suspend || syncInFlight || autoBlocked) return;
+  if (!useData.getState().autoSyncOn) return;
+  if (autoTimer) clearTimeout(autoTimer);
+  autoTimer = setTimeout(runAutoSync, AUTO_DEBOUNCE);
+}
+
+// Re-arm on any real change to synced data — never on the sync's own writes.
+useData.subscribe((s, prev) => {
+  if (
+    s.notes !== prev.notes ||
+    s.folders !== prev.folders ||
+    s.todos !== prev.todos ||
+    s.watch !== prev.watch ||
+    s.journalCount !== prev.journalCount ||
+    s.memory !== prev.memory
+  ) {
+    scheduleAutoSync();
+  }
+});
 
 /** Snippet via the shared markdown -> blocks -> snippet path. */
 export function snippet(body: string): string {

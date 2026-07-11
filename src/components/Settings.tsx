@@ -40,6 +40,8 @@ export function Settings() {
   const setGithubToken = useData((s) => s.setGithubToken)
   const setGithubRepo = useData((s) => s.setGithubRepo)
   const savedRepo = useData((s) => s.githubRepo)
+  const autoSyncOn = useData((s) => s.autoSyncOn)
+  const setAutoSync = useData((s) => s.setAutoSync)
   const syncNow = useData((s) => s.syncNow)
   const fileRef = useRef<HTMLInputElement>(null)
   const [resetArmed, setResetArmed] = useState(false)
@@ -207,6 +209,21 @@ export function Settings() {
               )}
             </div>
           )}
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 14 }}>
+            <div>
+              <div style={{ fontSize: 13, color: 'var(--ink2)' }}>Auto-sync</div>
+              <div style={{ fontSize: 11, color: 'var(--ink3)', marginTop: 2 }}>Sync in the background after you make changes</div>
+            </div>
+            <button
+              onClick={() => setAutoSync(!autoSyncOn)}
+              className="press-sm"
+              title={autoSyncOn ? 'On' : 'Off'}
+              style={{ width: 42, height: 24, borderRadius: 99, border: 'none', cursor: 'pointer', background: autoSyncOn ? 'var(--ac)' : 'var(--sf2)', position: 'relative', transition: 'background 0.2s ease' }}
+            >
+              <span style={{ position: 'absolute', top: 3, left: autoSyncOn ? 21 : 3, width: 18, height: 18, borderRadius: 99, background: 'var(--bg)', transition: 'left 0.2s cubic-bezier(0.65,0,0.35,1)' }} />
+            </button>
+          </div>
 
           <div style={{ height: 1, background: 'var(--ln)', margin: '22px 0' }} />
 

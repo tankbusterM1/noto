@@ -158,8 +158,11 @@ interface DataState {
   resetData: () => Promise<void>
   /** Which private repo this device syncs into. Empty means: don't sync anywhere. */
   githubRepo: string
+  /** Sync automatically in the background after edits settle. */
+  autoSyncOn: boolean
   setGithubToken: (token: string) => Promise<void>
   setGithubRepo: (repo: string) => Promise<void>
+  setAutoSync: (on: boolean) => Promise<void>
   syncNow: () => Promise<SyncOutcome>
 }
 
@@ -168,6 +171,8 @@ export interface SyncOutcome {
   message: string
   /** Encrypted journal entries are synced; plaintext ones never leave the device. */
   plaintextHeld?: number
+  /** The repo's journal uses a different passphrase — auto-sync must stop retrying. */
+  conflict?: boolean
 }
 
 const TABLE_NAMES = [
@@ -393,6 +398,7 @@ async function hydrateImpl(set: (partial: Partial<DataState>) => void): Promise<
   const tagsPool =
     (metaRows.find((m) => m.key === 'tagsPool')?.value as string[] | undefined) ?? []
   const githubRepo = (metaRows.find((m) => m.key === 'githubRepo')?.value as string | undefined) ?? ''
+  const autoSyncOn = (metaRows.find((m) => m.key === 'autoSync')?.value as string | undefined) !== '0'
   const scratchpad = journalCrypto
     ? ''
     : (metaRows.find((m) => m.key === 'scratchpad')?.value as string | undefined) ?? ''
@@ -417,6 +423,7 @@ async function hydrateImpl(set: (partial: Partial<DataState>) => void): Promise<
 
   set({
     hydrated: true,
+    autoSyncOn,
     folders,
     notes,
     srs,
@@ -451,6 +458,7 @@ export const useData = create<DataState>()((set, get) => ({
   journal: [],
   scratchpad: '',
   githubRepo: '',
+  autoSyncOn: true,
   journalCrypto: null,
   journalKey: null,
   tagsPool: [],
@@ -1262,46 +1270,132 @@ export const useData = create<DataState>()((set, get) => ({
     set({ githubRepo: name })
   },
 
-  syncNow: async () => {
-    const token = (await db.meta.get('githubToken'))?.value as string | undefined
-    if (!token) return { ok: false, message: 'Connect a GitHub token first.' }
+  setAutoSync: async (on) => {
+    await db.meta.put({ key: 'autoSync', value: on ? '1' : '0' })
+    set({ autoSyncOn: on })
+  },
 
-    // No guessing. A default repo name is a write to somewhere nobody asked for.
-    const repoName = ((await db.meta.get('githubRepo'))?.value as string | undefined) ?? ''
-    if (!repoName) return { ok: false, message: 'Name the repo to sync into first.' }
+  syncNow: () => {
+    // One sync at a time — manual and auto share this lock, so a background sync
+    // and a Sync-now click can never run two concurrent pushes.
+    if (syncInFlight) return syncInFlight
+    syncInFlight = (async (): Promise<SyncOutcome> => {
+      // `suspend` for the whole sync: the reload below changes state, and without
+      // this its own changes would re-arm the auto-sync timer into a loop.
+      suspend = true
+      try {
+        const token = (await db.meta.get('githubToken'))?.value as string | undefined
+        if (!token) return { ok: false, message: 'Connect a GitHub token first.' }
 
-    try {
-      const repo = await ensureRepo(token, repoName)
-      const { vault, plaintextHeld } = await readVault()
-      const result = await syncVault(token, repo, vault, await deviceName())
+        // No guessing. A default repo name is a write to somewhere nobody asked for.
+        const repoName = ((await db.meta.get('githubRepo'))?.value as string | undefined) ?? ''
+        if (!repoName) return { ok: false, message: 'Name the repo to sync into first.' }
 
-      // Nothing was pushed and nothing may be written: the merged vault would
-      // carry journal entries encrypted under a passphrase this device lacks.
-      if (result.cryptoConflict) {
-        return {
-          ok: false,
-          message:
-            'This vault was encrypted with a different journal passphrase. Nothing was synced — unlock with the vault’s passphrase, or use a separate repo.',
-          plaintextHeld,
+        try {
+          const repo = await ensureRepo(token, repoName)
+          const { vault, plaintextHeld } = await readVault()
+          const result = await syncVault(token, repo, vault, await deviceName())
+          lastSyncAt = Date.now()
+
+          // Nothing was pushed and nothing may be written: the merged vault would
+          // carry journal entries encrypted under a passphrase this device lacks.
+          // Block auto-retries until a manual sync resolves it.
+          if (result.cryptoConflict) {
+            autoBlocked = true
+            return {
+              ok: false,
+              conflict: true,
+              message:
+                'This vault was encrypted with a different journal passphrase. Nothing was synced — unlock with the vault’s passphrase, or use a separate repo.',
+              plaintextHeld,
+            }
+          }
+          autoBlocked = false
+
+          await writeVault(result.vault)
+          // Force a real reload, NOT get().hydrate() — that is single-flight-guarded
+          // (`if (get().hydrated) return`) and no-ops after the first load, so a sync
+          // that merged remote changes into Dexie would never reach the live store.
+          await hydrateImpl(set)
+
+          const { notes, ledger, lists } = result.stats
+          return {
+            ok: true,
+            plaintextHeld,
+            message: result.pushed
+              ? `Synced · ${notes} notes, ${ledger} reviews, ${lists} items`
+              : `Already up to date · ${notes} notes`,
+          }
+        } catch (e) {
+          // GitHub's own wording ("Resource not accessible…") never says which
+          // resource, nor what to grant. Translate what we can.
+          const why = explainGitError(e) ?? (e as Error).message
+          return { ok: false, message: `Sync failed — ${why}` }
         }
+      } finally {
+        suspend = false
+        syncInFlight = null
       }
-
-      await writeVault(result.vault)
-      await get().hydrate() // the merge may have brought in notes, reviews, folders
-
-      const { notes, ledger, lists } = result.stats
-      return {
-        ok: true,
-        plaintextHeld,
-        message: result.pushed
-          ? `Synced · ${notes} notes, ${ledger} reviews, ${lists} items`
-          : `Already up to date · ${notes} notes`,
-      }
-    } catch (e) {
-      // GitHub's own wording ("Resource not accessible…") never says which
-      // resource, nor what to grant. Translate what we can.
-      const why = explainGitError(e) ?? (e as Error).message
-      return { ok: false, message: `Sync failed — ${why}` }
-    }
+    })()
+    return syncInFlight
   },
 }))
+
+/*
+ * Auto-sync (desktop). Same contract as the phone: debounced so a burst of edits
+ * becomes one sync, capped at once a minute, and `suspend`ed for the duration of
+ * a sync so its own hydrate doesn't re-arm the timer into a loop.
+ */
+let autoTimer: ReturnType<typeof setTimeout> | null = null
+let syncInFlight: Promise<SyncOutcome> | null = null
+let suspend = false
+// A crypto-conflict blocks auto-retries until a manual sync resolves it.
+let autoBlocked = false
+// Seeded to "now" so the initial hydrate on launch doesn't fire a sync 12s after
+// every start — the first auto-sync waits out the min-gap like any other.
+let lastSyncAt = Date.now()
+
+const AUTO_DEBOUNCE = 12_000
+const AUTO_MIN_GAP = 60_000
+
+async function runAutoSync() {
+  autoTimer = null
+  if (autoBlocked || !useData.getState().autoSyncOn) return
+
+  const since = Date.now() - lastSyncAt
+  if (since < AUTO_MIN_GAP) {
+    autoTimer = setTimeout(runAutoSync, AUTO_MIN_GAP - since)
+    return
+  }
+  // No token or repo -> syncNow no-ops. Skip the network attempt entirely.
+  const token = (await db.meta.get('githubToken'))?.value as string | undefined
+  const repo = (await db.meta.get('githubRepo'))?.value as string | undefined
+  if (!token || !repo) return
+
+  // syncNow carries the mutex + suspend and sets lastSyncAt/autoBlocked itself.
+  await useData.getState().syncNow()
+}
+
+function scheduleAutoSync() {
+  if (suspend || syncInFlight || autoBlocked || !useData.getState().autoSyncOn) return
+  if (autoTimer) clearTimeout(autoTimer)
+  autoTimer = setTimeout(runAutoSync, AUTO_DEBOUNCE)
+}
+
+// Re-arm on any real change to synced data — never on the sync's own writes.
+useData.subscribe((s, prev) => {
+  if (
+    s.notes !== prev.notes ||
+    s.folders !== prev.folders ||
+    s.srs !== prev.srs ||
+    s.todos !== prev.todos ||
+    s.goals !== prev.goals ||
+    s.week !== prev.week ||
+    s.rituals !== prev.rituals ||
+    s.ranged !== prev.ranged ||
+    s.watch !== prev.watch ||
+    s.journal !== prev.journal
+  ) {
+    scheduleAutoSync()
+  }
+})

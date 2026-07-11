@@ -4,9 +4,27 @@ import * as SecureStore from 'expo-secure-store';
 /*
  * GitHub connection.
  *
- * The token is a fine-grained PAT scoped to ONE private repo. It lives in the
- * iOS Keychain, and reading it requires biometry (`requireAuthentication`), so a
- * stolen unlocked phone still can't exfiltrate it from another app.
+ * The token lives in the iOS Keychain as `WHEN_UNLOCKED_THIS_DEVICE_ONLY` —
+ * device-bound, kept out of iCloud/iTunes backups, readable only while the phone
+ * is unlocked. It is deliberately NOT behind a per-read Face ID prompt: auto-sync
+ * runs in the background as you work, and a token that demanded biometrics on
+ * every read would fire Face ID at random.
+ *
+ * Be honest about what that token can reach, because the code does not narrow it:
+ *   · Its blast radius is exactly the scope of whatever token was pasted/granted.
+ *     The one-tap device-flow sign-in requests the `repo` scope (see githubAuth),
+ *     which is read/write to EVERY repo the account owns. A fine-grained token
+ *     scoped to the single vault repo is far tighter — prefer it if you can.
+ *   · The vault repo is NOT end-to-end encrypted except for the journal. Notes,
+ *     todos, tags, folders and the whole review history sit in the repo as
+ *     PLAINTEXT (see src/lib/sync.ts). Only `journal/*` is ciphertext, and its
+ *     passphrase never leaves the device. So a stolen token can read your notes;
+ *     it cannot read your journal.
+ *
+ * Net: the journal stays private under any token theft; everything else is only
+ * as private as the repo and the token's scope. Auto-sync trades a per-read Face
+ * ID prompt for that reality — an acceptable trade for a device-bound token, but
+ * not a claim that the token is harmless.
  *
  * We validate before saving — a token that can't actually reach the repo is
  * worse than no token, because it fails at sync time instead of setup time.
@@ -113,7 +131,7 @@ export async function connect(token: string, repoFullName: string): Promise<Conn
       return { ok: false, error: 'That token is read-only. Sync needs write (Contents: read & write).' };
     }
 
-    const biometricLock = await setItem(TOKEN_KEY, trimmedToken, true);
+    const biometricLock = await setItem(TOKEN_KEY, trimmedToken, false);
     await setItem(REPO_KEY, meta.full_name, false);
 
     return {
@@ -168,7 +186,7 @@ export async function createPrivateRepo(tokenValue: string, name: string): Promi
     if (res.status !== 201) return { ok: false, error: `Could not create the repo (${res.status}).` };
 
     const repo = (await res.json()) as { full_name: string; private: boolean };
-    const biometricLock = await setItem(TOKEN_KEY, tok, true);
+    const biometricLock = await setItem(TOKEN_KEY, tok, false);
     await setItem(REPO_KEY, repo.full_name, false);
 
     return { ok: true, connection: { login, repo: repo.full_name, isPrivate: repo.private, biometricLock } };
@@ -182,7 +200,7 @@ export async function savedRepo(): Promise<string | null> {
   return getItem(REPO_KEY);
 }
 
-/** Reading the token triggers the biometric prompt when it was stored with one. */
+/** The sync token — a silent Keychain read (no biometric prompt), so auto-sync can run. */
 export async function token(): Promise<string | null> {
   return getItem(TOKEN_KEY);
 }
