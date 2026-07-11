@@ -40,19 +40,22 @@ export function Settings() {
   const setGithubToken = useData((s) => s.setGithubToken)
   const setGithubRepo = useData((s) => s.setGithubRepo)
   const savedRepo = useData((s) => s.githubRepo)
+  const savedToken = useData((s) => s.githubToken)
   const autoSyncOn = useData((s) => s.autoSyncOn)
   const setAutoSync = useData((s) => s.setAutoSync)
   const syncNow = useData((s) => s.syncNow)
   const fileRef = useRef<HTMLInputElement>(null)
   const [resetArmed, setResetArmed] = useState(false)
-  const [token, setToken] = useState('')
+  const [token, setToken] = useState(savedToken)
   const [repo, setRepo] = useState(savedRepo)
   const [syncing, setSyncing] = useState(false)
   const [syncNote, setSyncNote] = useState<SyncOutcome | null>(null)
 
   // Settings mounts before the vault hydrates, so the first `useState` captures
-  // the default rather than the saved repo. Adopt it once it arrives.
+  // the default rather than the saved repo/token. Adopt them once they arrive —
+  // this is why the token field looked empty (and "unsaved") after every reload.
   useEffect(() => setRepo(savedRepo), [savedRepo])
+  useEffect(() => setToken(savedToken), [savedToken])
 
   if (!settingsOpen) return null
 

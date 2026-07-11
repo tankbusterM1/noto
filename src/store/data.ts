@@ -158,6 +158,9 @@ interface DataState {
   resetData: () => Promise<void>
   /** Which private repo this device syncs into. Empty means: don't sync anywhere. */
   githubRepo: string
+  /** The saved GitHub token, mirrored from IndexedDB so the UI shows it's still
+   *  connected after a reload (it lives in db.meta; sync reads it from there). */
+  githubToken: string
   /** Sync automatically in the background after edits settle. */
   autoSyncOn: boolean
   setGithubToken: (token: string) => Promise<void>
@@ -398,6 +401,7 @@ async function hydrateImpl(set: (partial: Partial<DataState>) => void): Promise<
   const tagsPool =
     (metaRows.find((m) => m.key === 'tagsPool')?.value as string[] | undefined) ?? []
   const githubRepo = (metaRows.find((m) => m.key === 'githubRepo')?.value as string | undefined) ?? ''
+  const githubToken = (metaRows.find((m) => m.key === 'githubToken')?.value as string | undefined) ?? ''
   const autoSyncOn = (metaRows.find((m) => m.key === 'autoSync')?.value as string | undefined) !== '0'
   const scratchpad = journalCrypto
     ? ''
@@ -436,6 +440,7 @@ async function hydrateImpl(set: (partial: Partial<DataState>) => void): Promise<
     journal,
     tagsPool,
     githubRepo,
+    githubToken,
     scratchpad,
     journalCrypto,
     ledgerByDay,
@@ -458,6 +463,7 @@ export const useData = create<DataState>()((set, get) => ({
   journal: [],
   scratchpad: '',
   githubRepo: '',
+  githubToken: '',
   autoSyncOn: true,
   journalCrypto: null,
   journalKey: null,
@@ -1256,6 +1262,7 @@ export const useData = create<DataState>()((set, get) => ({
     const t = token.trim()
     if (t) await db.meta.put({ key: 'githubToken', value: t })
     else await db.meta.delete('githubToken')
+    set({ githubToken: t })
   },
 
   /*
