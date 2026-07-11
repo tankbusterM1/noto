@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Image,
   InputAccessoryView,
   KeyboardAvoidingView,
   Platform,
@@ -14,6 +15,8 @@ import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { c, mono, serif, serifBold, serifItalic, t } from '../theme';
 import { GlassSurface } from '../glass';
+import { haptics } from '../motion';
+import { pickPhotoDataUrl } from '../photo';
 import { Card, Screen, useBottomInset } from '../ui';
 import { useData } from '../store';
 import type { NotesStackParamList } from '../navTypes';
@@ -63,6 +66,29 @@ function Inline({ line, style }: { line: string; style?: object }) {
   );
 }
 
+/* A note image (`![alt](dataURL|https…)`) — sized to its own aspect ratio so it
+ * never letterboxes. Only data:image and http(s) sources render; anything else
+ * (never expected from our own writer) is dropped. */
+const IMG_LINE = /^!\[([^\]]*)\]\(([^\s]+)\)\s*$/;
+
+function NoteImage({ uri }: { uri: string }) {
+  const [ratio, setRatio] = useState(1.6);
+  useEffect(() => {
+    let alive = true;
+    Image.getSize(
+      uri,
+      (w, h) => {
+        if (alive && w && h) setRatio(w / h);
+      },
+      () => {},
+    );
+    return () => {
+      alive = false;
+    };
+  }, [uri]);
+  return <Image source={{ uri }} style={[st.image, { aspectRatio: ratio }]} resizeMode="cover" />;
+}
+
 function Markdown({ body }: { body: string }) {
   const lines = useMemo(() => body.split('\n'), [body]);
   if (!body.trim()) {
@@ -72,6 +98,8 @@ function Markdown({ body }: { body: string }) {
     <View style={{ gap: 6 }}>
       {lines.map((line, i) => {
         if (!line.trim()) return <View key={i} style={{ height: 8 }} />;
+        const img = line.match(IMG_LINE);
+        if (img && /^(https?:|data:image\/)/i.test(img[2])) return <NoteImage key={i} uri={img[2]} />;
         if (line.startsWith('### ')) return <Inline key={i} line={line.slice(4)} style={st.h3} />;
         if (line.startsWith('## ')) return <Inline key={i} line={line.slice(3)} style={st.h2} />;
         if (line.startsWith('# ')) return <Inline key={i} line={line.slice(2)} style={st.h1} />;
@@ -160,6 +188,29 @@ export function NoteScreen({ route, navigation }: Props) {
     setForceSel({ start: caret, end: caret });
   };
 
+  // Pick a photo, insert it as its own `![image](dataURL)` line at the caret,
+  // then flip to reading view so the picture shows instead of the base64 blob
+  // (a plain TextInput can't hide the data-URL the way the desktop editor does).
+  const [picking, setPicking] = useState(false);
+  const insertPhoto = async () => {
+    if (picking) return;
+    setPicking(true);
+    try {
+      const dataUrl = await pickPhotoDataUrl();
+      if (!dataUrl) return;
+      const { start, end } = sel;
+      const nl = start > 0 && body[start - 1] !== '\n' ? '\n' : '';
+      const snippet = `${nl}![image](${dataUrl})\n`;
+      setBody(body.slice(0, start) + snippet + body.slice(end));
+      haptics.confirm();
+      setWriting(false);
+    } catch {
+      haptics.error();
+    } finally {
+      setPicking(false);
+    }
+  };
+
   const toolbar = (
     <GlassSurface style={st.toolbar} fallbackColor={c.surface} interactive>
       <ToolButton label="B" font={serifBold} onPress={() => wrap('**')} />
@@ -169,6 +220,9 @@ export function NoteScreen({ route, navigation }: Props) {
       <ToolButton label="❝" onPress={() => prefixLine('> ')} />
       <ToolButton label="‹›" font={mono} onPress={() => wrap('`')} />
       <ToolButton label="[[ ]]" font={mono} onPress={() => wrap('[[', ']]')} />
+      <Pressable onPress={insertPhoto} disabled={picking} style={({ pressed }) => [st.tool, pressed && { opacity: 0.5 }]} hitSlop={6}>
+        <Ionicons name="image-outline" size={19} color={picking ? c.ink3 : c.ink} />
+      </Pressable>
       <View style={{ flex: 1 }} />
       <ToolButton label="Done" onPress={() => setWriting(false)} />
     </GlassSurface>
@@ -296,6 +350,7 @@ const st = StyleSheet.create({
   bodyText: { ...t.body, fontFamily: serif, color: c.ink, lineHeight: 27 },
   bulletRow: { flexDirection: 'row', gap: 8 },
   bulletDot: { ...t.body, color: c.amber, lineHeight: 27 },
+  image: { width: '100%', borderRadius: 12, marginVertical: 4, backgroundColor: c.surface },
   emptyBody: { ...t.subhead, fontFamily: serifItalic, color: c.ink3, paddingHorizontal: 20, paddingTop: 20 },
 
   toolbar: {

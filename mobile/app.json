@@ -46,6 +46,12 @@
           "faceIDPermission": "Noto uses Face ID to unlock your encrypted journal."
         }
       ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Noto adds the photos you pick to your notes. They stay in your vault on this device and your private repo."
+        }
+      ],
       "expo-font"
     ]
   }
