@@ -17,7 +17,11 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.noto.vault",
       "infoPlist": {
-        "NSFaceIDUsageDescription": "Noto uses Face ID to unlock your encrypted journal. Nothing leaves this device."
+        "NSFaceIDUsageDescription": "Noto uses Face ID to unlock your encrypted journal. Nothing leaves this device.",
+        "NSSupportsLiveActivities": true
+      },
+      "entitlements": {
+        "com.apple.security.application-groups": ["group.com.noto.vault"]
       }
     },
     "android": {
@@ -52,7 +56,8 @@
           "photosPermission": "Noto adds the photos you pick to your notes. They stay in your vault on this device and your private repo."
         }
       ],
-      "expo-font"
+      "expo-font",
+      "@bacons/apple-targets"
     ]
   }
 }

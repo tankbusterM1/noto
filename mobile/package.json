@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "index.ts",
   "dependencies": {
+    "@bacons/apple-targets": "^4.0.7",
     "@expo-google-fonts/jetbrains-mono": "^0.4.1",
     "@expo-google-fonts/newsreader": "^0.4.1",
     "@expo/metro-runtime": "~6.1.2",
@@ -39,15 +40,18 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@expo/prebuild-config": "^54.0.8",
     "@types/react": "~19.1.10",
     "babel-preset-expo": "~54.0.10",
-    "typescript": "~5.9.2"
+    "typescript": "~5.9.2",
+    "vitest": "^3.2.7"
   },
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "test": "vitest run"
   },
   "private": true
 }

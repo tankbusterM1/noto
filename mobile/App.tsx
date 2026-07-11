@@ -12,6 +12,7 @@ import { useAppFonts } from './src/fonts';
 import { Launch } from './src/Launch';
 import { FloatingTabBar } from './src/FloatingTabBar';
 import { useData } from './src/store';
+import { initWidgetSync } from './src/widgetSync';
 import { NotesScreen } from './src/screens/Notes';
 import { NoteScreen } from './src/screens/Note';
 import { TodayScreen } from './src/screens/Today';
@@ -59,7 +60,14 @@ function Tabs() {
   return (
     <Tab.Navigator
       tabBar={(props) => <FloatingTabBar {...props} />}
-      screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: c.bg } }}
+      screenOptions={{
+        headerShown: false,
+        sceneStyle: { backgroundColor: c.bg },
+        // Sections cross-shift in the direction of travel instead of hard-cutting
+        // (then letting each screen's content roll up on its own). This is the
+        // one built-in transition that reads as spatial, not a cheap slide-up.
+        animation: 'shift',
+      }}
     >
       <Tab.Screen name="Today" component={TodayStack} />
       <Tab.Screen name="NotesTab" component={NotesStack} />
@@ -93,6 +101,12 @@ function Boot() {
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
+
+  // Mirror the vault into the iOS widgets once it's loaded (no-op off native iOS).
+  useEffect(() => {
+    if (!ready) return;
+    return initWidgetSync();
+  }, [ready]);
 
   // Re-badge on foreground: todos may have been completed on another device, and
   // the daily digest's body is frozen at schedule time, so it needs re-arming.
