@@ -3,6 +3,7 @@ import { useData } from '../store/data'
 import { useUI } from '../store/ui'
 import { LANGS } from '../lib/constants'
 import { MONO } from '../lib/ui'
+import { safeHref } from '../lib/url'
 import { ImageIcon, ExternalArrow, LightbulbIcon } from './icons'
 import type { Block, Note } from '../lib/types'
 import s from './NoteBlocks.module.css'
@@ -66,12 +67,20 @@ export function Inline({ text }: { text?: string }): ReactNode {
             </code>
           )
         m = p.match(/^\[([^\]]+)\]\(([^)\s]+)\)$/)
-        if (m)
-          return (
-            <a key={i} href={m[2]} target="_blank" rel="noreferrer" style={{ color: 'var(--ac)' }}>
+        if (m) {
+          // Untrusted URL (notes sync between devices) — only http(s)/mailto get
+          // a live href; a javascript:/data: link degrades to plain styled text.
+          const href = safeHref(m[2])
+          return href ? (
+            <a key={i} href={href} target="_blank" rel="noreferrer" style={{ color: 'var(--ac)' }}>
               {m[1]}
             </a>
+          ) : (
+            <span key={i} style={{ color: 'var(--ac)' }}>
+              {m[1]}
+            </span>
           )
+        }
         return p
       })}
     </>
@@ -185,13 +194,15 @@ export function NoteBlocks({ note, readOnly = false, full = false }: { note: Not
           case 'link': {
             if (readOnly && !full) return null
             const initial = (b.domain || 'L')[0].toUpperCase()
-            const href = b.url ?? 'https://' + (b.domain ?? '')
+            // window.open() bypasses React's href sanitiser, so gate it on the
+            // same allow-list — an unsafe URL simply isn't clickable.
+            const href = safeHref(b.url ?? 'https://' + (b.domain ?? ''))
             return (
               <div
                 key={key}
                 className={s.link}
-                onClick={readOnly ? () => window.open(href, '_blank', 'noopener') : undefined}
-                style={readOnly ? { cursor: 'pointer' } : undefined}
+                onClick={readOnly && href ? () => window.open(href, '_blank', 'noopener') : undefined}
+                style={readOnly && href ? { cursor: 'pointer' } : undefined}
                 title={readOnly ? href : undefined}
               >
                 <div className={s.linkTile}>{initial}</div>

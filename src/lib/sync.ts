@@ -213,8 +213,13 @@ export function parseNote(text: string): SyncNote | null {
   for (const line of head.split('\n')) {
     const colon = line.indexOf(': ');
     if (colon === -1) continue;
+    const key = line.slice(0, colon);
+    // A note file arrives from a synced (untrusted) repo. `field['__proto__'] =`
+    // would walk the prototype instead of setting a plain key; drop the three
+    // keys that could — the real front-matter fields are id/title/created/… .
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
     try {
-      field[line.slice(0, colon)] = JSON.parse(line.slice(colon + 2));
+      field[key] = JSON.parse(line.slice(colon + 2));
     } catch {
       return null;
     }

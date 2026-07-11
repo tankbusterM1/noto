@@ -2,6 +2,7 @@ import { useState, type CSSProperties } from 'react'
 import { useData } from '../store/data'
 import { useUI } from '../store/ui'
 import { fmtMins } from '../lib/format'
+import { safeHref } from '../lib/url'
 import { MONO, SERIF } from '../lib/ui'
 import { PlayTriangle, ArticleIcon, PaperIcon, ExternalArrow, CloseIcon, TrashIcon } from './icons'
 
@@ -74,7 +75,13 @@ export function WatchDrawer() {
           <div
             className="tint"
             title="Open in a new tab"
-            onClick={() => window.open(/^https?:\/\//i.test(dw.url) ? dw.url : 'https://' + dw.url, '_blank', 'noopener')}
+            onClick={() => {
+              // dw.url is vault-synced (untrusted) — same allow-list as note links,
+              // then prepend https:// for a bare host so it isn't opened relative.
+              const safe = safeHref(dw.url)
+              if (!safe) return
+              window.open(/^[a-z][a-z0-9+.-]*:/i.test(safe) || safe.startsWith('//') ? safe : 'https://' + safe, '_blank', 'noopener')
+            }}
             style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 10, background: 'var(--sf)', border: '1px solid var(--ln)', borderRadius: 9, padding: '7px 11px', cursor: 'pointer' }}
           >
             <span style={{ fontFamily: MONO, fontSize: 10, color: 'var(--ink2)', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{dw.url}</span>

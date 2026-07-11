@@ -5,14 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content="A local-first notebook with spaced-repetition memory. Your vault never leaves this device." />
     <title>Noto — notes that stay</title>
-    <script>
-      // Paint the correct paper/ink background before React mounts — no white
-      // flash when the installed app launches (reads the persisted theme).
-      try {
-        var st = (JSON.parse(localStorage.getItem('noto-ui') || '{}').state) || {}
-        document.documentElement.style.backgroundColor = st.dark ? '#14110c' : '#f4f1e9'
-      } catch (e) {}
-    </script>
+    <!-- Pre-paint the theme background before React mounts. External (not inline)
+         so a strict script-src 'self' CSP needs no inline exception. -->
+    <script src="/preboot.js"></script>
   </head>
   <body>
     <div id="root"></div>

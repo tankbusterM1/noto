@@ -8,6 +8,7 @@ import {
   dropCursor,
   Decoration,
   ViewPlugin,
+  WidgetType,
   type DecorationSet,
   type ViewUpdate,
 } from '@codemirror/view'
@@ -208,6 +209,90 @@ const wikilinks = ViewPlugin.fromClass(
   { decorations: (v) => v.decorations },
 )
 
+// ── Inline images (Notion/Obsidian "live" images) ─────────────────────
+// A pasted image is stored as `![caption](data:…base64…)` — hundreds of raw
+// characters. Without this it shows as that wall of base64 in the editor while
+// reading mode shows the picture. This replaces each image's markdown with the
+// actual <img>, so edit mode matches read mode; select across it (or click and
+// backspace — the range is atomic) to reveal/remove the source.
+const IMG_MD = /^!\[([^\]]*)\]\(([^\s]+)\)\s*$/
+
+class ImageWidget extends WidgetType {
+  readonly url: string
+  readonly alt: string
+  constructor(url: string, alt: string) {
+    super()
+    this.url = url
+    this.alt = alt
+  }
+  eq(o: ImageWidget) {
+    return o.url === this.url && o.alt === this.alt
+  }
+  toDOM() {
+    const wrap = document.createElement('span')
+    wrap.className = 'nt-img'
+    const img = document.createElement('img')
+    // Only render http(s)/data image sources; never let a javascript:/other
+    // scheme reach the DOM (inert as an <img src>, but default-deny anyway).
+    img.src = /^(https?:|data:image\/)/i.test(this.url) ? this.url : ''
+    img.alt = this.alt
+    img.draggable = false
+    wrap.appendChild(img)
+    return wrap
+  }
+  ignoreEvent() {
+    return false
+  }
+}
+
+function buildImages(view: EditorView): DecorationSet {
+  const b = new RangeSetBuilder<Decoration>()
+  const sel = view.state.selection.ranges
+  // A non-empty selection touching the image → show its markdown source, so it
+  // can be edited or deleted (mirrors the live-preview reveal-on-select rule).
+  const selected = (from: number, to: number) =>
+    sel.some((r) => r.from !== r.to && r.from < to && r.to > from)
+  for (const { from, to } of view.visibleRanges) {
+    syntaxTree(view.state).iterate({
+      from,
+      to,
+      enter: (n) => {
+        if (n.name !== 'Image') return
+        if (selected(n.from, n.to)) return
+        // Only render images that markdownToBlocks (markdown.ts) will actually
+        // store as an `img` block — a whole-line `![alt](url)`. An image typed
+        // mid-line or after a heading is kept as raw text on save, so livening
+        // it here would make edit mode disagree with reading mode.
+        const line = view.state.doc.lineAt(n.from)
+        if (n.from !== line.from || view.state.doc.sliceString(n.to, line.to).trim() !== '') return
+        const m = view.state.doc.sliceString(n.from, n.to).match(IMG_MD)
+        if (!m) return
+        b.add(n.from, n.to, Decoration.replace({ widget: new ImageWidget(m[2], m[1]) }))
+      },
+    })
+  }
+  return b.finish()
+}
+
+const images = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet
+    constructor(view: EditorView) {
+      this.decorations = buildImages(view)
+    }
+    update(u: ViewUpdate) {
+      if (u.docChanged || u.selectionSet || u.viewportChanged) this.decorations = buildImages(u.view)
+    }
+  },
+  {
+    decorations: (v) => v.decorations,
+    // Treat a rendered image as one atom: arrow keys step over it and a single
+    // backspace removes the whole `![…](…)` instead of nibbling the base64.
+    provide: (plugin) =>
+      EditorView.atomicRanges.of((view) => view.plugin(plugin)?.decorations ?? Decoration.none),
+  },
+)
+
 /** ⌘/Ctrl-click on a [[wikilink]] → open the note (create it if missing). */
 function followWikilink(target: HTMLElement): boolean {
   const el = target.closest?.('.nt-wl') as HTMLElement | null
@@ -238,6 +323,14 @@ const theme = EditorView.theme(
       textDecoration: 'underline',
       textDecorationColor: 'rgba(53,81,142,0.35)',
       textUnderlineOffset: '3px',
+    },
+    '.nt-img': { display: 'block', margin: '6px 0' },
+    '.nt-img img': {
+      maxWidth: '100%',
+      maxHeight: '440px',
+      borderRadius: '12px',
+      display: 'block',
+      border: '1px solid var(--ln)',
     },
     '.cm-tooltip.cm-tooltip-autocomplete': {
       background: 'var(--bg)',
@@ -276,12 +369,13 @@ function insertImage(view: EditorView, file: File) {
   reader.onload = () => {
     const url = reader.result as string
     const at = view.state.selection.main.head
-    const label = 'image'
+    const insert = `\n![image](${url})\n`
     view.dispatch({
-      changes: { from: at, insert: `\n![${label}](${url})\n` },
-      // Select the caption placeholder ("image") so it can be renamed at once,
-      // rather than dropping the caret mid-marker.
-      selection: { anchor: at + 3, head: at + 3 + label.length },
+      changes: { from: at, insert },
+      // Drop the caret AFTER the image (collapsed) so it renders as a picture at
+      // once — no overlapping selection to keep the raw base64 revealed. Click
+      // the image and backspace (it's an atomic range) to remove it.
+      selection: { anchor: at + insert.length },
     })
   }
   reader.readAsDataURL(file)
@@ -621,6 +715,7 @@ export function MarkdownEditor({ note, apiRef }: { note: Note; apiRef?: React.Mu
           // (```sql, ```python, ```r, …) — the same registry Obsidian uses.
           markdown({ codeLanguages: languages }),
           livePreview,
+          images,
           wikilinks,
           autocompletion({ override: [wikiSource(noteId)], icons: false }),
           syntaxHighlighting(highlight),

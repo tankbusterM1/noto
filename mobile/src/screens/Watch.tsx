@@ -6,6 +6,7 @@ import { c, mono, serif, serifItalic, t } from '../theme';
 import { haptics, Press, Rise } from '../motion';
 import { LargeTitle, Screen, useBottomInset } from '../ui';
 import { useData, type WatchItem } from '../store';
+import { url as urlLib } from '../../core';
 import type { TodayStackParamList } from '../navTypes';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -29,7 +30,11 @@ function Row({ item, index }: { item: WatchItem; index: number }) {
           haptic={false}
           onPress={() => {
             haptics.selection();
-            void Linking.openURL(item.url).catch(() => haptics.error());
+            // Watch items sync from the desktop — only open http(s)/mailto, never
+            // a javascript:/other-scheme URL smuggled in through the vault.
+            const href = urlLib.safeHref(item.url);
+            if (href) void Linking.openURL(href).catch(() => haptics.error());
+            else haptics.error();
           }}
           style={[st.badge, { borderColor: k.color }]}
         >

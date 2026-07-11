@@ -19,6 +19,32 @@ function withProtocol(url: string): string {
   return /^https?:\/\//i.test(url) ? url : 'https://' + url
 }
 
+// A pasted link is handed to third-party services (noembed, the CORS proxy) to
+// fetch its title/thumbnail. A private share link can carry a secret in its
+// query (`?token=…`), which would then leak to — and be logged by — those
+// services. Strip the params that commonly hold secrets before sending; keep
+// the rest (e.g. YouTube's `?v=…`, needed to resolve the video) so scraping
+// still works. This is best-effort privacy, not a guarantee the URL stays local.
+const SECRET_PARAM =
+  /^(access[_-]?token|api[_-]?key|apikey|auth|authorization|token|secret|client[_-]?secret|password|passwd|pwd|session|sessionid|sig|signature)$/i
+
+export function redactForScrape(rawUrl: string): string {
+  const full = withProtocol(rawUrl)
+  try {
+    const u = new URL(full)
+    let changed = false
+    for (const k of [...u.searchParams.keys()]) {
+      if (SECRET_PARAM.test(k)) {
+        u.searchParams.delete(k)
+        changed = true
+      }
+    }
+    return changed ? u.toString() : full
+  } catch {
+    return full
+  }
+}
+
 export function youtubeId(url: string): string | null {
   const m = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/|v\/))([\w-]{11})/)
   return m ? m[1] : null
@@ -52,17 +78,28 @@ function decode(s?: string): string | undefined {
   return el.value
 }
 
-/** Only trust absolute http(s) thumbnail URLs from scraped (untrusted) pages. */
+/**
+ * Only trust absolute http(s) thumbnails from scraped (untrusted) pages. A
+ * scheme-relative `//host/x.jpg` is legitimate (it resolves to https on our
+ * https page) — normalise it rather than dropping the thumbnail.
+ */
 function safeThumb(u?: string): string | undefined {
-  return u && /^https?:\/\//i.test(u.trim()) ? u.trim() : undefined
+  const s = u?.trim()
+  if (!s) return undefined
+  if (/^https?:\/\//i.test(s)) return s
+  if (s.startsWith('//')) return 'https:' + s
+  return undefined
 }
 
 export async function scrapeLink(rawUrl: string): Promise<Scraped> {
   const url = withProtocol(rawUrl)
 
+  // Secret-bearing query params are dropped before the URL leaves the device.
+  const safeUrl = redactForScrape(url)
+
   // 1. noembed (CORS-friendly)
   try {
-    const r = await fetchTimeout('https://noembed.com/embed?url=' + encodeURIComponent(url))
+    const r = await fetchTimeout('https://noembed.com/embed?url=' + encodeURIComponent(safeUrl))
     if (r.ok) {
       const d = (await r.json()) as {
         title?: string
@@ -76,7 +113,9 @@ export async function scrapeLink(rawUrl: string): Promise<Scraped> {
         const yt = youtubeId(url)
         return {
           title: decode(d.title),
-          thumb: d.thumbnail_url || (yt ? `https://img.youtube.com/vi/${yt}/hqdefault.jpg` : undefined),
+          // safeThumb: the thumbnail comes from a third party — only trust an
+          // absolute http(s) URL, never a javascript:/data: value.
+          thumb: safeThumb(d.thumbnail_url) || (yt ? `https://img.youtube.com/vi/${yt}/hqdefault.jpg` : undefined),
           source,
         }
       }
@@ -92,7 +131,7 @@ export async function scrapeLink(rawUrl: string): Promise<Scraped> {
   // 3. CORS proxy → Open Graph / <title>
   try {
     const html = await fetchTimeout(
-      'https://api.allorigins.win/raw?url=' + encodeURIComponent(url),
+      'https://api.allorigins.win/raw?url=' + encodeURIComponent(safeUrl),
     ).then((r) => r.text())
     const title = decode(metaTag(html, 'og:title')) || decode(html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1])
     const thumb = safeThumb(metaTag(html, 'og:image'))

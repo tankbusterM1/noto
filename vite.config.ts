@@ -8,10 +8,43 @@ import { fileURLToPath, URL } from 'node:url'
 // Skipped under Vitest so the test run stays fast and DOM-free.
 const isTest = !!process.env.VITEST
 
+// A Content-Security-Policy is Noto's backstop: even if a future render path
+// slipped an injection through, script-src 'self' stops it executing, and the
+// connect-src allow-list caps where the app can phone home to (GitHub for sync,
+// noembed + the CORS proxy for Watch-Later scraping — nothing else).
+//   · style-src 'unsafe-inline' — React inline style={} are element style attrs;
+//     there is no nonce path for those, so this is required and standard.
+//   · img-src https: — scraped article/video thumbnails come from arbitrary hosts.
+//   · injected at BUILD ONLY (apply:'build') so `vite dev` keeps its inline HMR
+//     scripts + websocket; the production bundle loads only external 'self' JS.
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: https:",
+  "font-src 'self' data:",
+  "connect-src 'self' https://api.github.com https://noembed.com https://api.allorigins.win",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "form-action 'none'",
+].join('; ')
+
+const cspPlugin = {
+  name: 'noto-csp',
+  apply: 'build' as const,
+  transformIndexHtml(html: string) {
+    return html.replace(
+      '</title>',
+      `</title>\n    <meta http-equiv="Content-Security-Policy" content="${CSP}" />`,
+    )
+  },
+}
+
 // https://vite.dev/config/  ·  https://vitest.dev/config/
 export default defineConfig({
   plugins: [
     react(),
+    cspPlugin,
     ...(isTest
       ? []
       : [
