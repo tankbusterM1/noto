@@ -87,5 +87,124 @@ export const SQL_BYTES: Omit<ByteCard, 'updatedAt'>[] = [
   { id: 'b_sql_selectstar', pack: 'sql', topic: 'sql', level: 2, title: 'SELECT * costs you', blurb: 'It fetches columns you do not need, breaks silently when the schema changes, and blocks index-only scans. Name the columns you actually use.' },
 ];
 
-/** Everything a "load starter pack" ships — foundations + the SQL pack. */
-export const ALL_SEED_BYTES: Omit<ByteCard, 'updatedAt'>[] = [...STARTER_BYTES, ...SQL_BYTES];
+/* ── Python: basics → advanced ─────────────────────────────────────────── */
+export const PYTHON_BYTES: Omit<ByteCard, 'updatedAt'>[] = [
+  { id: 'b_py_dynamic', pack: 'python', topic: 'python', level: 1, title: 'Python is dynamically typed', blurb: "A variable is just a name bound to an object; the type belongs to the object and is checked at runtime — so one name can point at an int, then a string." },
+  { id: 'b_py_listtuple', pack: 'python', topic: 'python', level: 1, title: 'List mutable, tuple immutable', blurb: "[] changes in place; () can't. Use a tuple for a fixed record or a dict key, a list for a growing collection.", code: 'pt = (3, 4)      # fixed\nxs = [1, 2, 3]   # grows', lang: 'python' },
+  { id: 'b_py_dict', pack: 'python', topic: 'python', level: 1, title: 'Dicts map keys to values in O(1)', blurb: 'Backed by a hash table. dict.get(k, default) avoids a KeyError when the key is missing.', code: "ages = {'ana': 30}\nages.get('bob', 0)  # 0", lang: 'python' },
+  { id: 'b_py_set', pack: 'python', topic: 'python', level: 1, title: 'Sets are unique and fast to search', blurb: 'Unordered, no duplicates, O(1) membership — perfect for dedup and "have I seen this?" checks.', code: 'seen = set()\nif x not in seen:\n    seen.add(x)', lang: 'python' },
+  { id: 'b_py_fstring', pack: 'python', topic: 'python', level: 1, title: 'f-strings format inline', blurb: 'Drop expressions straight into the string; :.2f, :, and friends format numbers.', code: "f'{name}: {price:.2f}'", lang: 'python' },
+  { id: 'b_py_truthy', pack: 'python', topic: 'python', level: 1, title: 'Empty is falsy', blurb: "0, '', [], {} and None all count as False in an if — so `if xs:` reads as 'if non-empty'." },
+  { id: 'b_py_slice', pack: 'python', topic: 'python', level: 1, title: 'Slicing takes a range', blurb: 'xs[start:stop:step], stop excluded. xs[::-1] reverses; xs[:] makes a copy.', code: 'xs[1:4]    # items 1,2,3\nxs[::-1]   # reversed', lang: 'python' },
+  { id: 'b_py_argskwargs', pack: 'python', topic: 'python', level: 2, title: '*args and **kwargs catch the rest', blurb: '*args gathers extra positionals into a tuple; **kwargs gathers keyword arguments into a dict.', code: 'def f(*args, **kwargs):\n    print(args, kwargs)', lang: 'python' },
+  { id: 'b_py_unpack', pack: 'python', topic: 'python', level: 2, title: 'Unpack with * to grab the middle', blurb: 'a, *mid, b = xs binds the ends and collects everything between them into a list.', code: 'first, *rest = [1, 2, 3, 4]\n# first=1, rest=[2,3,4]', lang: 'python' },
+  { id: 'b_py_lambda', pack: 'python', topic: 'python', level: 2, title: 'Lambdas are one-line functions', blurb: 'Handy as a key= or with map/filter. If it needs a name or more than a line, write a def.', code: 'sorted(words, key=lambda w: len(w))', lang: 'python' },
+  { id: 'b_py_exceptions', pack: 'python', topic: 'python', level: 2, title: 'try / except / else / finally', blurb: 'except catches, else runs when there was no error, finally always runs (cleanup). Catch specific types, not a bare except.', code: 'try: risky()\nexcept ValueError as e: log(e)\nfinally: close()', lang: 'python' },
+  { id: 'b_py_decorator', pack: 'python', topic: 'python', level: 2, title: 'A decorator wraps a function', blurb: '@dec replaces f with dec(f) — add logging, timing or caching without touching the body.', code: '@lru_cache\ndef fib(n): ...', lang: 'python' },
+  { id: 'b_py_zip', pack: 'python', topic: 'python', level: 2, title: 'zip walks lists in lockstep', blurb: 'It pairs items by position and stops at the shortest. dict(zip(keys, vals)) builds a dict.', code: 'for name, age in zip(names, ages):\n    ...', lang: 'python' },
+  { id: 'b_py_gil', pack: 'python', topic: 'python', level: 3, title: 'The GIL serialises Python threads', blurb: 'Only one thread runs Python bytecode at a time. Threads still help I/O-bound work (they release the GIL while waiting); for CPU-bound work, use multiprocessing.' },
+  { id: 'b_py_async', pack: 'python', topic: 'python', level: 3, title: 'async / await is cooperative I/O', blurb: 'An async function hands control back at each await, so one thread juggles thousands of waits (sockets, HTTP). It does not speed up CPU work.', code: 'async def get(u):\n    return await client.fetch(u)', lang: 'python' },
+  { id: 'b_py_dunder', pack: 'python', topic: 'python', level: 3, title: 'Dunder methods hook the syntax', blurb: '__len__ powers len(x), __eq__ powers ==, __getitem__ powers x[i]. Implement them and your object behaves like a built-in.', code: 'def __repr__(self):\n    return f"Point({self.x}, {self.y})"', lang: 'python' },
+  { id: 'b_py_property', pack: 'python', topic: 'python', level: 3, title: '@property makes a method look like a field', blurb: 'Compute a value on access, or validate on assignment, without changing the call site.', code: '@property\ndef area(self):\n    return self.w * self.h', lang: 'python' },
+  { id: 'b_py_dataclass', pack: 'python', topic: 'python', level: 3, title: '@dataclass writes the boilerplate', blurb: 'It generates __init__, __repr__ and __eq__ from typed fields — a record without the ceremony.', code: '@dataclass\nclass Point:\n    x: int\n    y: int', lang: 'python' },
+  { id: 'b_py_copy', pack: 'python', topic: 'python', level: 3, title: 'Shallow copy shares the insides', blurb: 'list(xs) or xs[:] copies the outer list but keeps the SAME inner objects. copy.deepcopy() clones all the way down.' },
+  { id: 'b_py_gc', pack: 'python', topic: 'python', level: 3, title: 'Python frees memory by reference counting', blurb: 'An object is freed the moment its reference count hits zero; a separate cyclic collector sweeps up reference cycles. You rarely free by hand.' },
+];
+
+/* ── Algorithms & data structures: basics → advanced ───────────────────── */
+export const ALGO_BYTES: Omit<ByteCard, 'updatedAt'>[] = [
+  { id: 'b_algo_bigo', pack: 'algorithms', topic: 'algo', level: 1, title: 'Big-O measures growth, not seconds', blurb: 'It is how the work scales with input size, dropping constants. O(1) < O(log n) < O(n) < O(n log n) < O(n²) < O(2ⁿ).' },
+  { id: 'b_algo_array', pack: 'algorithms', topic: 'algo', level: 1, title: 'Arrays index in O(1), insert in O(n)', blurb: 'Contiguous memory makes x[i] instant, but inserting in the middle shifts everything after it.' },
+  { id: 'b_algo_linked', pack: 'algorithms', topic: 'algo', level: 1, title: 'Linked lists insert in O(1), index in O(n)', blurb: 'Each node points to the next, so splicing is cheap — but there is no jumping; you walk from the head.' },
+  { id: 'b_algo_stackqueue', pack: 'algorithms', topic: 'algo', level: 1, title: 'Stack is LIFO, queue is FIFO', blurb: 'A stack pushes and pops the same end (undo, DFS, call stack); a queue adds at the back and removes at the front (scheduling, BFS).' },
+  { id: 'b_algo_binsearch', pack: 'algorithms', topic: 'algo', level: 2, title: 'Binary search halves a sorted list', blurb: 'Check the middle, throw away half, repeat — O(log n). The list MUST be sorted.', code: 'while lo <= hi:\n    mid = (lo + hi) // 2\n    if a[mid] < t: lo = mid + 1\n    else: hi = mid - 1', lang: 'python' },
+  { id: 'b_algo_twoptr', pack: 'algorithms', topic: 'algo', level: 2, title: 'Two pointers sweep from both ends', blurb: 'On a sorted array, move a left and right pointer inward — pair sums, palindromes, dedup, all in O(n).', code: 'l, r = 0, len(a) - 1\nwhile l < r:\n    ...', lang: 'python' },
+  { id: 'b_algo_sliding', pack: 'algorithms', topic: 'algo', level: 2, title: 'Sliding window reuses work', blurb: 'Grow and shrink a window over a sequence instead of re-scanning — longest substring, max subarray, all in O(n).' },
+  { id: 'b_algo_sort', pack: 'algorithms', topic: 'algo', level: 2, title: 'Comparison sorts bottom out at O(n log n)', blurb: 'Merge sort is stable and uses O(n) space; quicksort is in-place but O(n²) worst case. Counting/radix beat the bound only for bounded keys.' },
+  { id: 'b_algo_recursion', pack: 'algorithms', topic: 'algo', level: 2, title: 'Recursion = base case + smaller subproblem', blurb: 'Every call must move toward a base case or it never stops, and each open call sits on the call stack.', code: 'def fac(n):\n    return 1 if n <= 1 else n * fac(n - 1)', lang: 'python' },
+  { id: 'b_algo_bst', pack: 'algorithms', topic: 'algo', level: 2, title: 'A BST keeps things sorted', blurb: 'left < node < right, so search and insert average O(log n) — but degrade to O(n) if it becomes a chain. Balanced trees (AVL, red-black) prevent that.' },
+  { id: 'b_algo_traversal', pack: 'algorithms', topic: 'algo', level: 2, title: 'Tree traversal: BFS vs DFS', blurb: 'BFS visits level by level with a queue; DFS goes deep first with a stack or recursion. Pre / in / post order differ only by when you visit the node.' },
+  { id: 'b_algo_heap', pack: 'algorithms', topic: 'algo', level: 2, title: 'A heap gives the min or max in O(log n)', blurb: 'A binary heap keeps the smallest (or largest) at the root — the engine behind priority queues and "top K".', code: 'import heapq\nheapq.heappush(h, x)\nheapq.heappop(h)   # smallest', lang: 'python' },
+  { id: 'b_algo_graph', pack: 'algorithms', topic: 'algo', level: 2, title: 'Graphs: adjacency list vs matrix', blurb: 'A list (dict of neighbours) is compact for sparse graphs; a matrix costs O(V²) space but checks an edge in O(1).' },
+  { id: 'b_algo_bfs', pack: 'algorithms', topic: 'algo', level: 2, title: 'BFS finds the shortest unweighted path', blurb: 'Explore outward level by level with a queue; the first time you reach a node is the fewest edges away.' },
+  { id: 'b_algo_dp', pack: 'algorithms', topic: 'algo', level: 3, title: 'DP trades memory for repeated work', blurb: 'When subproblems overlap, solve each once and store it — memoise top-down or fill a table bottom-up. Fibonacci, knapsack, edit distance.' },
+  { id: 'b_algo_greedy', pack: 'algorithms', topic: 'algo', level: 3, title: 'Greedy takes the best local step', blurb: 'Pick the locally optimal choice and never look back. It only reaches the global optimum when the problem has the right structure (interval scheduling, Huffman).' },
+  { id: 'b_algo_backtrack', pack: 'algorithms', topic: 'algo', level: 3, title: 'Backtracking tries, then undoes', blurb: 'Build a solution one choice at a time; when a partial choice cannot work, undo it and try the next — permutations, N-queens, sudoku.' },
+  { id: 'b_algo_dijkstra', pack: 'algorithms', topic: 'algo', level: 3, title: 'Dijkstra: shortest path with weights', blurb: 'A BFS that uses a priority queue to always expand the cheapest frontier node. Requires non-negative edge weights.' },
+  { id: 'b_algo_dsu', pack: 'algorithms', topic: 'algo', level: 3, title: 'Union-Find tracks connected groups', blurb: 'union() merges two sets, find() names a set — near O(1) with path compression. It detects cycles and builds MSTs (Kruskal).' },
+  { id: 'b_algo_trie', pack: 'algorithms', topic: 'algo', level: 3, title: 'A trie stores strings by prefix', blurb: 'Each node is a character and shared prefixes share a path — autocomplete and prefix search in O(word length).' },
+  { id: 'b_algo_topo', pack: 'algorithms', topic: 'algo', level: 3, title: 'Topological sort orders dependencies', blurb: 'A linear order of a DAG where every edge points forward — build order, task scheduling. It exists only if there is no cycle.' },
+];
+
+/* ── ML: intermediate → advanced (adds to the foundations ML cards) ─────── */
+export const ML_BYTES: Omit<ByteCard, 'updatedAt'>[] = [
+  { id: 'b_ml_split', pack: 'ml', topic: 'ml', level: 1, title: 'Split the data three ways', blurb: 'Train to fit, validation to tune, test to judge — once. Touch the test set while tuning and your score becomes a lie.' },
+  { id: 'b_ml_crossval', pack: 'ml', topic: 'ml', level: 2, title: 'Cross-validation reuses the data', blurb: 'k-fold rotates which slice is held out and averages k scores — a sturdier estimate than one split, especially on small data.' },
+  { id: 'b_ml_reg', pack: 'ml', topic: 'ml', level: 2, title: 'L1 and L2 punish big weights', blurb: 'Regularisation adds a weight penalty to the loss. L2 (ridge) shrinks smoothly; L1 (lasso) drives some weights to exactly 0, selecting features.' },
+  { id: 'b_ml_loss', pack: 'ml', topic: 'ml', level: 2, title: 'Pick the loss for the task', blurb: 'MSE for regression, cross-entropy for classification. The loss is what training actually minimises — match it to what you care about.' },
+  { id: 'b_ml_precrecall', pack: 'ml', topic: 'ml', level: 2, title: 'Precision vs recall', blurb: 'Precision: of the ones you flagged, how many were right. Recall: of the real ones, how many you caught. Spam and cancer weight them differently.' },
+  { id: 'b_ml_f1', pack: 'ml', topic: 'ml', level: 2, title: 'F1 balances precision and recall', blurb: 'The harmonic mean of the two — high only when BOTH are high. More honest than accuracy on imbalanced classes.' },
+  { id: 'b_ml_roc', pack: 'ml', topic: 'ml', level: 3, title: 'ROC-AUC scores ranking, not a cutoff', blurb: 'It sweeps every threshold, plotting true-positive vs false-positive rate. AUC 0.5 is a coin flip, 1.0 is perfect separation.' },
+  { id: 'b_ml_confusion', pack: 'ml', topic: 'ml', level: 2, title: 'The confusion matrix shows the mistakes', blurb: 'TP, FP, FN, TN in one grid — every classification metric (accuracy, precision, recall) is just a ratio of its cells.' },
+  { id: 'b_ml_scaling', pack: 'ml', topic: 'ml', level: 2, title: 'Scale features for distance and gradient models', blurb: 'If one feature runs 0–1 and another 0–100000, it dominates. Standardise or min-max — trees do not care, but KNN, SVM and neural nets do.' },
+  { id: 'b_ml_onehot', pack: 'ml', topic: 'ml', level: 2, title: 'One-hot encodes categories', blurb: "Turn a category into a row of 0/1 columns so the model doesn't read 'red=1, blue=2' as an ordering.", code: 'blue → [0, 1, 0]', lang: 'text' },
+  { id: 'b_ml_optimizers', pack: 'ml', topic: 'ml', level: 3, title: 'SGD, momentum, Adam', blurb: 'Plain SGD steps by the gradient; momentum carries velocity through flat spots; Adam adapts a per-parameter step size and usually just works.' },
+  { id: 'b_ml_vanishing', pack: 'ml', topic: 'ml', level: 3, title: 'Vanishing and exploding gradients', blurb: 'In deep nets, gradients multiply through layers and shrink to 0 or blow up. ReLU, residual connections and normalisation keep them alive.' },
+  { id: 'b_ml_batchnorm', pack: 'ml', topic: 'ml', level: 3, title: 'Batch norm steadies training', blurb: "It normalises each layer's inputs per mini-batch, so you can use higher learning rates and train deeper nets faster." },
+  { id: 'b_ml_pca', pack: 'ml', topic: 'ml', level: 3, title: 'PCA compresses along the biggest variance', blurb: 'It finds new axes (principal components) that capture the most spread, so you keep a few and drop the rest — reduction and visualisation.' },
+  { id: 'b_ml_kmeans', pack: 'ml', topic: 'ml', level: 2, title: 'k-means clusters by nearest centroid', blurb: 'Pick k centres, assign each point to the closest, move each centre to its points’ mean, repeat. You choose k; it finds the groups.' },
+  { id: 'b_ml_tree', pack: 'ml', topic: 'ml', level: 2, title: 'Decision trees split on questions', blurb: 'Each node asks a yes/no on one feature; leaves are predictions. Readable — but a deep tree overfits.' },
+  { id: 'b_ml_forest', pack: 'ml', topic: 'ml', level: 2, title: 'Random forests vote', blurb: 'Many trees on random subsets of rows and features, averaged — bagging cuts the variance a single tree suffers.' },
+  { id: 'b_ml_boosting', pack: 'ml', topic: 'ml', level: 3, title: 'Boosting fixes its own mistakes', blurb: 'Trees added in sequence, each focused on the errors of the last (XGBoost, LightGBM). Often the winner on tabular data.' },
+  { id: 'b_ml_cnn', pack: 'ml', topic: 'ml', level: 3, title: 'CNNs slide filters over grids', blurb: 'A convolution reuses one small filter across an image, learning edges → shapes → objects with far fewer weights than a dense net.' },
+  { id: 'b_ml_transfer', pack: 'ml', topic: 'ml', level: 3, title: 'Transfer learning reuses a trained model', blurb: 'Start from a big pretrained model and fine-tune on your small dataset — you inherit its features instead of learning from scratch.' },
+];
+
+/* ── AI / LLMs: adds to the foundations AI cards ────────────────────────── */
+export const AI_BYTES: Omit<ByteCard, 'updatedAt'>[] = [
+  { id: 'b_ai_context', pack: 'ai', topic: 'ai', level: 1, title: 'The context window is working memory', blurb: 'Everything the model sees at once — prompt, history, retrieved docs — measured in tokens. Past the limit, the oldest falls off.' },
+  { id: 'b_ai_prompt', pack: 'ai', topic: 'ai', level: 1, title: 'Prompting is programming in English', blurb: 'Be specific, state the format you want, show an example. Clear instructions beat clever tricks.' },
+  { id: 'b_ai_system', pack: 'ai', topic: 'ai', level: 1, title: 'The system prompt sets the rules', blurb: "A high-priority instruction that frames the model's role and boundaries for the whole conversation, above the user's turns." },
+  { id: 'b_ai_fewshot', pack: 'ai', topic: 'ai', level: 2, title: 'Few-shot = teach by examples', blurb: 'Put a couple of input→output examples in the prompt and the model imitates the pattern — no training needed (in-context learning).' },
+  { id: 'b_ai_cot', pack: 'ai', topic: 'ai', level: 2, title: 'Chain-of-thought = ask it to reason', blurb: 'Telling the model to work step by step before answering improves hard reasoning, because each step conditions the next.' },
+  { id: 'b_ai_rag', pack: 'ai', topic: 'ai', level: 2, title: 'RAG grounds answers in your data', blurb: 'Retrieve relevant documents, put them in the prompt, then answer FROM them — cuts hallucination and adds fresh, private knowledge without retraining.' },
+  { id: 'b_ai_embed', pack: 'ai', topic: 'ai', level: 2, title: 'Embeddings turn text into vectors', blurb: "Similar meanings land near each other in vector space, so nearest-neighbour search becomes semantic search — the engine behind RAG." },
+  { id: 'b_ai_topp', pack: 'ai', topic: 'ai', level: 2, title: 'top-p and top-k trim the choices', blurb: 'Beyond temperature, sample only from the top-k tokens or the smallest set covering probability p — fewer wild picks.' },
+  { id: 'b_ai_pretrain', pack: 'ai', topic: 'ai', level: 2, title: 'Pretraining, then fine-tuning', blurb: 'First learn language from a huge corpus (self-supervised next-token), then specialise on a smaller labelled set. Most of the knowledge is in stage one.' },
+  { id: 'b_ai_finetune', pack: 'ai', topic: 'ai', level: 3, title: 'Fine-tune vs prompt', blurb: 'Prompting and RAG change what the model SEES; fine-tuning changes its WEIGHTS. Fine-tune for style and format at scale — for facts, reach for RAG.' },
+  { id: 'b_ai_rlhf', pack: 'ai', topic: 'ai', level: 3, title: 'RLHF aligns to human preference', blurb: 'After pretraining, the model is tuned on human rankings of its answers, so it becomes helpful and follows instructions — not just a next-token predictor.' },
+  { id: 'b_ai_agents', pack: 'ai', topic: 'ai', level: 3, title: 'Agents call tools in a loop', blurb: 'Give the model tools (search, code, APIs) and let it decide, act, observe the result, and repeat — reasoning plus doing.' },
+  { id: 'b_ai_diffusion', pack: 'ai', topic: 'ai', level: 3, title: 'Diffusion models denoise into images', blurb: 'Train a net to remove a little noise, then run it backwards from pure noise step by step until an image appears — the idea behind Stable Diffusion.' },
+  { id: 'b_ai_quant', pack: 'ai', topic: 'ai', level: 3, title: 'Quantisation shrinks the model', blurb: 'Store weights in 8- or 4-bit instead of 16/32, cutting memory and speeding inference for a small accuracy hit — how big models run on a laptop.' },
+];
+
+/* ── CS fundamentals: adds to the foundations CS cards ──────────────────── */
+export const CS_BYTES: Omit<ByteCard, 'updatedAt'>[] = [
+  { id: 'b_cs_status', pack: 'cs', topic: 'cs', level: 1, title: 'HTTP status codes by the hundreds', blurb: '2xx success, 3xx redirect, 4xx you messed up (404 not found, 401 unauthorised), 5xx the server did.' },
+  { id: 'b_cs_http', pack: 'cs', topic: 'cs', level: 1, title: 'HTTP verbs say what you are doing', blurb: 'GET reads, POST creates, PUT/PATCH updates, DELETE removes. GET and DELETE should be idempotent; POST usually is not.' },
+  { id: 'b_cs_dns', pack: 'cs', topic: 'cs', level: 1, title: 'DNS is the internet phone book', blurb: 'It turns a name (example.com) into an IP address, cached at many layers so it is fast — the first step of almost every request.' },
+  { id: 'b_cs_stackheap', pack: 'cs', topic: 'cs', level: 2, title: 'Stack memory vs heap memory', blurb: 'The stack holds call frames and locals (fast, freed automatically on return); the heap holds objects that outlive a call. Deep recursion overflows the stack.' },
+  { id: 'b_cs_procthread', pack: 'cs', topic: 'cs', level: 2, title: 'Processes are isolated; threads share', blurb: 'Each process has its own memory; threads inside one share it — cheaper to switch, but you must guard shared state with locks against races.' },
+  { id: 'b_cs_concpar', pack: 'cs', topic: 'cs', level: 2, title: 'Concurrency vs parallelism', blurb: 'Concurrency is dealing with many things at once (interleaving); parallelism is doing many at once (multiple cores). You can have either without the other.' },
+  { id: 'b_cs_tcpudp', pack: 'cs', topic: 'cs', level: 2, title: 'TCP is reliable, UDP is fast', blurb: 'TCP guarantees ordered, retried delivery (web, files); UDP just fires packets and forgets (games, video, DNS) — no handshake, no resend.' },
+  { id: 'b_cs_rest', pack: 'cs', topic: 'cs', level: 2, title: 'REST models URLs as resources', blurb: 'Nouns as paths (/users/42), verbs as HTTP methods, stateless requests. Predictable and cacheable.' },
+  { id: 'b_cs_cache', pack: 'cs', topic: 'cs', level: 2, title: 'Caching trades freshness for speed', blurb: 'Keep a copy close (memory, CDN) so you do not recompute or refetch. The hard parts are invalidation and staleness.' },
+  { id: 'b_cs_latency', pack: 'cs', topic: 'cs', level: 2, title: 'Know the latency ladder', blurb: 'Roughly: RAM ~100ns, SSD ~100µs, a network round-trip ~1–100ms. Each rung is about 1000× slower — design to stay on the fast ones.' },
+  { id: 'b_cs_acid', pack: 'cs', topic: 'cs', level: 2, title: 'ACID is a transaction promise', blurb: 'Atomic (all or nothing), Consistent (valid state), Isolated (as if alone), Durable (survives a crash). SQL databases give you this.' },
+  { id: 'b_cs_cap', pack: 'cs', topic: 'cs', level: 3, title: 'CAP: pick two under a partition', blurb: 'When the network splits, a distributed store can stay Consistent or Available, not both. Most choose availability plus eventual consistency.' },
+  { id: 'b_cs_loadbalance', pack: 'cs', topic: 'cs', level: 2, title: 'Load balancers spread traffic', blurb: 'One entry point fans requests across many servers (round-robin, least-connections), so you scale out and survive a node dying.' },
+  { id: 'b_cs_compinterp', pack: 'cs', topic: 'cs', level: 2, title: 'Compiled vs interpreted', blurb: 'A compiler translates the whole program to machine code ahead of time (C, Rust — fast); an interpreter runs it line by line (Python — flexible). A JIT does both.' },
+  { id: 'b_cs_gc', pack: 'cs', topic: 'cs', level: 2, title: 'Garbage collection frees unused memory', blurb: 'The runtime finds objects nothing points at and reclaims them, so you do not free by hand — at the cost of occasional pauses.' },
+  { id: 'b_cs_unicode', pack: 'cs', topic: 'cs', level: 2, title: 'UTF-8 encodes every character', blurb: 'Unicode gives each character a number; UTF-8 stores it in 1–4 bytes and stays ASCII-compatible. Length in bytes is not length in characters.' },
+];
+
+/** Everything a "load starter pack" ships — every bundled pack. */
+export const ALL_SEED_BYTES: Omit<ByteCard, 'updatedAt'>[] = [
+  ...STARTER_BYTES,
+  ...SQL_BYTES,
+  ...PYTHON_BYTES,
+  ...ALGO_BYTES,
+  ...ML_BYTES,
+  ...AI_BYTES,
+  ...CS_BYTES,
+];

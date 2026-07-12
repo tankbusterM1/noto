@@ -23,7 +23,7 @@ const NEVER = ReduceMotion.Never;
 const SPRING = { damping: 20, stiffness: 200, mass: 0.7, reduceMotion: NEVER };
 const SWIPE = 90; // px past which a drag becomes an advance
 
-const ACCENT: Record<string, string> = { ml: c.amber, ai: c.amber, sql: c.green, python: c.accent, stats: c.accent, cs: c.ink2 };
+const ACCENT: Record<string, string> = { ml: c.amber, ai: c.amber, sql: c.green, python: c.accent, algo: c.red, stats: c.accent, cs: c.ink2 };
 const accentOf = (topic: string) => ACCENT[topic] ?? c.amber;
 
 type Props = NativeStackScreenProps<TodayStackParamList, 'Bytes'>;
