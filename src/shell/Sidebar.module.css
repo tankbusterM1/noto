@@ -215,7 +215,9 @@
   color: var(--bg);
   border-radius: 999px;
   padding: 2px 7px;
-  animation: badgepulse 3.2s ease-in-out infinite;
+  /* Pulse a few times to catch the eye when work is waiting, then rest — a
+     forever-breathing badge reads as nagging (and never lets the page settle). */
+  animation: badgepulse 3.2s ease-in-out 3;
 }
 .sidebar.slim .badge {
   display: none;

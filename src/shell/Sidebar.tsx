@@ -39,6 +39,12 @@ function NavItem({ icon, label, active, onClick, right }: NavItemProps) {
     <button
       type="button"
       onClick={onClick}
+      // The label span is hidden in the collapsed icon rail (slim mode), leaving
+      // an icon-only button — so name it explicitly for screen readers, and title
+      // it so hovering an icon in the rail shows what it is.
+      aria-label={label}
+      title={label}
+      aria-current={active ? 'page' : undefined}
       className={`${s.navItem} ${active ? s.active : ''}`}
     >
       <span className={s.navIcon}>{icon}</span>
