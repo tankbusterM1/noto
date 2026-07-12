@@ -31,6 +31,7 @@ import {
 } from './crypto';
 import { runSync, type SyncOutcome } from './vault';
 import { cancelDigest, scheduleDigest, syncBadge } from './badge';
+import { haptics, setHapticStrength, type HapticLevel } from './motion';
 import { dates, format, fsrs, markdown, sync } from '../core';
 import type { Grade, HistEntry } from '../core';
 
@@ -121,8 +122,11 @@ interface State {
   setAutoSync: (on: boolean) => Promise<void>;
   /** Daily local reminder naming what's waiting. */
   digestOn: boolean;
+  /** Haptic strength (off/low/med/high), persisted; also drives motion.ts. */
+  hapticLevel: HapticLevel;
   hydrate: () => Promise<void>;
   setDigest: (on: boolean) => Promise<void>;
+  setHapticLevel: (level: HapticLevel) => Promise<void>;
   /** Push the open-todo count to the app icon (and re-arm the digest). */
   refreshSignals: () => Promise<void>;
   createNote: (title?: string, folderId?: string) => Promise<string>;
@@ -353,10 +357,11 @@ export const useData = create<State>((set, get) => ({
   journalCached: false,
   autoSyncOn: true,
   digestOn: false,
+  hapticLevel: 'high',
 
   hydrate: async () => {
     vault = await openVault();
-    const [noteRows, folderRows, srsRows, ledger, todoRows, watchRows, journalRows, digest, cryptoRaw] = await Promise.all([
+    const [noteRows, folderRows, srsRows, ledger, todoRows, watchRows, journalRows, digest, cryptoRaw, hapticRaw] = await Promise.all([
       vault.notes(),
       vault.folders(),
       vault.srs(),
@@ -366,7 +371,12 @@ export const useData = create<State>((set, get) => ({
       vault.journal(),
       vault.getMeta('digest'),
       vault.getMeta('journalCrypto'),
+      vault.getMeta('haptics'),
     ]);
+
+    // Apply the saved haptic strength to the motion engine before anything fires.
+    const hapticLevel: HapticLevel = (hapticRaw as HapticLevel) || 'high';
+    setHapticStrength(hapticLevel);
 
     let journalCrypto: VaultCrypto | null = null;
     try {
@@ -391,6 +401,7 @@ export const useData = create<State>((set, get) => ({
       // Auto-sync defaults ON; only an explicit '0' turns it off.
       autoSyncOn: (await vault.getMeta('autoSync')) !== '0',
       digestOn: digest === '1',
+      hapticLevel,
     });
     void get().refreshSignals();
   },
@@ -549,6 +560,13 @@ export const useData = create<State>((set, get) => ({
     set({ digestOn: on });
     if (!on) await cancelDigest();
     else await get().refreshSignals();
+  },
+
+  setHapticLevel: async (level) => {
+    setHapticStrength(level); // engine first, so the sample tap below uses it
+    set({ hapticLevel: level });
+    if (vault) await vault.setMeta('haptics', level);
+    if (level !== 'off') haptics.commit(); // let them feel the new strength
   },
 
   createNote: async (title = 'Untitled note', folderId?) => {

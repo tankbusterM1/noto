@@ -9,8 +9,6 @@
     "userInterfaceStyle": "light",
     "backgroundColor": "#f4f1e9",
     "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
       "backgroundColor": "#f4f1e9"
     },
     "ios": {

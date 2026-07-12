@@ -48,8 +48,33 @@ const safe = (p: Promise<void>) => void p.catch(() => {});
 
 type Atom = 'selection' | 'light' | 'medium' | 'heavy' | 'rigid' | 'soft' | 'success' | 'warning' | 'error';
 
+/**
+ * Global haptic intensity, set from Settings and persisted (see the store).
+ * `high` is the default — punchier than the old build, which felt weak.
+ *
+ * Each level remaps the impact atoms: `high` promotes them (a "tap" becomes a
+ * heavy thud), `low` softens them, `off` mutes everything. Notification chords
+ * (success/warning/error) and `selection` don't have weights, so they pass
+ * through unchanged at every level except `off`.
+ */
+export type HapticLevel = 'off' | 'low' | 'med' | 'high';
+let strength: HapticLevel = 'high';
+export function setHapticStrength(level: HapticLevel) {
+  strength = level;
+}
+export function getHapticStrength(): HapticLevel {
+  return strength;
+}
+
+const SCALE: Record<Exclude<HapticLevel, 'off'>, Partial<Record<Atom, Atom>>> = {
+  low: { rigid: 'light', heavy: 'medium', medium: 'light', soft: 'soft' },
+  med: {}, // identity — the previously-tuned default
+  high: { light: 'medium', soft: 'medium', medium: 'heavy', rigid: 'heavy' },
+};
+
 function fire(a: Atom) {
-  if (Platform.OS === 'web') return;
+  if (Platform.OS === 'web' || strength === 'off') return;
+  a = SCALE[strength][a] ?? a;
   switch (a) {
     case 'selection':
       return safe(Haptics.selectionAsync());
@@ -74,7 +99,7 @@ function fire(a: Atom) {
 
 /** Fire a pattern: [atom, ms-since-previous]. The first delay is from now. */
 function seq(steps: Array<[Atom, number]>) {
-  if (Platform.OS === 'web') return;
+  if (Platform.OS === 'web' || strength === 'off') return;
   let t = 0;
   for (const [atom, gap] of steps) {
     t += gap;

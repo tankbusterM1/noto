@@ -377,6 +377,8 @@ export function SettingsScreen() {
   const setDigest = useData((s) => s.setDigest);
   const autoSyncOn = useData((s) => s.autoSyncOn);
   const setAutoSync = useData((s) => s.setAutoSync);
+  const hapticLevel = useData((s) => s.hapticLevel);
+  const setHapticLevel = useData((s) => s.setHapticLevel);
   const [repo, setRepo] = useState('');
   const [tok, setTok] = useState('');
   const [conn, setConn] = useState<Connection | null>(null);
@@ -533,9 +535,31 @@ export function SettingsScreen() {
             />
           </View>
           <Text style={st.note}>
-            A real WidgetKit widget needs an App Group, which Apple does not grant to free personal teams — that one
-            costs $99/yr. The badge and this reminder need no entitlement at all.
+            The app icon badge and this reminder are Noto&apos;s home-screen presence — no widget, no entitlement, nothing to buy.
           </Text>
+        </Card>
+
+        <Card>
+          <Text style={st.kicker}>FEEL</Text>
+          <View style={{ marginTop: 6 }}>
+            <Text style={st.rowLabel}>Haptics</Text>
+            <Text style={st.note}>How strong the taps feel across the app. High is the default — tap a level to feel it.</Text>
+            <View style={st.segment}>
+              {(['off', 'low', 'med', 'high'] as const).map((lvl) => {
+                const active = hapticLevel === lvl;
+                return (
+                  <Press
+                    key={lvl}
+                    haptic={false}
+                    onPress={() => void setHapticLevel(lvl)}
+                    style={active ? [st.segItem, st.segItemOn] : st.segItem}
+                  >
+                    <Text style={[st.segText, active && st.segTextOn]}>{lvl.toUpperCase()}</Text>
+                  </Press>
+                );
+              })}
+            </View>
+          </View>
         </Card>
 
         <Card glass>
@@ -834,6 +858,20 @@ const st = StyleSheet.create({
   rowLabel: { ...t.subhead, color: c.ink2 },
   rowValue: { ...t.subhead, fontFamily: mono, color: c.ink, flexShrink: 1 },
   switchRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
+  segment: { flexDirection: 'row', gap: 6, marginTop: 14 },
+  segItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 9,
+    borderRadius: radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: c.line,
+    backgroundColor: c.surface,
+  },
+  segItemOn: { backgroundColor: c.amber, borderColor: c.amber },
+  segText: { ...t.footnote, fontFamily: mono, color: c.ink2, letterSpacing: 0.5 },
+  segTextOn: { color: c.bg, fontWeight: '600' },
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: c.line, marginVertical: 18 },
 
   deviceBox: { alignItems: 'center', paddingVertical: 8 },
