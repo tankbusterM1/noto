@@ -136,6 +136,20 @@ export interface MetaRow {
   value: unknown
 }
 
+/** A Bytes learning card — authored on desktop, synced as a vault row. */
+export interface ByteRow {
+  id: string
+  updatedAt: number
+  pack: string
+  topic: string
+  level: number
+  title: string
+  blurb: string
+  code?: string
+  lang?: string
+  source?: string
+}
+
 export const db = new Dexie('noto') as Dexie & {
   folders: EntityTable<FolderRow, 'id'>
   notes: EntityTable<NoteRow, 'id'>
@@ -152,6 +166,7 @@ export const db = new Dexie('noto') as Dexie & {
   revisions: EntityTable<RevisionRow, 'id'>
   trash: EntityTable<TrashRow, 'id'>
   tombstones: EntityTable<TombstoneRow, 'id'>
+  bytes: EntityTable<ByteRow, 'id'>
 }
 
 const DAY_MS = 86_400_000
@@ -208,6 +223,9 @@ db.version(3).stores({ tombstones: 'id, deletedAt' })
 
 /** v4 — the journal needs an index on its new cross-device id. */
 db.version(4).stores({ journal: '++id, sid' })
+
+/** v5 — Bytes learning cards. Indexed by pack + topic for the deck views. */
+db.version(5).stores({ bytes: 'id, pack, topic' })
 
 /** A list row's edit time. Rows written before the column read as "unknown, so lose". */
 export const stampOf = (row: { updatedAt?: number }): number => row.updatedAt ?? 0

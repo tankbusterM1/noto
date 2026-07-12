@@ -11,6 +11,7 @@
  */
 
 import { db, folderCreatedAt, noteCreatedAt, noteUpdatedAt, stampOf, syncId, type NoteRow } from './db'
+import { toCard, type ByteCard } from '../lib/bytes'
 import { DEFAULT_ITERATIONS } from '../lib/crypto'
 import { blocksToMarkdown, markdownToBlocks } from '../lib/markdown'
 import { replayLedger } from '../lib/srs'
@@ -53,7 +54,7 @@ export interface LocalVault {
 }
 
 export async function readVault(): Promise<LocalVault> {
-  const [noteRows, folderRows, srsRows, ledgerRows, journalRows, tombRows, metaRows] = await Promise.all([
+  const [noteRows, folderRows, srsRows, ledgerRows, journalRows, tombRows, metaRows, byteRows] = await Promise.all([
     db.notes.toArray(),
     db.folders.toArray(),
     db.srs.toArray(),
@@ -61,6 +62,7 @@ export async function readVault(): Promise<LocalVault> {
     db.journal.toArray(),
     db.tombstones.toArray(),
     db.meta.toArray(),
+    db.bytes.toArray(),
   ])
 
   let plaintextHeld = 0
@@ -128,6 +130,7 @@ export async function readVault(): Promise<LocalVault> {
     journal,
     scratchpad: scratchEnc ? { ...scratchEnc, updatedAt: scratchAt } : null,
     lists,
+    bytes: byteRows.map((r) => ({ ...r, id: r.id, updatedAt: stampOf(r) }) as SyncRow),
     tagsPool: (meta.get('tagsPool') as string[] | undefined) ?? [],
     tombstones: tombRows.map((t) => ({ id: t.id, deletedAt: t.deletedAt })),
     crypto,
@@ -264,6 +267,16 @@ export async function writeVault(v: Vault): Promise<ApplyStats> {
     const live = new Set(rows.map((r) => r.id))
     const removed = [...localIds].filter((id) => !live.has(id) && tombstoned.has(id))
     if (removed.length) await table.bulkDelete(removed)
+  }
+
+  // Bytes cards: put what's here (coerced defensively), drop what a tombstone killed.
+  {
+    const localByteIds = new Set((await db.bytes.toArray()).map((r) => r.id))
+    const cards = (v.bytes ?? []).map(toCard).filter((c): c is ByteCard => c !== null)
+    if (cards.length) await db.bytes.bulkPut(cards)
+    const live = new Set(cards.map((c) => c.id))
+    const gone = [...localByteIds].filter((id) => !live.has(id) && tombstoned.has(id))
+    if (gone.length) await db.bytes.bulkDelete(gone)
   }
 
   if (v.tagsPool.length) await db.meta.put({ key: 'tagsPool', value: v.tagsPool })

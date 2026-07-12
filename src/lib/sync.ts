@@ -154,6 +154,8 @@ export interface Vault {
   journal: JournalBlob[];
   scratchpad: SyncScratchpad | null;
   lists: Lists;
+  /** Bytes learning cards — one collection of rows, merged by id like a list. */
+  bytes: SyncRow[];
   tagsPool: string[];
   tombstones: Tombstone[];
   crypto: VaultCrypto | null;
@@ -180,6 +182,7 @@ export const emptyVault = (): Vault => ({
   journal: [],
   scratchpad: null,
   lists: emptyLists(),
+  bytes: [],
   tagsPool: [],
   tombstones: [],
   crypto: null,
@@ -412,6 +415,9 @@ export function mergeVaults(local: Vault, remote: Vault): { vault: Vault; stats:
     listRows += lists[name].length;
   }
 
+  // 6b. Bytes cards — same last-writer-wins row merge as a list.
+  const bytes = mergeRows(local.bytes ?? [], remote.bytes ?? [], tombs);
+
   // 7. The tag vocabulary only ever grows; a union needs no timestamps.
   const tagsPool = [...new Set([...local.tagsPool, ...remote.tagsPool])].sort();
 
@@ -428,6 +434,7 @@ export function mergeVaults(local: Vault, remote: Vault): { vault: Vault; stats:
     journal: [...journal.values()].sort((a, b) => a.id.localeCompare(b.id)),
     scratchpad,
     lists,
+    bytes,
     tagsPool,
     tombstones,
     crypto,
@@ -461,6 +468,7 @@ export function vaultToFiles(v: Vault): RepoFiles {
   files.set('state/srs.json', JSON.stringify(v.srs, null, 2) + '\n');
   files.set('prefs.json', JSON.stringify({ tagsPool: v.tagsPool }, null, 2) + '\n');
   for (const name of LIST_NAMES) files.set(`lists/${name}.json`, JSON.stringify(v.lists[name], null, 2) + '\n');
+  if (v.bytes?.length) files.set('bytes.json', JSON.stringify(v.bytes, null, 2) + '\n');
   if (v.crypto) files.set('journal/crypto.json', JSON.stringify(v.crypto, null, 2) + '\n');
   if (v.scratchpad) files.set('journal/scratchpad.json', JSON.stringify(v.scratchpad, null, 2) + '\n');
   for (const n of v.notes) files.set(`notes/${n.id}.md`, serializeNote(n));
@@ -483,6 +491,7 @@ const OWNED_FILES = new Set(['manifest.json', 'folders.json', 'tombstones.json',
  */
 export function isVaultPath(path: string): boolean {
   if (OWNED_FILES.has(path)) return true;
+  if (path === 'bytes.json') return true;
   if (path.startsWith('lists/') && path.endsWith('.json')) return true;
   if (path.startsWith('notes/') && path.endsWith('.md')) return true;
   if (path.startsWith('journal/') && path.endsWith('.json')) return true;
@@ -542,6 +551,9 @@ export function filesToVault(files: RepoFiles): Vault {
       (r) => r && typeof r.id === 'string' && typeof r.updatedAt === 'number',
     );
   }
+  v.bytes = safeArray<SyncRow>(files.get('bytes.json')).filter(
+    (r) => r && typeof r.id === 'string' && typeof r.updatedAt === 'number',
+  );
 
   for (const [path, text] of files) {
     if (path.startsWith('notes/') && path.endsWith('.md')) {

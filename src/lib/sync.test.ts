@@ -463,6 +463,7 @@ describe('repo files', () => {
         ranged: [row('rg1', 2, { from: 1, to: 5 })],
         watch: [row('v1', 2, { url: 'https://x', tags: ['ml'] })],
       }),
+      bytes: [row('b1', 3, { pack: 'foundations', topic: 'sql', level: 1, title: 'X', blurb: 'Y' })],
     }
     expect(filesToVault(vaultToFiles(vault))).toEqual(vault)
   })

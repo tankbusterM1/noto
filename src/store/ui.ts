@@ -18,6 +18,7 @@ export type Screen =
   | 'journal'
   | 'todos'
   | 'watch'
+  | 'bytes'
   | 'trash'
 
 export type Accent = '#35518E' | '#4A7350' | '#7D4A34' | '#41414B'

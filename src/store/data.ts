@@ -1,7 +1,9 @@
 import { create } from 'zustand'
 import { db, folderCreatedAt, noteCreatedAt, repairForSync, type RevisionRow, type TrashRow } from '../data/db'
 import { deviceName, readVault, writeVault } from '../data/vault'
-import { journalId } from '../lib/sync'
+import { toCard, byteId, type ByteCard } from '../lib/bytes'
+import { STARTER_BYTES } from '../lib/bytesSeed'
+import { journalId, type SyncRow } from '../lib/sync'
 import { ensureRepo, explainGitError, repoNameFrom } from '../lib/gitapi'
 import { syncVault } from '../lib/vaultSync'
 import { seedDatabase } from '../data/seed'
@@ -167,6 +169,12 @@ interface DataState {
   setGithubRepo: (repo: string) => Promise<void>
   setAutoSync: (on: boolean) => Promise<void>
   syncNow: () => Promise<SyncOutcome>
+  /** Bytes learning cards, authored here on desktop and synced to the phone. */
+  bytes: ByteCard[]
+  addByte: (card: Omit<ByteCard, 'id' | 'updatedAt'>) => Promise<void>
+  addByteBatch: (cards: ByteCard[]) => Promise<number>
+  deleteByte: (id: string) => Promise<void>
+  loadStarterPack: () => Promise<number>
 }
 
 export interface SyncOutcome {
@@ -295,6 +303,7 @@ async function hydrateImpl(set: (partial: Partial<DataState>) => void): Promise<
     watchRows,
     journalRows,
     metaRows,
+    byteRows,
   ] = await Promise.all([
     db.folders.toArray(),
     db.notes.toArray(),
@@ -308,6 +317,7 @@ async function hydrateImpl(set: (partial: Partial<DataState>) => void): Promise<
     db.watch.toArray(),
     db.journal.toArray(),
     db.meta.toArray(),
+    db.bytes.toArray(),
   ])
 
   // Creation order comes from the timestamp column now. The old code parsed the
@@ -446,6 +456,7 @@ async function hydrateImpl(set: (partial: Partial<DataState>) => void): Promise<
     ledgerByDay,
     doneToday,
     trash,
+    bytes: (byteRows as unknown as SyncRow[]).map(toCard).filter((c): c is ByteCard => !!c),
   })
 }
 
@@ -461,6 +472,7 @@ export const useData = create<DataState>()((set, get) => ({
   ranged: [],
   watch: [],
   journal: [],
+  bytes: [],
   scratchpad: '',
   githubRepo: '',
   githubToken: '',
@@ -1275,6 +1287,33 @@ export const useData = create<DataState>()((set, get) => ({
     if (name) await db.meta.put({ key: 'githubRepo', value: name })
     else await db.meta.delete('githubRepo')
     set({ githubRepo: name })
+  },
+
+  // ── Bytes deck (authoring lives on desktop) ──────────────────────────
+  addByte: async (card) => {
+    const full: ByteCard = { ...card, id: byteId(), updatedAt: Date.now() }
+    await db.bytes.put(full)
+    set({ bytes: [full, ...get().bytes] })
+  },
+  addByteBatch: async (cards) => {
+    if (!cards.length) return 0
+    await db.bytes.bulkPut(cards)
+    set({ bytes: [...cards, ...get().bytes] })
+    return cards.length
+  },
+  deleteByte: async (id) => {
+    await db.bytes.delete(id)
+    // A tombstone so the deletion propagates instead of resurrecting on the phone.
+    await db.tombstones.put({ id, deletedAt: Date.now() })
+    set({ bytes: get().bytes.filter((c) => c.id !== id) })
+  },
+  loadStarterPack: async () => {
+    const have = new Set(get().bytes.map((c) => c.id))
+    const fresh: ByteCard[] = STARTER_BYTES.filter((c) => !have.has(c.id)).map((c) => ({ ...c, updatedAt: Date.now() }))
+    if (!fresh.length) return 0
+    await db.bytes.bulkPut(fresh)
+    set({ bytes: [...fresh, ...get().bytes] })
+    return fresh.length
   },
 
   setAutoSync: async (on) => {

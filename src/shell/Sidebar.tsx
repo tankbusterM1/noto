@@ -74,6 +74,7 @@ export function Sidebar() {
   const journal = useData((st) => st.journal)
   const ledgerByDay = useData((st) => st.ledgerByDay)
   const trashCount = useData((st) => st.trash.length)
+  const bytesCount = useData((st) => st.bytes.length)
 
   const notesCount = notes.length
   const todosLeft = todos.filter((t) => !t.done).length
@@ -200,6 +201,17 @@ export function Sidebar() {
                   : <span className={s.badge}>{dueCount}</span>
                 : undefined
             }
+          />
+          <NavItem
+            icon={
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M13 3L4 14h6l-1 7 9-11h-6l1-7z" />
+              </svg>
+            }
+            label="Bytes"
+            active={isActive('bytes', screen)}
+            onClick={go('bytes')}
+            right={bytesCount > 0 ? <span className={s.count}>{bytesCount}</span> : undefined}
           />
         </div>
       </div>
