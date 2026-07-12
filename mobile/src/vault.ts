@@ -73,6 +73,10 @@ export async function readVault(v: Vault): Promise<{ vault: sync.Vault; legacyHe
   const lists = sync.emptyLists();
   for (const name of sync.LIST_NAMES) lists[name] = (await v.listRows(name as ListName)) as sync.SyncRow[];
 
+  // Bytes cards ride the generic list store under the name 'bytes' (not in
+  // LIST_NAMES, handled explicitly here + in writeVault).
+  const byteCards = (await v.listRows('bytes' as ListName)) as sync.SyncRow[];
+
   const scratch = await readJson<sync.SyncScratchpad | null>(v, 'scratchpad', null);
 
   const vault: sync.Vault = {
@@ -97,6 +101,7 @@ export async function readVault(v: Vault): Promise<{ vault: sync.Vault; legacyHe
     journal,
     scratchpad: scratch,
     lists,
+    bytes: byteCards,
     tagsPool: await readJson<string[]>(v, 'tagsPool', []),
     tombstones: tombRows.map((t) => ({ id: t.id, deletedAt: t.deletedAt })),
     crypto: await readJson<sync.VaultCrypto | null>(v, 'journalCrypto', null),
@@ -180,6 +185,14 @@ export async function writeVault(v: Vault, merged: sync.Vault): Promise<void> {
     for (const row of merged.lists[name]) await v.putListRow(name as ListName, row as ListRow);
     const live = new Set(merged.lists[name].map((r) => r.id));
     for (const id of local) if (!live.has(id) && tombstoned.has(id)) await v.deleteListRow(name as ListName, id);
+  }
+
+  // Bytes cards — same row merge as a list, under the 'bytes' name.
+  {
+    const local = new Set((await v.listRows('bytes' as ListName)).map((r) => r.id));
+    for (const row of merged.bytes ?? []) await v.putListRow('bytes' as ListName, row as ListRow);
+    const live = new Set((merged.bytes ?? []).map((r) => r.id));
+    for (const id of local) if (!live.has(id) && tombstoned.has(id)) await v.deleteListRow('bytes' as ListName, id);
   }
 
   for (const t of merged.tombstones) await v.tombstone(t.id, t.deletedAt);

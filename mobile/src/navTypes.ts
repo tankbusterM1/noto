@@ -12,6 +12,7 @@ export type TodayStackParamList = {
   TodayHome: undefined;
   Todos: undefined;
   Watch: undefined;
+  Bytes: undefined;
 };
 
 export type TabParamList = {

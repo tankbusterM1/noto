@@ -66,6 +66,7 @@ export function TodayScreen({ navigation }: Props) {
   const memory = useData((s) => s.memory);
   const todos = useData((s) => s.todos);
   const watch = useData((s) => s.watch);
+  const bytesN = useData((s) => s.bytes.length);
   const bottom = useBottomInset();
 
   const due = dueCount(memory);
@@ -111,6 +112,13 @@ export function TodayScreen({ navigation }: Props) {
               title="Watch Later"
               detail={queued ? `${queued} queued` : 'nothing saved'}
               onPress={() => navigation.navigate('Watch')}
+            />
+            <View style={st.hubSep} />
+            <HubCard
+              icon="sparkles-outline"
+              title="Bytes"
+              detail={bytesN ? `${bytesN} cards` : 'sync a pack'}
+              onPress={() => navigation.navigate('Bytes')}
             />
           </View>
         </Rise>

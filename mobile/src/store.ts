@@ -5,6 +5,7 @@ import {
   type FolderRow,
   type JournalRow,
   type LedgerRow,
+  type ListName,
   type NoteRow,
   type TodoRow,
   type Vault,
@@ -32,7 +33,7 @@ import {
 import { runSync, type SyncOutcome } from './vault';
 import { cancelDigest, scheduleDigest, syncBadge } from './badge';
 import { haptics, setHapticStrength, type HapticLevel } from './motion';
-import { dates, format, fsrs, markdown, sync } from '../core';
+import { bytes as bytesLib, bytesDeck, dates, format, fsrs, markdown, sync } from '../core';
 import type { Grade, HistEntry } from '../core';
 
 export interface Note {
@@ -127,6 +128,12 @@ interface State {
   hydrate: () => Promise<void>;
   setDigest: (on: boolean) => Promise<void>;
   setHapticLevel: (level: HapticLevel) => Promise<void>;
+  /** Bytes learning cards, synced from the desktop deck. */
+  bytes: bytesLib.ByteCard[];
+  /** Per-card seen/kept state (local; drives the scheduler). */
+  byteState: Record<string, bytesDeck.ByteState>;
+  markByteSeen: (id: string) => Promise<void>;
+  keepByte: (card: bytesLib.ByteCard) => Promise<void>;
   /** Push the open-todo count to the app icon (and re-arm the digest). */
   refreshSignals: () => Promise<void>;
   createNote: (title?: string, folderId?: string) => Promise<string>;
@@ -358,10 +365,12 @@ export const useData = create<State>((set, get) => ({
   autoSyncOn: true,
   digestOn: false,
   hapticLevel: 'high',
+  bytes: [],
+  byteState: {},
 
   hydrate: async () => {
     vault = await openVault();
-    const [noteRows, folderRows, srsRows, ledger, todoRows, watchRows, journalRows, digest, cryptoRaw, hapticRaw] = await Promise.all([
+    const [noteRows, folderRows, srsRows, ledger, todoRows, watchRows, journalRows, digest, cryptoRaw, hapticRaw, byteRows, byteStateRaw] = await Promise.all([
       vault.notes(),
       vault.folders(),
       vault.srs(),
@@ -372,7 +381,17 @@ export const useData = create<State>((set, get) => ({
       vault.getMeta('digest'),
       vault.getMeta('journalCrypto'),
       vault.getMeta('haptics'),
+      vault.listRows('bytes' as ListName),
+      vault.getMeta('byteState'),
     ]);
+
+    const bytes = (byteRows as sync.SyncRow[]).map(bytesLib.toCard).filter((c): c is bytesLib.ByteCard => !!c);
+    let byteState: Record<string, bytesDeck.ByteState> = {};
+    try {
+      byteState = byteStateRaw ? (JSON.parse(byteStateRaw) as Record<string, bytesDeck.ByteState>) : {};
+    } catch {
+      byteState = {};
+    }
 
     // Apply the saved haptic strength to the motion engine before anything fires.
     const hapticLevel: HapticLevel = (hapticRaw as HapticLevel) || 'high';
@@ -402,6 +421,8 @@ export const useData = create<State>((set, get) => ({
       autoSyncOn: (await vault.getMeta('autoSync')) !== '0',
       digestOn: digest === '1',
       hapticLevel,
+      bytes,
+      byteState,
     });
     void get().refreshSignals();
   },
@@ -567,6 +588,27 @@ export const useData = create<State>((set, get) => ({
     set({ hapticLevel: level });
     if (vault) await vault.setMeta('haptics', level);
     if (level !== 'off') haptics.commit(); // let them feel the new strength
+  },
+
+  markByteSeen: async (id) => {
+    const prev = get().byteState[id];
+    const next = { ...get().byteState, [id]: { seen: true, kept: prev?.kept ?? false, seenAt: Date.now() } };
+    set({ byteState: next });
+    if (vault) await vault.setMeta('byteState', JSON.stringify(next));
+  },
+
+  keepByte: async (card) => {
+    if (!vault) return;
+    const today = dates.todayEpochDay();
+    // The card becomes a real note (title + markdown body, tagged its topic), then
+    // enters FSRS review due today — so the loop closes: scroll → keep → note → review.
+    const id = await get().createNote(card.title);
+    await get().saveNote(id, { body: bytesLib.cardToMarkdown(card), tags: [card.topic] });
+    await vault.putSrs({ noteId: id, ease: 2.5, ivl: 0, dueDay: today });
+    const [srsRows, ledger] = await Promise.all([vault.srs(), vault.ledger()]);
+    const next = { ...get().byteState, [card.id]: { seen: true, kept: true, seenAt: Date.now() } };
+    await vault.setMeta('byteState', JSON.stringify(next));
+    set({ memory: deriveMemory(ledger, srsRows), byteState: next });
   },
 
   createNote: async (title = 'Untitled note', folderId?) => {

@@ -17,6 +17,7 @@ import { NoteScreen } from './src/screens/Note';
 import { TodayScreen } from './src/screens/Today';
 import { TodosScreen } from './src/screens/Todos';
 import { WatchScreen } from './src/screens/Watch';
+import { BytesScreen } from './src/screens/Bytes';
 import { ReviewScreen } from './src/screens/Review';
 import { JournalScreen, SettingsScreen } from './src/screens/Vault';
 import type { NotesStackParamList, TabParamList, TodayStackParamList } from './src/navTypes';
@@ -43,6 +44,7 @@ function TodayStack() {
       <TodayNav.Screen name="TodayHome" component={TodayScreen} />
       <TodayNav.Screen name="Todos" component={TodosScreen} />
       <TodayNav.Screen name="Watch" component={WatchScreen} />
+      <TodayNav.Screen name="Bytes" component={BytesScreen} />
     </TodayNav.Navigator>
   );
 }
