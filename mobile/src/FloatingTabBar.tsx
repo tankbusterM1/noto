@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, {
@@ -166,6 +167,11 @@ export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
     width: itemW,
     transform: [{ translateX: ROW_PAD + idx.value * itemW }],
   }));
+
+  // The Bytes reader is a full-screen reel — the floating bar has no business
+  // over it (it covered the Keep button and swallowed swipes). Hide it there.
+  // Every hook above has already run, so this conditional return is rules-safe.
+  if (getFocusedRouteNameFromRoute(state.routes[state.index]) === 'Bytes') return null;
 
   const newNote = async () => {
     const id = await createNote();

@@ -69,11 +69,18 @@ export function BytesScreen({ navigation }: Props) {
   const land = (delta: number) => {
     const ni = Math.max(0, Math.min(indexRef.current + delta, deck.length));
     setIdx(ni);
-    y.value = delta > 0 ? H : -H; // new card enters from the opposite edge
-    y.value = withSpring(0, SPRING, () => {
-      busy.current = false;
-    });
+    y.value = delta > 0 ? H : -H; // new card starts off-screen on the opposite edge
+    y.value = withSpring(0, SPRING); // …then springs into place
     haptics.tick();
+  };
+
+  // Runs on the JS thread (via runOnJS) after every fling, however it ended.
+  // Clearing `busy` HERE — not inside a UI-thread animation callback, which only
+  // mutates a frozen worklet copy of the ref — is what keeps the lock from
+  // sticking `true` and freezing every gesture after the first swipe.
+  const settle = (delta: number, finished: boolean) => {
+    busy.current = false;
+    if (finished) land(delta);
   };
 
   const fling = (delta: number) => {
@@ -86,7 +93,7 @@ export function BytesScreen({ navigation }: Props) {
     busy.current = true;
     const off = delta > 0 ? -H : H; // advancing flings the current card up
     y.value = withTiming(off, { duration: 220, easing: Easing.bezier(0.5, 0, 0.2, 1), reduceMotion: NEVER }, (fin) => {
-      if (fin) runOnJS(land)(delta);
+      runOnJS(settle)(delta, !!fin);
     });
   };
 
