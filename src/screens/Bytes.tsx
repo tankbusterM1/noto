@@ -22,6 +22,9 @@ export function Bytes() {
   const [level, setLevel] = useState(1)
   const [batch, setBatch] = useState('')
   const [toast, setToast] = useState<string | null>(null)
+  const [filter, setFilter] = useState<string | null>(null)
+
+  const topics = useMemo(() => [...new Set(bytes.map((c) => c.topic))].sort(), [bytes])
 
   const flash = (m: string) => {
     setToast(m)
@@ -53,16 +56,17 @@ export function Bytes() {
     flash(n ? `Loaded ${n} starter cards` : 'Starter pack already loaded')
   }
 
-  // Group for the list, newest topic-blocks first.
+  // Group for the list (filtered by the active tag).
   const byTopic = useMemo(() => {
+    const shown = filter ? bytes.filter((c) => c.topic === filter) : bytes
     const m = new Map<string, ByteCard[]>()
-    for (const c of bytes) {
+    for (const c of shown) {
       const a = m.get(c.topic)
       if (a) a.push(c)
       else m.set(c.topic, [c])
     }
     return [...m.entries()]
-  }, [bytes])
+  }, [bytes, filter])
 
   return (
     <div style={wrap}>
@@ -130,10 +134,22 @@ export function Bytes() {
         </div>
 
         {/* the deck */}
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginTop: 34, marginBottom: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginTop: 34, marginBottom: 10 }}>
           <div style={panelK}>The deck</div>
           <div style={{ fontFamily: MONO, fontSize: 11, color: 'var(--ink3)' }}>{bytes.length} cards</div>
         </div>
+        {topics.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginBottom: 14 }}>
+            <button style={chip(filter === null)} onClick={() => setFilter(null)}>
+              all
+            </button>
+            {topics.map((tp) => (
+              <button key={tp} style={chip(filter === tp)} onClick={() => setFilter(filter === tp ? null : tp)}>
+                {tp} · {bytes.filter((c) => c.topic === tp).length}
+              </button>
+            ))}
+          </div>
+        )}
         {bytes.length === 0 ? (
           <div style={{ fontFamily: 'var(--serif, Georgia), serif', fontStyle: 'italic', color: 'var(--ink3)', padding: '18px 2px' }}>
             Empty. Write a card above, or load the starter pack.
@@ -181,3 +197,13 @@ const ghostBtn: CSSProperties = { background: 'transparent', color: 'var(--ink2)
 const cardRow: CSSProperties = { display: 'flex', alignItems: 'center', gap: 12, background: 'var(--sf)', border: '1px solid var(--ln)', borderRadius: 11, padding: '11px 13px' }
 const delBtn: CSSProperties = { background: 'transparent', border: 'none', color: 'var(--ink3)', cursor: 'pointer', fontSize: 13, flexShrink: 0, padding: 4 }
 const toastStyle: CSSProperties = { position: 'fixed', bottom: 26, left: '50%', transform: 'translateX(-50%)', background: 'var(--ink)', color: 'var(--bg)', padding: '9px 16px', borderRadius: 999, fontSize: 12.5, fontFamily: MONO, boxShadow: '0 12px 30px rgba(24,19,10,0.28)', zIndex: 50 }
+const chip = (active: boolean): CSSProperties => ({
+  fontFamily: MONO,
+  fontSize: 11,
+  padding: '5px 11px',
+  borderRadius: 999,
+  cursor: 'pointer',
+  border: '1px solid ' + (active ? 'var(--am)' : 'var(--ln)'),
+  background: active ? 'var(--am)' : 'transparent',
+  color: active ? 'var(--bg)' : 'var(--ink2)',
+})

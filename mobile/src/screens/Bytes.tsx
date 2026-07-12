@@ -35,9 +35,16 @@ export function BytesScreen({ navigation }: Props) {
   const keepByte = useData((s) => s.keepByte);
   const { height: H } = useWindowDimensions();
 
-  // The deck is snapshotted ONCE at mount so it stays stable for the session
-  // (the scheduler is day-seeded; marking cards seen mid-scroll must not reshuffle).
-  const [deck] = useState(() => bytesDeck.buildDeck(bytes, byteState, dates.todayEpochDay(), 20));
+  // Snapshot cards + seen/kept at mount, so marking a card seen mid-scroll never
+  // reshuffles the deck. Only the tag filter rebuilds it (day-seeded, so stable).
+  const bytesSnap = useRef(bytes).current;
+  const stateSnap = useRef(byteState).current;
+  const [filter, setFilter] = useState<string | null>(null);
+  const topics = useMemo(() => [...new Set(bytesSnap.map((b) => b.topic))].sort(), [bytesSnap]);
+  const deck = useMemo(() => {
+    const pool = filter ? bytesSnap.filter((b) => b.topic === filter) : bytesSnap;
+    return bytesDeck.buildDeck(pool, stateSnap, dates.todayEpochDay(), 20);
+  }, [filter, bytesSnap, stateSnap]);
 
   const [index, setIndex] = useState(0);
   const indexRef = useRef(0);
@@ -117,6 +124,29 @@ export function BytesScreen({ navigation }: Props) {
   const cardStyle = useAnimatedStyle(() => ({ transform: [{ translateY: y.value }, { scale: keepScale.value }] }));
   const glowStyle = useAnimatedStyle(() => ({ opacity: keepGlow.value * 0.5 }));
 
+  const pickTopic = (tp: string | null) => {
+    if (busy.current || tp === filter) return;
+    y.value = 0;
+    keepGlow.value = 0;
+    setIdx(0);
+    setFilter(tp);
+    haptics.tick();
+  };
+
+  const chipsRow =
+    topics.length > 1 ? (
+      <View style={st.chips}>
+        <Pressable style={[st.chip, filter === null && st.chipOn]} onPress={() => pickTopic(null)}>
+          <Text style={[st.chipText, filter === null && st.chipTextOn]}>all</Text>
+        </Pressable>
+        {topics.map((tp) => (
+          <Pressable key={tp} style={[st.chip, filter === tp && st.chipOn]} onPress={() => pickTopic(tp)}>
+            <Text style={[st.chipText, filter === tp && st.chipTextOn]}>{tp}</Text>
+          </Pressable>
+        ))}
+      </View>
+    ) : null;
+
   const progress = deck.length ? Math.min(index, deck.length) / deck.length : 0;
 
   // ── empty / finished states ──────────────────────────────────────────
@@ -136,6 +166,7 @@ export function BytesScreen({ navigation }: Props) {
     return (
       <Screen>
         <Nav navigation={navigation} />
+        {chipsRow}
         <View style={st.center}>
           <View style={st.diamond} />
           <Text style={st.endTitle}>That&apos;s your drift for today.</Text>
@@ -153,6 +184,7 @@ export function BytesScreen({ navigation }: Props) {
   return (
     <Screen>
       <Nav navigation={navigation} />
+      {chipsRow}
       {/* progress */}
       <View style={st.track}>
         <View style={[st.trackFill, { width: `${progress * 100}%` }]} />
@@ -213,6 +245,12 @@ const st = StyleSheet.create({
 
   track: { height: 3, marginHorizontal: 20, borderRadius: 2, backgroundColor: c.surface2, overflow: 'hidden' },
   trackFill: { height: '100%', borderRadius: 2, backgroundColor: c.amber },
+
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, paddingHorizontal: 20, paddingBottom: 12 },
+  chip: { paddingVertical: 5, paddingHorizontal: 12, borderRadius: 999, borderWidth: StyleSheet.hairlineWidth, borderColor: c.line, backgroundColor: c.surface },
+  chipOn: { backgroundColor: c.amber, borderColor: c.amber },
+  chipText: { fontFamily: mono, fontSize: 11, color: c.ink2 },
+  chipTextOn: { color: c.bg, fontWeight: '600' },
 
   card: {
     flex: 1,

@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { db, folderCreatedAt, noteCreatedAt, repairForSync, type RevisionRow, type TrashRow } from '../data/db'
 import { deviceName, readVault, writeVault } from '../data/vault'
 import { toCard, byteId, type ByteCard } from '../lib/bytes'
-import { STARTER_BYTES } from '../lib/bytesSeed'
+import { ALL_SEED_BYTES } from '../lib/bytesSeed'
 import { journalId, type SyncRow } from '../lib/sync'
 import { ensureRepo, explainGitError, repoNameFrom } from '../lib/gitapi'
 import { syncVault } from '../lib/vaultSync'
@@ -1309,7 +1309,7 @@ export const useData = create<DataState>()((set, get) => ({
   },
   loadStarterPack: async () => {
     const have = new Set(get().bytes.map((c) => c.id))
-    const fresh: ByteCard[] = STARTER_BYTES.filter((c) => !have.has(c.id)).map((c) => ({ ...c, updatedAt: Date.now() }))
+    const fresh: ByteCard[] = ALL_SEED_BYTES.filter((c) => !have.has(c.id)).map((c) => ({ ...c, updatedAt: Date.now() }))
     if (!fresh.length) return 0
     await db.bytes.bulkPut(fresh)
     set({ bytes: [...fresh, ...get().bytes] })
