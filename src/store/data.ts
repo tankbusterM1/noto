@@ -1317,7 +1317,8 @@ export const useData = create<DataState>()((set, get) => ({
     const tombstoned = new Set((await db.tombstones.toArray()).map((t) => t.id))
     const differs = (a: Omit<ByteCard, 'updatedAt'>, b: ByteCard): boolean =>
       a.title !== b.title || a.blurb !== b.blurb || (a.code ?? '') !== (b.code ?? '') ||
-      (a.diagram ?? '') !== (b.diagram ?? '') || a.level !== b.level || a.topic !== b.topic ||
+      (a.diagram ?? '') !== (b.diagram ?? '') || (a.detail ?? '') !== (b.detail ?? '') ||
+      a.level !== b.level || a.topic !== b.topic ||
       a.pack !== b.pack || (a.lang ?? '') !== (b.lang ?? '') || (a.source ?? '') !== (b.source ?? '')
     const now = Date.now()
     const toWrite: ByteCard[] = []

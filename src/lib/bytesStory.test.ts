@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { parseStory, hasStory, storyCount } from './bytesStory';
 import { parseBatch } from './bytes';
+import { ALL_SEED_BYTES } from './bytesSeed';
 
 const STORY = `WHY IT MATTERS
 Per-group stats without collapsing rows.
@@ -87,5 +88,17 @@ describe('parseStory', () => {
   it('a card with no +++ has no detail', () => {
     const [card] = parseBatch('## sql · x :: Just a face\nplain blurb', 'p', 1);
     expect(card.detail).toBeUndefined();
+  });
+
+  it('every seeded story parses into a real multi-slide deck', () => {
+    const withStory = ALL_SEED_BYTES.filter((c) => hasStory(c));
+    expect(withStory.length).toBeGreaterThanOrEqual(20);
+    for (const card of withStory) {
+      const slides = parseStory(card.detail!);
+      // at least 2 slides, every slide has content, first slide has a kicker
+      expect(slides.length, `${card.id} slide count`).toBeGreaterThanOrEqual(2);
+      expect(slides[0].kicker, `${card.id} leads with a kicker`).not.toBe('');
+      for (const s of slides) expect(s.blocks.length, `${card.id} · ${s.kicker} has content`).toBeGreaterThan(0);
+    }
   });
 });
