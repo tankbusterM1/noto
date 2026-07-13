@@ -1,5 +1,17 @@
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
+import { notify } from '../core';
+
+// Show banners even when the app is foregrounded — so the settings "test" fires
+// are actually visible, not silently swallowed.
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: false,
+    shouldSetBadge: true,
+  }),
+});
 
 /*
  * The home-screen signal, without a widget.
@@ -95,5 +107,63 @@ export async function scheduleDigest(openTodos: number, dueNotes: number, hour =
     });
   } catch {
     /* scheduling refused — ignore */
+  }
+}
+
+// ── the creative nudge system (name + modes) ─────────────────────────────
+const NUDGE_PREFIX = 'noto.nudge.';
+const MAX_NUDGES = 8;
+
+export async function cancelNudges(): Promise<void> {
+  if (Platform.OS === 'web') return;
+  try {
+    for (let i = 0; i < MAX_NUDGES; i++) await Notifications.cancelScheduledNotificationAsync(NUDGE_PREFIX + i);
+  } catch {
+    /* nothing scheduled */
+  }
+}
+
+/**
+ * Schedule the day's nudges for the chosen mode, worded by the copy engine.
+ * normal fires once and only when something waits; high a few times; obsessed
+ * many times across the day. Re-schedule whenever the counts change (the body is
+ * baked in at schedule time). `seed` (a day number) varies the copy day to day.
+ */
+export async function scheduleNudges(mode: notify.NotifyMode, ctx: notify.NotifyCtx, seed: number): Promise<void> {
+  if (Platform.OS === 'web') return;
+  await cancelNudges();
+  if (mode === 'off') return;
+  if (!(await ensureNotificationPermission())) return;
+
+  if (mode === 'normal' && ctx.due + ctx.todos === 0) return; // polite: nothing to interrupt for
+
+  const hours = notify.NOTIFY_HOURS[mode];
+  try {
+    for (let i = 0; i < hours.length; i++) {
+      const { title, body } = notify.composeNotify(mode, ctx, seed + i * 101);
+      await Notifications.scheduleNotificationAsync({
+        identifier: NUDGE_PREFIX + i,
+        content: { title, body, badge: ctx.todos },
+        trigger: { type: Notifications.SchedulableTriggerInputTypes.DAILY, hour: hours[i], minute: (i * 17) % 60 },
+      });
+    }
+  } catch {
+    /* scheduling refused — ignore */
+  }
+}
+
+/** Fire one sample notification of a mode ~2s from now — for the settings test panel. */
+export async function fireTestNotify(mode: Exclude<notify.NotifyMode, 'off'>, ctx: notify.NotifyCtx, seed: number): Promise<boolean> {
+  if (Platform.OS === 'web') return false;
+  if (!(await ensureNotificationPermission())) return false;
+  const { title, body } = notify.composeNotify(mode, ctx, seed);
+  try {
+    await Notifications.scheduleNotificationAsync({
+      content: { title, body, badge: ctx.todos },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 2, repeats: false },
+    });
+    return true;
+  } catch {
+    return false;
   }
 }
