@@ -12,6 +12,7 @@ import { useAppFonts } from './src/fonts';
 import { Launch } from './src/Launch';
 import { FloatingTabBar } from './src/FloatingTabBar';
 import { useData } from './src/store';
+import { initWidgetSync } from './src/widgetSync';
 import { NotesScreen } from './src/screens/Notes';
 import { NoteScreen } from './src/screens/Note';
 import { TodayScreen } from './src/screens/Today';
@@ -102,6 +103,12 @@ function Boot() {
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
+
+  // Mirror the vault into the iOS widgets once it's loaded (no-op off native iOS).
+  useEffect(() => {
+    if (!ready) return;
+    return initWidgetSync();
+  }, [ready]);
 
   // Re-badge on foreground: todos may have been completed on another device, and
   // the daily digest's body is frozen at schedule time, so it needs re-arming.

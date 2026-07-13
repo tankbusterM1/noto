@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { c, mono, serif, t } from '../theme';
 import { haptics, Press, Rise } from '../motion';
 import { Card, LargeTitle, Screen, useBottomInset } from '../ui';
 import { useData } from '../store';
+import { startReviewActivity, updateReviewActivity, endReviewActivity } from '../widgetSync';
 import type { Grade } from '../../core';
 
 /*
@@ -29,6 +30,32 @@ export function ReviewScreen() {
     [notes, memory],
   );
   const current = queue[0];
+
+  // Drive the review Live Activity. total stays the session's initial count
+  // (each review moves one note out of `queue` and into `done`), so it's simply
+  // queue.length + done. Starts on the first due note, ends when the queue drains.
+  const started = useRef(false);
+  const total = queue.length + done;
+  useEffect(() => {
+    if (!started.current && queue.length > 0) {
+      started.current = true;
+      startReviewActivity(total);
+    } else if (started.current && queue.length > 0) {
+      updateReviewActivity(queue.length, total);
+    } else if (started.current && queue.length === 0) {
+      endReviewActivity();
+      started.current = false;
+    }
+  }, [queue.length, total]);
+  useEffect(
+    () => () => {
+      if (started.current) {
+        endReviewActivity();
+        started.current = false;
+      }
+    },
+    [],
+  );
 
   if (!current) {
     return (
