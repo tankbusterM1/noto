@@ -208,7 +208,9 @@ export function BytesScreen({ navigation }: Props) {
         <View style={[st.trackFill, { width: `${progress * 100}%` }]} />
       </View>
 
-      <View style={{ flex: 1 }} {...pan.panHandlers}>
+      {/* clip the card to its own lane: as it drags/flings it slides UNDER the
+          header instead of bleeding over the tag chips (the old clumsy overlap). */}
+      <View style={st.stage} {...pan.panHandlers}>
         <Animated.View style={[st.card, cardStyle]}>
           <View style={st.topic}>
             <View style={[st.tdot, { backgroundColor: accent }]} />
@@ -413,6 +415,10 @@ const st = StyleSheet.create({
   chipText: { ...t.caption1, fontFamily: mono, color: c.ink2 },
   chipTextOn: { color: c.bg },
 
+  // The swipe lane — clips the card so a drag/fling slides it under the header
+  // instead of overlapping the tag chips. Small top pad so the card doesn't kiss
+  // the progress track at rest.
+  stage: { flex: 1, overflow: 'hidden', paddingTop: 8 },
   card: { flex: 1, marginHorizontal: 20, marginBottom: 10, paddingHorizontal: 26, paddingVertical: 24, borderRadius: 22, backgroundColor: c.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: c.line, justifyContent: 'space-between' },
   topic: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   tdot: { width: 7, height: 7, borderRadius: 4 },
