@@ -136,6 +136,10 @@ interface State {
   seeByte: (id: string) => Promise<void>;
   /** A checkpoint answer — grades the card through the memory engine. */
   answerByte: (id: string, grade: bytesMemory.Grade) => Promise<void>;
+  /** Consecutive-day study streak for Bytes. */
+  byteStreak: { count: number; last: number };
+  /** Mark today active — rolls the streak. Called when the reel opens. */
+  markByteDay: () => Promise<void>;
   /** Push the open-todo count to the app icon (and re-arm the digest). */
   refreshSignals: () => Promise<void>;
   createNote: (title?: string, folderId?: string) => Promise<string>;
@@ -369,10 +373,11 @@ export const useData = create<State>((set, get) => ({
   hapticLevel: 'high',
   bytes: [],
   byteMemory: {},
+  byteStreak: { count: 0, last: 0 },
 
   hydrate: async () => {
     vault = await openVault();
-    const [noteRows, folderRows, srsRows, ledger, todoRows, watchRows, journalRows, digest, cryptoRaw, hapticRaw, byteRows, byteMemRaw] = await Promise.all([
+    const [noteRows, folderRows, srsRows, ledger, todoRows, watchRows, journalRows, digest, cryptoRaw, hapticRaw, byteRows, byteMemRaw, byteStreakRaw] = await Promise.all([
       vault.notes(),
       vault.folders(),
       vault.srs(),
@@ -385,6 +390,7 @@ export const useData = create<State>((set, get) => ({
       vault.getMeta('haptics'),
       vault.listRows('bytes' as ListName),
       vault.getMeta('byteMemory'),
+      vault.getMeta('byteStreak'),
     ]);
 
     const bytes = (byteRows as sync.SyncRow[]).map(bytesLib.toCard).filter((c): c is bytesLib.ByteCard => !!c);
@@ -393,6 +399,12 @@ export const useData = create<State>((set, get) => ({
       byteMemory = byteMemRaw ? (JSON.parse(byteMemRaw) as Record<string, bytesMemory.ByteMemory>) : {};
     } catch {
       byteMemory = {};
+    }
+    let byteStreak = { count: 0, last: 0 };
+    try {
+      if (byteStreakRaw) byteStreak = JSON.parse(byteStreakRaw) as { count: number; last: number };
+    } catch {
+      byteStreak = { count: 0, last: 0 };
     }
 
     // Apply the saved haptic strength to the motion engine before anything fires.
@@ -425,6 +437,7 @@ export const useData = create<State>((set, get) => ({
       hapticLevel,
       bytes,
       byteMemory,
+      byteStreak,
     });
     void get().refreshSignals();
   },
@@ -608,6 +621,16 @@ export const useData = create<State>((set, get) => ({
     const next = { ...get().byteMemory, [id]: bytesMemory.review(prev, grade, today) };
     set({ byteMemory: next });
     if (vault) await vault.setMeta('byteMemory', JSON.stringify(next));
+  },
+
+  markByteDay: async () => {
+    const today = dates.todayEpochDay();
+    const s = get().byteStreak;
+    if (s.last === today) return; // already counted today
+    const count = s.last === today - 1 ? s.count + 1 : 1; // continue the run, or restart it
+    const next = { count, last: today };
+    set({ byteStreak: next });
+    if (vault) await vault.setMeta('byteStreak', JSON.stringify(next));
   },
 
   createNote: async (title = 'Untitled note', folderId?) => {

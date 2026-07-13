@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { PanResponder, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { PanResponder, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, {
   Easing,
   ReduceMotion,
@@ -15,7 +15,7 @@ import { c, mono, serif, t } from '../theme';
 import { haptics } from '../motion';
 import { Screen } from '../ui';
 import { useData } from '../store';
-import { bytesFeed, bytesMemory, dates } from '../../core';
+import { bytes as bytesLib, bytesFeed, bytesMemory, bytesRelated, dates } from '../../core';
 import type { TodayStackParamList } from '../navTypes';
 
 const NEVER = ReduceMotion.Never;
@@ -24,8 +24,6 @@ const SWIPE = 90; // px past which a drag becomes an advance
 
 const ACCENT: Record<string, string> = { ml: c.amber, ai: c.amber, sql: c.green, python: c.accent, algo: c.red, stats: c.accent, cs: c.ink2 };
 const accentOf = (topic: string) => ACCENT[topic] ?? c.amber;
-
-// The memory meter's colour, by strength band.
 const BAND_COLOR: Record<string, string> = { fresh: c.green, solid: c.amber, fading: '#c8702a', cold: c.red, new: c.ink3 };
 
 type Props = NativeStackScreenProps<TodayStackParamList, 'Bytes'>;
@@ -35,11 +33,17 @@ export function BytesScreen({ navigation }: Props) {
   const byteMemory = useData((s) => s.byteMemory);
   const seeByte = useData((s) => s.seeByte);
   const answerByte = useData((s) => s.answerByte);
+  const markByteDay = useData((s) => s.markByteDay);
+  const byteStreak = useData((s) => s.byteStreak);
   const { height: H } = useWindowDimensions();
   const today = dates.todayEpochDay();
 
-  // Snapshot cards + memory at mount, so answering a card mid-scroll never
-  // reshuffles the feed under you. Only the tag filter rebuilds it.
+  // Opening the reel counts as showing up today — rolls the streak once.
+  useEffect(() => {
+    void markByteDay();
+  }, [markByteDay]);
+
+  // Snapshot cards + memory at mount, so answering mid-scroll never reshuffles.
   const bytesSnap = useRef(bytes).current;
   const memSnap = useRef(byteMemory).current;
   const [filter, setFilter] = useState<string | null>(null);
@@ -60,32 +64,38 @@ export function BytesScreen({ navigation }: Props) {
 
   const current = index < feed.length ? feed[index] : null;
 
-  // Each card is processed once per session: a read counts a sighting when shown;
-  // a checkpoint is graded when answered (below).
+  // Session tally for the end recap.
+  const stats = useRef({ reads: 0, checks: 0, right: 0 }).current;
+
+  // A read counts a sighting when shown; a checkpoint is graded on answer.
   const processed = useRef(new Set<string>()).current;
   useEffect(() => {
     if (current && current.mode === 'read' && !processed.has(current.card.id)) {
       processed.add(current.card.id);
+      stats.reads += 1;
       void seeByte(current.card.id);
     }
   }, [current?.card.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const related = useMemo(
+    () => (current && current.mode === 'read' ? bytesRelated.relatedFor(current.card, bytesSnap) : null),
+    [current?.card.id], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
   // ── animation state ──────────────────────────────────────────────────
   const y = useSharedValue(0);
   const busy = useRef(false);
-  const [picked, setPicked] = useState<string | null>(null); // chosen checkpoint answer
+  const [picked, setPicked] = useState<string | null>(null);
 
   const land = (delta: number) => {
     const ni = Math.max(0, Math.min(indexRef.current + delta, lenRef.current));
     setIdx(ni);
     setPicked(null);
-    y.value = delta > 0 ? H : -H; // new card starts off-screen on the opposite edge
+    y.value = delta > 0 ? H : -H;
     y.value = withSpring(0, SPRING);
     haptics.tick();
   };
 
-  // Always runs on the JS thread — clears the input lock however the fling ended,
-  // so the reader can never freeze mid-swipe.
   const settle = (delta: number, finished: boolean) => {
     busy.current = false;
     if (finished) land(delta);
@@ -126,6 +136,8 @@ export function BytesScreen({ navigation }: Props) {
     setPicked(choice);
     if (!processed.has(current.card.id)) {
       processed.add(current.card.id);
+      stats.checks += 1;
+      if (right) stats.right += 1;
       void answerByte(current.card.id, right ? 'good' : 'again');
     }
     if (right) haptics.confirm();
@@ -164,7 +176,7 @@ export function BytesScreen({ navigation }: Props) {
 
   const progress = feed.length ? Math.min(index, feed.length) / feed.length : 0;
 
-  // ── empty / finished states ──────────────────────────────────────────
+  // ── empty state ──────────────────────────────────────────────────────
   if (feed.length === 0) {
     return (
       <Screen>
@@ -179,22 +191,8 @@ export function BytesScreen({ navigation }: Props) {
     );
   }
 
-  if (!current) {
-    return (
-      <Screen>
-        <Nav navigation={navigation} />
-        {chipsRow}
-        <View style={st.center}>
-          <View style={st.diamond} />
-          <Text style={st.endTitle}>That&apos;s your drift for today.</Text>
-          <Text style={st.endSub}>{index} done · they&apos;ll resurface on their own schedule.</Text>
-          <Pressable style={st.doneBtn} onPress={() => navigation.goBack()}>
-            <Text style={st.doneText}>Done</Text>
-          </Pressable>
-        </View>
-      </Screen>
-    );
-  }
+  // ── finished: the recap ──────────────────────────────────────────────
+  if (!current) return <Recap navigation={navigation} bytes={bytes} byteMemory={byteMemory} today={today} streak={byteStreak.count} stats={stats} seen={index} />;
 
   const card = current.card;
   const accent = accentOf(card.topic);
@@ -224,7 +222,6 @@ export function BytesScreen({ navigation }: Props) {
           </View>
 
           {current.mode === 'checkpoint' && current.checkpoint ? (
-            // ── checkpoint ──
             <View style={st.body}>
               <Text style={st.prompt}>{current.checkpoint.prompt}</Text>
               <View style={st.choices}>
@@ -250,19 +247,29 @@ export function BytesScreen({ navigation }: Props) {
               ) : null}
             </View>
           ) : (
-            // ── read ──
             <View style={st.body}>
               <Text style={st.concept}>{card.title}</Text>
               {card.blurb ? <Text style={st.blurb}>{card.blurb}</Text> : null}
+              {card.diagram ? (
+                <View style={st.diagram}>
+                  <Text style={st.diagramText}>{card.diagram}</Text>
+                </View>
+              ) : null}
               {card.code ? (
                 <View style={st.code}>
                   <Text style={st.codeText}>{card.code}</Text>
                 </View>
               ) : null}
+              {related && (related.deeper || related.connects.length) ? (
+                <Text style={st.links}>
+                  {related.deeper ? `↑ deeper: ${related.deeper.title}` : ''}
+                  {related.deeper && related.connects.length ? '\n' : ''}
+                  {related.connects.length ? `→ connects: ${related.connects.map((r) => r.title).join(' · ')}` : ''}
+                </Text>
+              ) : null}
             </View>
           )}
 
-          {/* memory meter */}
           <View style={st.meterRow}>
             <View style={st.meterTrack}>
               <View style={[st.meterFill, { width: `${Math.round((strength ?? 0) * 100)}%`, backgroundColor: BAND_COLOR[band] }]} />
@@ -274,6 +281,107 @@ export function BytesScreen({ navigation }: Props) {
 
       <Text style={st.swipeHint}>{current.mode === 'checkpoint' && picked == null ? 'tap the answer' : 'swipe up for the next'}</Text>
     </Screen>
+  );
+}
+
+// ── the end-of-session recap: what you did, what's mastered, what's shaky ──
+function Recap({
+  navigation, bytes, byteMemory, today, streak, stats, seen,
+}: {
+  navigation: Props['navigation'];
+  bytes: bytesLib.ByteCard[];
+  byteMemory: Record<string, bytesMemory.ByteMemory>;
+  today: number;
+  streak: number;
+  stats: { reads: number; checks: number; right: number };
+  seen: number;
+}) {
+  const cardById = new Map(bytes.map((c) => [c.id, c]));
+  const mems = Object.values(byteMemory);
+
+  const perTopic: Record<string, { solid: number; seen: number }> = {};
+  for (const m of mems) {
+    const cd = cardById.get(m.id);
+    if (!cd) continue;
+    const p = (perTopic[cd.topic] ??= { solid: 0, seen: 0 });
+    p.seen += 1;
+    if (bytesMemory.strengthAt(m, today) >= 0.6) p.solid += 1;
+  }
+  const mastery = Object.entries(perTopic).sort((a, b) => b[1].seen - a[1].seen);
+
+  const weak = mems
+    .filter((m) => m.lapses > 0 || bytesMemory.strengthAt(m, today) < 0.3)
+    .sort((a, b) => bytesMemory.strengthAt(a, today) - bytesMemory.strengthAt(b, today))
+    .slice(0, 3)
+    .map((m) => cardById.get(m.id)?.title)
+    .filter((x): x is string => !!x);
+
+  const returning = mems.filter((m) => m.due > today).length;
+  const pct = stats.checks ? Math.round((100 * stats.right) / stats.checks) : 0;
+
+  return (
+    <Screen>
+      <Nav navigation={navigation} />
+      <ScrollView contentContainerStyle={st.recap}>
+        <View style={st.diamond} />
+        <Text style={st.endTitle}>That&apos;s your drift for today.</Text>
+
+        <View style={st.recapRow}>
+          <RecapStat n={stats.reads} label="read" />
+          <RecapStat n={stats.checks} label="checks" />
+          {stats.checks ? <RecapStat n={pct} label="% right" /> : <RecapStat n={seen} label="cards" />}
+        </View>
+
+        {streak > 0 ? <Text style={st.streak}>◆ {streak}-day streak</Text> : null}
+
+        {mastery.length ? (
+          <View style={st.section}>
+            <Text style={st.sectionK}>MASTERY</Text>
+            {mastery.map(([topic, p]) => (
+              <View key={topic} style={st.mrow}>
+                <Text style={st.mtopic}>{topic}</Text>
+                <View style={st.mtrack}>
+                  <View style={[st.mfill, { width: `${p.seen ? Math.round((100 * p.solid) / p.seen) : 0}%` }]} />
+                </View>
+                <Text style={st.mcount}>
+                  {p.solid}/{p.seen}
+                </Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
+        {weak.length ? (
+          <View style={st.section}>
+            <Text style={st.sectionK}>SHAKY — WORTH ANOTHER LOOK</Text>
+            {weak.map((title, i) => (
+              <Text key={i} style={st.weakItem}>
+                · {title}
+              </Text>
+            ))}
+          </View>
+        ) : null}
+
+        {returning > 0 ? (
+          <Text style={st.endSub}>
+            {returning} concept{returning > 1 ? 's' : ''} scheduled to resurface on their own.
+          </Text>
+        ) : null}
+
+        <Pressable style={st.doneBtn} onPress={() => navigation.goBack()}>
+          <Text style={st.doneText}>Done</Text>
+        </Pressable>
+      </ScrollView>
+    </Screen>
+  );
+}
+
+function RecapStat({ n, label }: { n: number; label: string }) {
+  return (
+    <View style={{ flex: 1, alignItems: 'center' }}>
+      <Text style={st.statN}>{n}</Text>
+      <Text style={st.statL}>{label.toUpperCase()}</Text>
+    </View>
   );
 }
 
@@ -314,10 +422,12 @@ const st = StyleSheet.create({
   body: { flex: 1, justifyContent: 'center' },
   concept: { ...t.title1, fontFamily: serif, fontWeight: undefined, color: c.ink, marginBottom: 14 },
   blurb: { ...t.body, color: c.ink2, lineHeight: 25 },
+  diagram: { marginTop: 16, padding: 14, borderRadius: 12, backgroundColor: c.surface2, borderWidth: StyleSheet.hairlineWidth, borderColor: c.line },
+  diagramText: { fontFamily: mono, fontSize: 12, lineHeight: 18, color: c.ink2 },
   code: { marginTop: 16, padding: 14, borderRadius: 12, backgroundColor: c.surface2 },
   codeText: { fontFamily: mono, fontSize: 13, lineHeight: 20, color: c.ink },
+  links: { ...t.caption1, fontFamily: mono, color: c.ink3, marginTop: 16, lineHeight: 18 },
 
-  // checkpoint
   prompt: { fontFamily: mono, fontSize: 15, lineHeight: 24, color: c.ink, padding: 14, borderRadius: 12, backgroundColor: c.surface2, marginBottom: 18 },
   choices: { gap: 9 },
   choice: { paddingVertical: 13, paddingHorizontal: 16, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: c.line, backgroundColor: c.surface },
@@ -329,7 +439,6 @@ const st = StyleSheet.create({
   verdictRight: { color: c.green },
   verdictWrong: { color: c.red },
 
-  // memory meter
   meterRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 18 },
   meterTrack: { flex: 1, height: 5, borderRadius: 3, backgroundColor: c.surface2, overflow: 'hidden' },
   meterFill: { height: '100%', borderRadius: 3 },
@@ -338,9 +447,24 @@ const st = StyleSheet.create({
   swipeHint: { ...t.caption1, fontFamily: mono, color: c.ink3, textAlign: 'center', paddingBottom: 8 },
 
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40, gap: 12 },
-  diamond: { width: 12, height: 12, backgroundColor: c.amber, transform: [{ rotate: '45deg' }], marginBottom: 10 },
+  diamond: { width: 12, height: 12, backgroundColor: c.amber, transform: [{ rotate: '45deg' }], marginBottom: 10, alignSelf: 'center' },
   endTitle: { ...t.title2, fontFamily: serif, fontWeight: undefined, color: c.ink, textAlign: 'center' },
-  endSub: { ...t.body, color: c.ink2, textAlign: 'center', lineHeight: 24 },
-  doneBtn: { marginTop: 16, paddingVertical: 12, paddingHorizontal: 30, borderRadius: 999, backgroundColor: c.ink },
+  endSub: { ...t.body, color: c.ink2, textAlign: 'center', lineHeight: 24, marginTop: 8 },
+  doneBtn: { marginTop: 22, paddingVertical: 12, paddingHorizontal: 30, borderRadius: 999, backgroundColor: c.ink, alignSelf: 'center' },
   doneText: { ...t.headline, color: c.bg },
+
+  // recap
+  recap: { paddingHorizontal: 28, paddingTop: 24, paddingBottom: 48 },
+  recapRow: { flexDirection: 'row', marginTop: 22, marginBottom: 6 },
+  statN: { ...t.title1, fontFamily: serif, fontWeight: undefined, color: c.ink },
+  statL: { ...t.caption2, fontFamily: mono, letterSpacing: 1, color: c.ink3, marginTop: 2 },
+  streak: { ...t.headline, fontFamily: mono, color: c.amber, textAlign: 'center', marginTop: 10 },
+  section: { marginTop: 26 },
+  sectionK: { ...t.caption2, fontFamily: mono, letterSpacing: 1.4, color: c.ink3, marginBottom: 10 },
+  mrow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
+  mtopic: { ...t.caption1, fontFamily: mono, color: c.ink2, width: 54 },
+  mtrack: { flex: 1, height: 6, borderRadius: 3, backgroundColor: c.surface2, overflow: 'hidden' },
+  mfill: { height: '100%', borderRadius: 3, backgroundColor: c.green },
+  mcount: { ...t.caption2, fontFamily: mono, color: c.ink3, width: 44, textAlign: 'right' },
+  weakItem: { ...t.footnote, color: c.ink2, marginBottom: 5 },
 });

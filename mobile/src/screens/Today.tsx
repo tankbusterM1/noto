@@ -67,6 +67,7 @@ export function TodayScreen({ navigation }: Props) {
   const todos = useData((s) => s.todos);
   const watch = useData((s) => s.watch);
   const bytesN = useData((s) => s.bytes.length);
+  const byteStreak = useData((s) => s.byteStreak);
   const bottom = useBottomInset();
 
   const due = dueCount(memory);
@@ -117,7 +118,7 @@ export function TodayScreen({ navigation }: Props) {
             <HubCard
               icon="sparkles-outline"
               title="Bytes"
-              detail={bytesN ? `${bytesN} cards` : 'sync a pack'}
+              detail={byteStreak.count > 0 ? `${byteStreak.count}-day streak · ${bytesN} cards` : bytesN ? `${bytesN} cards` : 'sync a pack'}
               onPress={() => navigation.navigate('Bytes')}
             />
           </View>

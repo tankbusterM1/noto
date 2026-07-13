@@ -23,6 +23,8 @@ export interface ByteCard {
   code?: string;
   lang?: string;
   source?: string;
+  /** Optional tiny text diagram (dual coding — a picture beside the words). */
+  diagram?: string;
 }
 
 /** Fresh card id. */
@@ -45,6 +47,7 @@ export function toCard(r: SyncRow): ByteCard | null {
     code: typeof r.code === 'string' && r.code.trim() ? r.code : undefined,
     lang: typeof r.lang === 'string' && r.lang ? r.lang : undefined,
     source: typeof r.source === 'string' && r.source ? r.source : undefined,
+    diagram: typeof r.diagram === 'string' && r.diagram.trim() ? r.diagram : undefined,
   };
 }
 
