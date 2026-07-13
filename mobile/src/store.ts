@@ -592,7 +592,9 @@ export const useData = create<State>((set, get) => ({
 
   markByteSeen: async (id) => {
     const prev = get().byteState[id];
-    const next = { ...get().byteState, [id]: { seen: true, kept: prev?.kept ?? false, seenAt: Date.now() } };
+    // seenCount climbs the spacing ladder: each sighting without a Keep waits
+    // longer before the scheduler resurfaces the card.
+    const next = { ...get().byteState, [id]: { seen: true, kept: prev?.kept ?? false, seenAt: Date.now(), seenCount: (prev?.seenCount ?? 0) + 1 } };
     set({ byteState: next });
     if (vault) await vault.setMeta('byteState', JSON.stringify(next));
   },
@@ -606,7 +608,8 @@ export const useData = create<State>((set, get) => ({
     await get().saveNote(id, { body: bytesLib.cardToMarkdown(card), tags: [card.topic] });
     await vault.putSrs({ noteId: id, ease: 2.5, ivl: 0, dueDay: today });
     const [srsRows, ledger] = await Promise.all([vault.srs(), vault.ledger()]);
-    const next = { ...get().byteState, [card.id]: { seen: true, kept: true, seenAt: Date.now() } };
+    const prev = get().byteState[card.id];
+    const next = { ...get().byteState, [card.id]: { seen: true, kept: true, seenAt: Date.now(), seenCount: prev?.seenCount ?? 1 } };
     await vault.setMeta('byteState', JSON.stringify(next));
     set({ memory: deriveMemory(ledger, srsRows), byteState: next });
   },

@@ -1308,8 +1308,15 @@ export const useData = create<DataState>()((set, get) => ({
     set({ bytes: get().bytes.filter((c) => c.id !== id) })
   },
   loadStarterPack: async () => {
+    // Purely additive. It only inserts seed cards you don't already have and
+    // never had (tombstoned = you deleted it, so don't resurrect it). Existing
+    // cards keep their row, their seen/kept history, and the FSRS scheduling of
+    // any notes you made from them — loading the pack can never reset progress.
     const have = new Set(get().bytes.map((c) => c.id))
-    const fresh: ByteCard[] = ALL_SEED_BYTES.filter((c) => !have.has(c.id)).map((c) => ({ ...c, updatedAt: Date.now() }))
+    const tombstoned = new Set((await db.tombstones.toArray()).map((t) => t.id))
+    const fresh: ByteCard[] = ALL_SEED_BYTES
+      .filter((c) => !have.has(c.id) && !tombstoned.has(c.id))
+      .map((c) => ({ ...c, updatedAt: Date.now() }))
     if (!fresh.length) return 0
     await db.bytes.bulkPut(fresh)
     set({ bytes: [...fresh, ...get().bytes] })

@@ -1,13 +1,21 @@
 import { describe, it, expect } from 'vitest';
-import { buildDeck, type ByteState } from './bytesDeck';
+import { buildDeck, isEligible, type ByteState } from './bytesDeck';
 import type { ByteCard } from './bytes';
 
 const card = (id: string, topic: string, level = 1): ByteCard => ({
   id, updatedAt: 0, pack: 'p', topic, level, title: id, blurb: '',
 });
 
+const DAY_MS = 86_400_000;
 const DAY = 20000; // arbitrary epoch-day
-const seen = (kept = false, seenAt = 0): ByteState => ({ seen: true, kept, seenAt });
+const atDay = (d: number): number => d * DAY_MS;
+/** Seen `ago` days before DAY, unkept by default, shown `count` times. */
+const seen = ({ kept = false, ago = 0, count = 1 }: { kept?: boolean; ago?: number; count?: number } = {}): ByteState => ({
+  seen: true,
+  kept,
+  seenAt: atDay(DAY - ago),
+  seenCount: count,
+});
 
 describe('buildDeck', () => {
   it('is finite and never exceeds the cap', () => {
@@ -16,9 +24,9 @@ describe('buildDeck', () => {
     expect(buildDeck(cards, {}, DAY, 5)).toHaveLength(5);
   });
 
-  it('puts unseen cards ahead of seen ones', () => {
+  it('puts unseen cards ahead of seen-but-due ones', () => {
     const cards = [card('seen1', 'ml'), card('fresh', 'ml'), card('seen2', 'ml')];
-    const state: Record<string, ByteState> = { seen1: seen(true, 0), seen2: seen(true, 0) };
+    const state: Record<string, ByteState> = { seen1: seen({ ago: 10 }), seen2: seen({ ago: 10 }) };
     const deck = buildDeck(cards, state, DAY, 10);
     expect(deck[0].id).toBe('fresh');
   });
@@ -53,5 +61,41 @@ describe('buildDeck', () => {
 
   it('empty deck for no cards', () => {
     expect(buildDeck([], {}, DAY)).toEqual([]);
+  });
+
+  // ── v2: graduation, spacing, frontier ──────────────────────────────────
+  it('kept cards leave the discovery feed (they graduate to review)', () => {
+    const cards = [card('a', 'ml'), card('b', 'ml')];
+    const deck = buildDeck(cards, { a: seen({ kept: true }) }, DAY, 10);
+    expect(deck.map((c) => c.id)).toEqual(['b']);
+  });
+
+  it('a seen-but-unkept card resurfaces only after its spacing interval', () => {
+    const cards = [card('x', 'ml')];
+    // seenCount 1 → ladder interval 1 day.
+    expect(buildDeck(cards, { x: seen({ ago: 0, count: 1 }) }, DAY, 10)).toHaveLength(0); // 0 < 1
+    expect(buildDeck(cards, { x: seen({ ago: 2, count: 1 }) }, DAY, 10).map((c) => c.id)).toEqual(['x']); // 2 ≥ 1
+  });
+
+  it('the spacing ladder widens with each unkept sighting', () => {
+    const cards = [card('x', 'ml')];
+    // seenCount 3 → ladder interval LADDER[2] = 7 days.
+    expect(buildDeck(cards, { x: seen({ ago: 5, count: 3 }) }, DAY, 10)).toHaveLength(0); // 5 < 7
+    expect(buildDeck(cards, { x: seen({ ago: 8, count: 3 }) }, DAY, 10)).toHaveLength(1); // 8 ≥ 7
+  });
+
+  it('difficulty frontier ramps to the next level once you keep one', () => {
+    const cards = [card('l1', 'sql', 1), card('l2', 'sql', 2), card('l3', 'sql', 3), card('k1', 'sql', 1)];
+    // Keeping a level-1 sql card pushes the sql frontier to 2, so the unseen
+    // level-2 card should outrank the level-3 one.
+    const deck = buildDeck(cards, { k1: seen({ kept: true }) }, DAY, 10).map((c) => c.id);
+    expect(deck).not.toContain('k1'); // graduated
+    expect(deck.indexOf('l2')).toBeLessThan(deck.indexOf('l3'));
+  });
+
+  it('back-compat: state without seenCount is treated as seen once', () => {
+    const cards = [card('x', 'ml')];
+    const legacy: Record<string, ByteState> = { x: { seen: true, kept: false, seenAt: atDay(DAY - 2) } };
+    expect(isEligible(cards[0], legacy, DAY)).toBe(true); // 2 days ≥ interval 1
   });
 });
