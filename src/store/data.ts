@@ -1308,19 +1308,29 @@ export const useData = create<DataState>()((set, get) => ({
     set({ bytes: get().bytes.filter((c) => c.id !== id) })
   },
   loadStarterPack: async () => {
-    // Purely additive. It only inserts seed cards you don't already have and
-    // never had (tombstoned = you deleted it, so don't resurrect it). Existing
-    // cards keep their row, their seen/kept history, and the FSRS scheduling of
-    // any notes you made from them — loading the pack can never reset progress.
-    const have = new Set(get().bytes.map((c) => c.id))
+    // Adds new seed cards AND refreshes ones whose text improved (e.g. a new
+    // diagram) — but never resurrects a card you deleted (tombstoned), and never
+    // touches your learning progress: that lives in a separate store keyed by
+    // card id, so a card can gain a better blurb and keep its whole schedule.
+    // Unchanged content writes nothing, so re-loading stays a no-op.
+    const byId = new Map(get().bytes.map((c) => [c.id, c]))
     const tombstoned = new Set((await db.tombstones.toArray()).map((t) => t.id))
-    const fresh: ByteCard[] = ALL_SEED_BYTES
-      .filter((c) => !have.has(c.id) && !tombstoned.has(c.id))
-      .map((c) => ({ ...c, updatedAt: Date.now() }))
-    if (!fresh.length) return 0
-    await db.bytes.bulkPut(fresh)
-    set({ bytes: [...fresh, ...get().bytes] })
-    return fresh.length
+    const differs = (a: Omit<ByteCard, 'updatedAt'>, b: ByteCard): boolean =>
+      a.title !== b.title || a.blurb !== b.blurb || (a.code ?? '') !== (b.code ?? '') ||
+      (a.diagram ?? '') !== (b.diagram ?? '') || a.level !== b.level || a.topic !== b.topic ||
+      a.pack !== b.pack || (a.lang ?? '') !== (b.lang ?? '') || (a.source ?? '') !== (b.source ?? '')
+    const now = Date.now()
+    const toWrite: ByteCard[] = []
+    for (const seed of ALL_SEED_BYTES) {
+      if (tombstoned.has(seed.id)) continue
+      const existing = byId.get(seed.id)
+      if (!existing || differs(seed, existing)) toWrite.push({ ...seed, updatedAt: now })
+    }
+    if (!toWrite.length) return 0
+    await db.bytes.bulkPut(toWrite)
+    const written = new Set(toWrite.map((c) => c.id))
+    set({ bytes: [...toWrite, ...get().bytes.filter((c) => !written.has(c.id))] })
+    return toWrite.length
   },
 
   setAutoSync: async (on) => {
