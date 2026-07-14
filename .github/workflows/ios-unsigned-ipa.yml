@@ -113,6 +113,31 @@ jobs:
             echo "no embedded.mobileprovision — unsigned, as intended"
           fi
 
+      - name: Verify the widget extension + Live Activity are in the build
+        working-directory: mobile
+        # Fails loudly if the widget didn't compile into the app, so a bad build
+        # never ships silently. The .appex lives inside <App>.app/PlugIns/.
+        run: |
+          set -euo pipefail
+          APP="Payload/${SCHEME}.app"
+          if [ ! -d "${APP}/PlugIns" ]; then
+            echo "::error::no PlugIns/ — the widget extension did not build into the app"
+            exit 1
+          fi
+          echo "== embedded app extensions =="
+          ls -la "${APP}/PlugIns"
+          APPEX="$(ls -d "${APP}/PlugIns/"*.appex 2>/dev/null | head -n1 || true)"
+          if [ -z "${APPEX}" ]; then
+            echo "::error::no .appex under PlugIns/ — widget missing from the build"
+            exit 1
+          fi
+          echo "OK — widget extension embedded: $(basename "${APPEX}")"
+          if /usr/libexec/PlistBuddy -c 'Print :NSSupportsLiveActivities' "${APP}/Info.plist" >/dev/null 2>&1; then
+            echo "OK — NSSupportsLiveActivities = YES (Live Activity + Dynamic Island enabled)"
+          else
+            echo "::warning::NSSupportsLiveActivities missing from the app Info.plist"
+          fi
+
       - name: Upload the .ipa
         uses: actions/upload-artifact@v4
         with:
