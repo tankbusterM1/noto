@@ -25,6 +25,9 @@ export interface ByteCard {
   source?: string;
   /** Optional tiny text diagram (dual coding — a picture beside the words). */
   diagram?: string;
+  /** Optional depth story — free text the reader splits into swipeable slides
+   *  (each ALL-CAPS line starts a new slide). Any length; shown on demand. */
+  detail?: string;
 }
 
 /** Fresh card id. */
@@ -48,6 +51,7 @@ export function toCard(r: SyncRow): ByteCard | null {
     lang: typeof r.lang === 'string' && r.lang ? r.lang : undefined,
     source: typeof r.source === 'string' && r.source ? r.source : undefined,
     diagram: typeof r.diagram === 'string' && r.diagram.trim() ? r.diagram : undefined,
+    detail: typeof r.detail === 'string' && r.detail.trim() ? r.detail : undefined,
   };
 }
 
@@ -94,7 +98,14 @@ function parseBlock(block: string, pack: string, now: number): ByteCard | null {
   const body: string[] = [];
   let code: string | undefined;
   let lang: string | undefined;
+  let detail: string | undefined;
   for (; i < lines.length; i++) {
+    // A line of just `+++` ends the face; everything after it is the depth story
+    // (kept raw — the reader splits it into slides at render time).
+    if (/^\+\+\+\s*$/.test(lines[i])) {
+      detail = lines.slice(i + 1).join('\n').trim() || undefined;
+      break;
+    }
     const fence = lines[i].match(/^```(\w*)\s*$/);
     if (fence) {
       lang = fence[1] || undefined;
@@ -119,6 +130,7 @@ function parseBlock(block: string, pack: string, now: number): ByteCard | null {
     blurb: body.join('\n').trim(),
     code,
     lang,
+    detail,
   };
 }
 

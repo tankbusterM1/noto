@@ -15,7 +15,7 @@ import { c, mono, serif, t } from '../theme';
 import { haptics } from '../motion';
 import { Screen } from '../ui';
 import { useData } from '../store';
-import { bytes as bytesLib, bytesFeed, bytesMemory, bytesRelated, dates } from '../../core';
+import { bytes as bytesLib, bytesFeed, bytesMemory, bytesRelated, bytesStory, dates } from '../../core';
 import type { TodayStackParamList } from '../navTypes';
 
 const NEVER = ReduceMotion.Never;
@@ -35,7 +35,7 @@ export function BytesScreen({ navigation }: Props) {
   const answerByte = useData((s) => s.answerByte);
   const markByteDay = useData((s) => s.markByteDay);
   const byteStreak = useData((s) => s.byteStreak);
-  const { height: H } = useWindowDimensions();
+  const { height: H, width: W } = useWindowDimensions();
   const today = dates.todayEpochDay();
 
   // Opening the reel counts as showing up today — rolls the streak once.
@@ -87,6 +87,42 @@ export function BytesScreen({ navigation }: Props) {
   const busy = useRef(false);
   const [picked, setPicked] = useState<string | null>(null);
 
+  // ── depth story (horizontal slide deck) ──────────────────────────────
+  const storyX = useSharedValue(W); // overlay translateX: W = off-right (closed), 0 = open
+  const [storyOpen, setStoryOpen] = useState(false);
+  const [slideIdx, setSlideIdx] = useState(0);
+  const slides = useMemo(
+    () => (current && bytesStory.hasStory(current.card) ? bytesStory.parseStory(current.card.detail!) : []),
+    [current?.card.id], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  // Refs the once-created PanResponder reads for fresh state.
+  const storyOpenRef = useRef(false);
+  storyOpenRef.current = storyOpen;
+  const hasStoryRef = useRef(false);
+  hasStoryRef.current = slides.length > 0;
+  const wRef = useRef(W);
+  wRef.current = W;
+  const axisRef = useRef<null | 'v' | 'h'>(null);
+
+  const openStory = () => {
+    if (!hasStoryRef.current) return;
+    setStoryOpen(true);
+    storyX.value = withTiming(0, { duration: 240, easing: Easing.bezier(0.4, 0, 0.2, 1), reduceMotion: NEVER });
+    haptics.tick();
+  };
+  const closeStory = () => {
+    setStoryOpen(false);
+    storyX.value = withTiming(wRef.current, { duration: 220, easing: Easing.bezier(0.4, 0, 0.2, 1), reduceMotion: NEVER });
+    haptics.tick();
+  };
+
+  // Each new card starts with its story closed.
+  useEffect(() => {
+    setStoryOpen(false);
+    setSlideIdx(0);
+    storyX.value = W;
+  }, [current?.card.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const land = (delta: number) => {
     const ni = Math.max(0, Math.min(indexRef.current + delta, lenRef.current));
     setIdx(ni);
@@ -116,16 +152,40 @@ export function BytesScreen({ navigation }: Props) {
 
   const pan = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dy) > 8 && Math.abs(g.dy) > Math.abs(g.dx),
+      // While the story is open its own ScrollView owns gestures. Otherwise claim
+      // a vertical drag (card flow) OR a left drag on a card that has a story.
+      onMoveShouldSetPanResponder: (_e, g) => {
+        if (busy.current || storyOpenRef.current) return false;
+        const v = Math.abs(g.dy) > 8 && Math.abs(g.dy) > Math.abs(g.dx);
+        const h = Math.abs(g.dx) > 12 && Math.abs(g.dx) > Math.abs(g.dy) && g.dx < 0 && hasStoryRef.current;
+        return v || h;
+      },
+      onPanResponderGrant: () => {
+        axisRef.current = null;
+      },
       onPanResponderMove: (_e, g) => {
         if (busy.current) return;
-        y.value = g.dy * 0.85;
+        if (!axisRef.current) {
+          if (Math.abs(g.dx) < 6 && Math.abs(g.dy) < 6) return;
+          axisRef.current = Math.abs(g.dx) > Math.abs(g.dy) ? 'h' : 'v';
+        }
+        if (axisRef.current === 'h') {
+          if (hasStoryRef.current && g.dx < 0) storyX.value = Math.max(wRef.current + g.dx, 0); // follow the finger in
+        } else {
+          y.value = g.dy * 0.85;
+        }
       },
       onPanResponderRelease: (_e, g) => {
         if (busy.current) return;
-        if (g.dy < -SWIPE) fling(1);
-        else if (g.dy > SWIPE) fling(-1);
-        else y.value = withSpring(0, SPRING);
+        if (axisRef.current === 'h') {
+          if (hasStoryRef.current && -g.dx > SWIPE) openStory();
+          else storyX.value = withTiming(wRef.current, { duration: 200, reduceMotion: NEVER }); // snap closed
+        } else {
+          if (g.dy < -SWIPE) fling(1);
+          else if (g.dy > SWIPE) fling(-1);
+          else y.value = withSpring(0, SPRING);
+        }
+        axisRef.current = null;
       },
     }),
   ).current;
@@ -150,6 +210,7 @@ export function BytesScreen({ navigation }: Props) {
   };
 
   const cardStyle = useAnimatedStyle(() => ({ transform: [{ translateY: y.value }] }));
+  const overlayStyle = useAnimatedStyle(() => ({ transform: [{ translateX: storyX.value }] }));
 
   const pickTopic = (tp: string | null) => {
     if (busy.current || tp === filter) return;
@@ -208,10 +269,11 @@ export function BytesScreen({ navigation }: Props) {
         <View style={[st.trackFill, { width: `${progress * 100}%` }]} />
       </View>
 
-      {/* clip the card to its own lane: as it drags/flings it slides UNDER the
+      <View style={st.stageWrap}>
+        {/* clip the card to its own lane: as it drags/flings it slides UNDER the
           header instead of bleeding over the tag chips (the old clumsy overlap). */}
-      <View style={st.stage} {...pan.panHandlers}>
-        <Animated.View style={[st.card, cardStyle]}>
+        <View style={st.stage} {...pan.panHandlers}>
+          <Animated.View style={[st.card, cardStyle]}>
           <View style={st.topic}>
             <View style={[st.tdot, { backgroundColor: accent }]} />
             <Text style={st.topicText}>
@@ -269,6 +331,11 @@ export function BytesScreen({ navigation }: Props) {
                   {related.connects.length ? `→ connects: ${related.connects.map((r) => r.title).join(' · ')}` : ''}
                 </Text>
               ) : null}
+              {slides.length ? (
+                <Pressable onPress={openStory} hitSlop={8} style={st.storyTag}>
+                  <Text style={st.storyTagText}>◀ the story · {slides.length}</Text>
+                </Pressable>
+              ) : null}
             </View>
           )}
 
@@ -278,11 +345,92 @@ export function BytesScreen({ navigation }: Props) {
             </View>
             <Text style={[st.meterLabel, { color: BAND_COLOR[band] }]}>{band === 'new' ? 'new' : `${band} · ${Math.round((strength ?? 0) * 100)}%`}</Text>
           </View>
-        </Animated.View>
+          </Animated.View>
+        </View>
+
+        {slides.length ? (
+          <Animated.View style={[st.storyOverlay, overlayStyle]} pointerEvents={storyOpen ? 'auto' : 'none'}>
+            <StoryDeck key={card.id} slides={slides} width={W} accent={accent} topic={card.topic} slideIdx={slideIdx} onSlide={setSlideIdx} onClose={closeStory} />
+          </Animated.View>
+        ) : null}
       </View>
 
-      <Text style={st.swipeHint}>{current.mode === 'checkpoint' && picked == null ? 'tap the answer' : 'swipe up for the next'}</Text>
+      <Text style={st.swipeHint}>{hintText(current.mode, picked != null, storyOpen, slides.length > 0)}</Text>
     </Screen>
+  );
+}
+
+function hintText(mode: 'read' | 'checkpoint', answered: boolean, storyOpen: boolean, hasStory: boolean): string {
+  if (storyOpen) return 'slide ◀ ▶ through it · ◀ card to leave';
+  if (mode === 'checkpoint' && !answered) return 'tap the answer';
+  if (hasStory) return 'swipe up next · slide ◀ for the story';
+  return 'swipe up for the next';
+}
+
+// The depth story — a header, story-style segments, and a native horizontal
+// pager of slides (each a vertical scroll for long ones). Pull right past the
+// first slide, or tap "card", to leave.
+function StoryDeck({
+  slides, width, accent, topic, slideIdx, onSlide, onClose,
+}: {
+  slides: bytesStory.StorySlide[];
+  width: number;
+  accent: string;
+  topic: string;
+  slideIdx: number;
+  onSlide: (i: number) => void;
+  onClose: () => void;
+}) {
+  const [pw, setPw] = useState(width);
+  return (
+    <View style={st.storyInner}>
+      <View style={st.shHead}>
+        <Pressable onPress={onClose} hitSlop={12} style={st.shBackBtn}>
+          <Ionicons name="chevron-back" size={18} color={c.accent} />
+          <Text style={st.shBack}>card</Text>
+        </Pressable>
+        <Text style={st.shK}>{topic.toUpperCase()} · THE STORY</Text>
+        <Text style={st.shCount}>
+          {Math.min(slideIdx + 1, slides.length)} / {slides.length}
+        </Text>
+      </View>
+      <View style={st.segs}>
+        {slides.map((_, i) => (
+          <View key={i} style={[st.seg, i <= slideIdx && { backgroundColor: c.amber }]} />
+        ))}
+      </View>
+      <ScrollView
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onLayout={(e) => setPw(e.nativeEvent.layout.width)}
+        onScroll={(e) => {
+          const x = e.nativeEvent.contentOffset.x;
+          const i = Math.round(x / pw);
+          if (i !== slideIdx && i >= 0 && i < slides.length) onSlide(i);
+          if (x < -52) onClose(); // pulled right past the first slide → leave
+        }}
+        style={{ flex: 1 }}
+      >
+        {slides.map((sl, i) => (
+          <ScrollView key={i} style={{ width: pw }} contentContainerStyle={st.slidePad} showsVerticalScrollIndicator={false}>
+            {sl.kicker ? <Text style={[st.slKick, { color: accent }]}>{sl.kicker}</Text> : null}
+            {sl.blocks.map((b, j) =>
+              b.kind === 'code' ? (
+                <View key={j} style={st.slCode}>
+                  <Text style={st.slCodeText}>{b.content}</Text>
+                </View>
+              ) : (
+                <Text key={j} style={st.slBody}>
+                  {b.content}
+                </Text>
+              ),
+            )}
+          </ScrollView>
+        ))}
+      </ScrollView>
+    </View>
   );
 }
 
@@ -418,8 +566,31 @@ const st = StyleSheet.create({
   // The swipe lane — clips the card so a drag/fling slides it under the header
   // instead of overlapping the tag chips. Small top pad so the card doesn't kiss
   // the progress track at rest.
+  // stageWrap clips the story overlay's horizontal slide-in; stage clips the
+  // card's vertical fling. The overlay is a sibling that covers the card box.
+  stageWrap: { flex: 1, overflow: 'hidden' },
   stage: { flex: 1, overflow: 'hidden', paddingTop: 8 },
   card: { flex: 1, marginHorizontal: 20, marginBottom: 10, paddingHorizontal: 26, paddingVertical: 24, borderRadius: 22, backgroundColor: c.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: c.line, justifyContent: 'space-between' },
+
+  // the "◀ the story · N" tag on a read card
+  storyTag: { alignSelf: 'flex-end', marginTop: 16, paddingVertical: 4 },
+  storyTagText: { ...t.caption1, fontFamily: mono, color: c.amber, letterSpacing: 0.4 },
+
+  // the depth overlay — sized to the card box, slid in from the right
+  storyOverlay: { position: 'absolute', top: 8, left: 20, right: 20, bottom: 10, borderRadius: 22, backgroundColor: c.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: c.line, overflow: 'hidden' },
+  storyInner: { flex: 1 },
+  shHead: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingTop: 14, paddingBottom: 8 },
+  shBackBtn: { flexDirection: 'row', alignItems: 'center' },
+  shBack: { ...t.caption1, fontFamily: mono, color: c.accent },
+  shK: { ...t.caption2, fontFamily: mono, letterSpacing: 1.4, color: c.ink3, flex: 1 },
+  shCount: { ...t.caption2, fontFamily: mono, color: c.ink3 },
+  segs: { flexDirection: 'row', gap: 4, paddingHorizontal: 16, paddingBottom: 10 },
+  seg: { flex: 1, height: 3, borderRadius: 2, backgroundColor: c.surface2 },
+  slidePad: { paddingHorizontal: 22, paddingTop: 6, paddingBottom: 26 },
+  slKick: { ...t.caption2, fontFamily: mono, letterSpacing: 2, marginBottom: 12 },
+  slBody: { ...t.body, color: c.ink, lineHeight: 26, marginBottom: 12 },
+  slCode: { backgroundColor: c.surface2, borderRadius: 12, padding: 14, marginBottom: 12 },
+  slCodeText: { fontFamily: mono, fontSize: 13, lineHeight: 20, color: c.ink },
   topic: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   tdot: { width: 7, height: 7, borderRadius: 4 },
   topicText: { ...t.caption2, fontFamily: mono, letterSpacing: 1.4, color: c.ink3, flex: 1 },

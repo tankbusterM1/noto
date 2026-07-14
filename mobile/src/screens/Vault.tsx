@@ -21,7 +21,7 @@ import { haptics, Press, Rise } from '../motion';
 import { deviceSalt } from '../db';
 import { useData } from '../store';
 import { connect, createPrivateRepo, disconnect, savedRepo, type Connection } from '../github';
-import { dates, gitapi } from '../../core';
+import { dates, gitapi, notify } from '../../core';
 import type { SyncOutcome } from '../vault';
 import { clientId, pollForToken, requestDeviceCode, type DeviceCode } from '../githubAuth';
 
@@ -373,8 +373,11 @@ function Row({ label, value }: { label: string; value: string }) {
 export function SettingsScreen() {
   const bottom = useBottomInset();
   const todos = useData((s) => s.todos);
-  const digestOn = useData((s) => s.digestOn);
-  const setDigest = useData((s) => s.setDigest);
+  const userName = useData((s) => s.userName);
+  const setUserName = useData((s) => s.setUserName);
+  const notifyMode = useData((s) => s.notifyMode);
+  const setNotifyMode = useData((s) => s.setNotifyMode);
+  const testNotify = useData((s) => s.testNotify);
   const autoSyncOn = useData((s) => s.autoSyncOn);
   const setAutoSync = useData((s) => s.setAutoSync);
   const hapticLevel = useData((s) => s.hapticLevel);
@@ -390,6 +393,15 @@ export function SettingsScreen() {
   const [syncNote, setSyncNote] = useState<SyncOutcome | null>(null);
   const cancelled = useRef(false);
   const syncNow = useData((s) => s.syncNow);
+  const [nameDraft, setNameDraft] = useState(userName);
+  useEffect(() => setNameDraft(userName), [userName]);
+  const [notifySent, setNotifySent] = useState<string | null>(null);
+
+  const fireTest = async (mode: Exclude<notify.NotifyMode, 'off'>) => {
+    haptics.selection();
+    const ok = await testNotify(mode);
+    setNotifySent(ok ? `Sent a "${mode}" nudge — it lands in ~2s.` : 'Turn on notifications first (iOS will ask when you pick a mode).');
+  };
 
   const doSync = async () => {
     setSyncing(true);
@@ -516,26 +528,61 @@ export function SettingsScreen() {
         </Card>
 
         <Card>
-          <Text style={st.kicker}>HOME SCREEN</Text>
-          <View style={st.switchRow}>
-            <View style={{ flex: 1, paddingRight: 14 }}>
-              <Text style={st.rowLabel}>Daily digest</Text>
-              <Text style={st.note}>
-                A 9am reminder naming what&apos;s waiting. The app icon always carries the open-todo count
-                {todos.filter((t) => !t.done).length > 0 ? ` (${todos.filter((t) => !t.done).length} now)` : ''}.
-              </Text>
-            </View>
-            <Switch
-              value={digestOn}
-              onValueChange={(v) => {
-                haptics.selection();
-                void setDigest(v);
-              }}
-              trackColor={{ true: c.amber, false: c.line }}
-            />
+          <Text style={st.kicker}>NUDGES</Text>
+
+          <Text style={[st.rowLabel, { marginTop: 12 }]}>Your name</Text>
+          <Text style={st.note}>So the reminders can call you by name (optional).</Text>
+          <TextInput
+            value={nameDraft}
+            onChangeText={setNameDraft}
+            onEndEditing={() => void setUserName(nameDraft.trim())}
+            onSubmitEditing={() => void setUserName(nameDraft.trim())}
+            placeholder="e.g. Alex"
+            placeholderTextColor={c.ink3}
+            autoCapitalize="words"
+            autoCorrect={false}
+            returnKeyType="done"
+            style={st.input}
+          />
+
+          <Text style={[st.rowLabel, { marginTop: 18 }]}>Reminder mode</Text>
+          <View style={st.segment}>
+            {notify.NOTIFY_MODES.map((m) => {
+              const active = notifyMode === m;
+              return (
+                <Press
+                  key={m}
+                  haptic={false}
+                  onPress={() => {
+                    haptics.selection();
+                    void setNotifyMode(m);
+                  }}
+                  style={active ? [st.segItem, st.segItemOn] : st.segItem}
+                >
+                  <Text style={[st.segText, active && st.segTextOn]}>{m.toUpperCase()}</Text>
+                </Press>
+              );
+            })}
           </View>
+          <Text style={st.note}>{notify.NOTIFY_MODE_INFO.find((i) => i.key === notifyMode)?.blurb}</Text>
+
+          <View style={st.divider} />
+          <Text style={st.rowLabel}>Test them now</Text>
           <Text style={st.note}>
-            The app icon badge and this reminder are Noto&apos;s home-screen presence — no widget, no entitlement, nothing to buy.
+            Fires a sample in ~2s so you can feel each voice — {notify.variationCount()}+ lines ship, and every tap shows a different one.
+          </Text>
+          <View style={st.testRow}>
+            {(['normal', 'high', 'obsessed'] as const).map((m) => (
+              <Press key={m} haptic={false} onPress={() => void fireTest(m)} style={st.testBtn}>
+                <Text style={st.testText}>{m}</Text>
+              </Press>
+            ))}
+          </View>
+          {notifySent ? <Text style={[st.note, { color: c.amber, marginTop: 10 }]}>{notifySent}</Text> : null}
+
+          <Text style={st.note}>
+            The app icon always carries the open-todo count
+            {todos.filter((t) => !t.done).length > 0 ? ` (${todos.filter((t) => !t.done).length} now)` : ''}. Local reminders only — no push, no account, nothing to buy.
           </Text>
         </Card>
 
@@ -872,6 +919,18 @@ const st = StyleSheet.create({
   segItemOn: { backgroundColor: c.amber, borderColor: c.amber },
   segText: { ...t.footnote, fontFamily: mono, color: c.ink2, letterSpacing: 0.5 },
   segTextOn: { color: c.bg, fontWeight: '600' },
+  testRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  testBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: c.amber,
+    backgroundColor: c.surface,
+  },
+  testText: { ...t.caption1, fontFamily: mono, color: c.amber, letterSpacing: 0.4 },
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: c.line, marginVertical: 18 },
 
   deviceBox: { alignItems: 'center', paddingVertical: 8 },

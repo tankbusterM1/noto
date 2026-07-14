@@ -1,6 +1,7 @@
 import { useMemo, useState, type CSSProperties } from 'react'
 import { useData } from '../store/data'
 import { parseBatch, BYTE_TOPICS, type ByteCard } from '../lib/bytes'
+import { storyCount } from '../lib/bytesStory'
 import { MONO } from '../lib/ui'
 
 /*
@@ -19,6 +20,7 @@ export function Bytes() {
   const [title, setTitle] = useState('')
   const [blurb, setBlurb] = useState('')
   const [code, setCode] = useState('')
+  const [story, setStory] = useState('')
   const [level, setLevel] = useState(1)
   const [batch, setBatch] = useState('')
   const [toast, setToast] = useState<string | null>(null)
@@ -37,10 +39,11 @@ export function Bytes() {
 
   const submitOne = async () => {
     if (!canAdd) return
-    await addByte({ pack: 'foundations', topic, level, title: title.trim(), blurb: blurb.trim(), code: code.trim() || undefined, lang: code.trim() ? topic : undefined })
+    await addByte({ pack: 'foundations', topic, level, title: title.trim(), blurb: blurb.trim(), code: code.trim() || undefined, lang: code.trim() ? topic : undefined, detail: story.trim() || undefined })
     setTitle('')
     setBlurb('')
     setCode('')
+    setStory('')
     flash('Added 1 · syncs on next push')
   }
 
@@ -106,7 +109,21 @@ export function Bytes() {
             </div>
             <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Concept — the one idea" style={{ ...field, fontFamily: 'var(--serif, Georgia), serif', fontSize: 15, marginBottom: 9 }} />
             <textarea value={blurb} onChange={(e) => setBlurb(e.target.value)} placeholder="A sentence or two of intuition…" rows={3} style={{ ...field, fontFamily: 'var(--serif, Georgia), serif', resize: 'vertical', marginBottom: 9 }} />
-            <textarea value={code} onChange={(e) => setCode(e.target.value)} placeholder="code? (≤5 lines, optional)" rows={3} style={{ ...field, fontFamily: MONO, fontSize: 12, resize: 'vertical', marginBottom: 12 }} />
+            <textarea value={code} onChange={(e) => setCode(e.target.value)} placeholder="code? (≤5 lines, optional)" rows={3} style={{ ...field, fontFamily: MONO, fontSize: 12, resize: 'vertical', marginBottom: 9 }} />
+            <textarea
+              value={story}
+              onChange={(e) => setStory(e.target.value)}
+              placeholder={'The story? (optional — swipe-through depth)\nEach ALL-CAPS line = a new slide:\nWHY IT MATTERS\n…\nTHE MODEL\n…'}
+              rows={4}
+              style={{ ...field, fontFamily: MONO, fontSize: 11.5, lineHeight: 1.55, resize: 'vertical', marginBottom: 6 }}
+            />
+            {story.trim() ? (
+              <div style={{ fontFamily: MONO, fontSize: 10.5, color: 'var(--am)', marginBottom: 10 }}>
+                ◆ {storyCount({ detail: story })} slide{storyCount({ detail: story }) === 1 ? '' : 's'}
+              </div>
+            ) : (
+              <div style={{ marginBottom: 10 }} />
+            )}
             <button style={{ ...primaryBtn, ...(canAdd ? {} : { opacity: 0.45, cursor: 'not-allowed' }) }} disabled={!canAdd} onClick={submitOne}>
               ◆ Add to deck
             </button>
@@ -168,6 +185,7 @@ export function Bytes() {
                       <div style={{ fontSize: 12.5, color: 'var(--ink2)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.blurb}</div>
                       {c.code ? <div style={{ fontFamily: MONO, fontSize: 10.5, color: 'var(--ink3)', marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.code.split('\n')[0]}</div> : null}
                     </div>
+                    {c.detail ? <span style={{ fontFamily: MONO, fontSize: 9.5, color: 'var(--am)', flexShrink: 0 }} title={`${storyCount(c)}-slide story`}>▤ {storyCount(c)}</span> : null}
                     <span style={{ fontFamily: MONO, fontSize: 10, color: 'var(--ink3)', flexShrink: 0 }}>L{c.level}</span>
                     <button style={delBtn} title="Delete card" onClick={() => void deleteByte(c.id)}>
                       ✕

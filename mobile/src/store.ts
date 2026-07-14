@@ -31,9 +31,9 @@ import {
   type VaultCrypto,
 } from './crypto';
 import { runSync, type SyncOutcome } from './vault';
-import { cancelDigest, scheduleDigest, syncBadge } from './badge';
+import { cancelNudges, fireTestNotify, scheduleNudges, syncBadge } from './badge';
 import { haptics, setHapticStrength, type HapticLevel } from './motion';
-import { bytes as bytesLib, bytesMemory, dates, format, fsrs, markdown, sync } from '../core';
+import { bytes as bytesLib, bytesMemory, dates, format, fsrs, markdown, notify, sync } from '../core';
 import type { Grade, HistEntry } from '../core';
 
 export interface Note {
@@ -121,12 +121,17 @@ interface State {
   /** Sync automatically in the background after you make changes. */
   autoSyncOn: boolean;
   setAutoSync: (on: boolean) => Promise<void>;
-  /** Daily local reminder naming what's waiting. */
-  digestOn: boolean;
+  /** Your name for personalised nudges (set in settings; '' = a friendly stand-in). */
+  userName: string;
+  /** Notification personality: off · normal · high · obsessed. */
+  notifyMode: notify.NotifyMode;
   /** Haptic strength (off/low/med/high), persisted; also drives motion.ts. */
   hapticLevel: HapticLevel;
   hydrate: () => Promise<void>;
-  setDigest: (on: boolean) => Promise<void>;
+  setUserName: (name: string) => Promise<void>;
+  setNotifyMode: (mode: notify.NotifyMode) => Promise<void>;
+  /** Fire one sample notification of a mode right now (settings test panel). */
+  testNotify: (mode: Exclude<notify.NotifyMode, 'off'>) => Promise<boolean>;
   setHapticLevel: (level: HapticLevel) => Promise<void>;
   /** Bytes learning cards, synced from the desktop deck. */
   bytes: bytesLib.ByteCard[];
@@ -369,7 +374,8 @@ export const useData = create<State>((set, get) => ({
   journalCrypto: null,
   journalCached: false,
   autoSyncOn: true,
-  digestOn: false,
+  userName: '',
+  notifyMode: 'normal',
   hapticLevel: 'high',
   bytes: [],
   byteMemory: {},
@@ -377,7 +383,7 @@ export const useData = create<State>((set, get) => ({
 
   hydrate: async () => {
     vault = await openVault();
-    const [noteRows, folderRows, srsRows, ledger, todoRows, watchRows, journalRows, digest, cryptoRaw, hapticRaw, byteRows, byteMemRaw, byteStreakRaw] = await Promise.all([
+    const [noteRows, folderRows, srsRows, ledger, todoRows, watchRows, journalRows, digest, cryptoRaw, hapticRaw, byteRows, byteMemRaw, byteStreakRaw, notifyRaw, userNameRaw] = await Promise.all([
       vault.notes(),
       vault.folders(),
       vault.srs(),
@@ -391,6 +397,8 @@ export const useData = create<State>((set, get) => ({
       vault.listRows('bytes' as ListName),
       vault.getMeta('byteMemory'),
       vault.getMeta('byteStreak'),
+      vault.getMeta('notifyMode'),
+      vault.getMeta('userName'),
     ]);
 
     const bytes = (byteRows as sync.SyncRow[]).map(bytesLib.toCard).filter((c): c is bytesLib.ByteCard => !!c);
@@ -406,6 +414,11 @@ export const useData = create<State>((set, get) => ({
     } catch {
       byteStreak = { count: 0, last: 0 };
     }
+
+    // Notification personality — migrate the old digest flag if no mode is saved.
+    const isMode = (m: string | null): m is notify.NotifyMode => m === 'off' || m === 'normal' || m === 'high' || m === 'obsessed';
+    const notifyMode: notify.NotifyMode = isMode(notifyRaw) ? notifyRaw : digest === '0' ? 'off' : 'normal';
+    const userName = typeof userNameRaw === 'string' ? userNameRaw : '';
 
     // Apply the saved haptic strength to the motion engine before anything fires.
     const hapticLevel: HapticLevel = (hapticRaw as HapticLevel) || 'high';
@@ -433,7 +446,8 @@ export const useData = create<State>((set, get) => ({
       journalCached: journalCrypto ? await hasCachedKey(journalCrypto.salt) : false,
       // Auto-sync defaults ON; only an explicit '0' turns it off.
       autoSyncOn: (await vault.getMeta('autoSync')) !== '0',
-      digestOn: digest === '1',
+      notifyMode,
+      userName,
       hapticLevel,
       bytes,
       byteMemory,
@@ -587,15 +601,28 @@ export const useData = create<State>((set, get) => ({
     const s = get();
     const open = s.todos.filter((t) => !t.done).length;
     await syncBadge(open);
-    if (s.digestOn) await scheduleDigest(open, dueCount(s.memory));
+    const ctx: notify.NotifyCtx = { name: s.userName, due: dueCount(s.memory), todos: open, streak: s.byteStreak.count };
+    await scheduleNudges(s.notifyMode, ctx, dates.todayEpochDay());
   },
 
-  setDigest: async (on) => {
-    if (!vault) return;
-    await vault.setMeta('digest', on ? '1' : '0');
-    set({ digestOn: on });
-    if (!on) await cancelDigest();
+  setUserName: async (name) => {
+    set({ userName: name });
+    if (vault) await vault.setMeta('userName', name);
+    await get().refreshSignals(); // re-word the scheduled nudges with the new name
+  },
+
+  setNotifyMode: async (mode) => {
+    set({ notifyMode: mode });
+    if (vault) await vault.setMeta('notifyMode', mode);
+    if (mode === 'off') await cancelNudges();
     else await get().refreshSignals();
+  },
+
+  testNotify: async (mode) => {
+    const s = get();
+    const open = s.todos.filter((t) => !t.done).length;
+    const ctx: notify.NotifyCtx = { name: s.userName, due: dueCount(s.memory), todos: open, streak: s.byteStreak.count };
+    return fireTestNotify(mode, ctx, Date.now()); // a fresh line each tap
   },
 
   setHapticLevel: async (level) => {
