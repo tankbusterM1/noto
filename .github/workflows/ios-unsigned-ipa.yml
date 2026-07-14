@@ -57,6 +57,19 @@ jobs:
         working-directory: mobile
         run: npm ci
 
+      - name: Materialize the local widget module into node_modules
+        working-directory: mobile
+        # use_expo_modules! on the build Mac autolinks packages that physically
+        # live in node_modules; it skips the modules/ local module (its
+        # nativeModulesDir resolves to null here, and a file: symlink gets resolved
+        # back to modules/ and dropped) — which is why NotoWidgetsModule never
+        # registered and every Live Activity call no-op'd. Replacing the symlink
+        # with a REAL copy makes it link like any other node_modules package.
+        run: |
+          rm -rf node_modules/noto-widgets
+          cp -R modules/noto-widgets node_modules/noto-widgets
+          echo "materialized node_modules/noto-widgets:"; ls node_modules/noto-widgets
+
       - name: Generate the native iOS project
         working-directory: mobile
         # --no-install so npm/pods don't run twice; we drive CocoaPods ourselves.
