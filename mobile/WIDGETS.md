@@ -43,6 +43,15 @@ To light up live home-widget data on a **paid** account, add back in both files:
 entitlements: { 'com.apple.security.application-groups': ['group.com.noto.vault'] }
 ```
 
+## Interactive buttons (deep links, free-account safe)
+
+The daily-nudge Live Activity carries **Done** and **Review** buttons on the lock
+screen and the Dynamic Island expanded view. They're SwiftUI `Link`s to
+`noto://done` / `noto://review` — handled in `App.tsx`: Done checks off your top
+open todo (the activity then updates itself through the store subscription), Review
+jumps to the Review tab. Deep links, not App Intents, so there's no App Group and it
+works on a free build; the app opens briefly to perform the action.
+
 ## One-time setup (on a Mac)
 
 1. **Add your Apple Team ID** to `app.json` — the config warns until you do:

@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { AppState, StyleSheet, View } from 'react-native';
+import { AppState, Linking, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ReduceMotion, ReducedMotionConfig } from 'react-native-reanimated';
-import { NavigationContainer, DefaultTheme, type Theme } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme, createNavigationContainerRef, type Theme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
@@ -22,6 +22,9 @@ import { BytesScreen } from './src/screens/Bytes';
 import { ReviewScreen } from './src/screens/Review';
 import { JournalScreen, SettingsScreen } from './src/screens/Vault';
 import type { NotesStackParamList, TabParamList, TodayStackParamList } from './src/navTypes';
+
+/** For deep links fired by the Live Activity buttons (noto://review, noto://done). */
+const navRef = createNavigationContainerRef<TabParamList>();
 
 const stackOptions = { headerShown: false, contentStyle: { backgroundColor: c.bg } } as const;
 
@@ -119,6 +122,26 @@ function Boot() {
     return () => sub.remove();
   }, [refreshSignals]);
 
+  // The Live Activity buttons deep-link back in: "Review" jumps to the Review
+  // tab; "Done" checks off the top open todo (the activity then updates itself
+  // through the store subscription). Warm taps are the common case; a cold-start
+  // "review" only navigates once the container is ready.
+  useEffect(() => {
+    const run = (url: string | null) => {
+      if (!url || !url.startsWith('noto://')) return;
+      if (url.includes('done')) {
+        const st = useData.getState();
+        const top = st.todos.find((x) => !x.done);
+        if (top) void st.toggleTodo(top.id);
+      } else if (url.includes('review') && navRef.isReady()) {
+        navRef.navigate('Review');
+      }
+    };
+    void Linking.getInitialURL().then(run);
+    const sub = Linking.addEventListener('url', ({ url }) => run(url));
+    return () => sub.remove();
+  }, []);
+
   // The launch animation plays over a paper background and lifts away to reveal
   // the app, which mounts underneath the moment fonts + the vault are ready.
   // Until both are ready it holds on the settled mark — no font flash, no
@@ -128,7 +151,7 @@ function Boot() {
   return (
     <View style={st.root}>
       {bootComplete ? (
-        <NavigationContainer theme={navTheme}>
+        <NavigationContainer ref={navRef} theme={navTheme}>
           <Tabs />
         </NavigationContainer>
       ) : null}

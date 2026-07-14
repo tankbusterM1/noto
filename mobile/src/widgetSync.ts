@@ -32,7 +32,7 @@ export function buildSnapshot(): Widgets.NotoSnapshot {
     reviewsDue,
     todosOpen: open.length,
     todos: open.slice(0, 3).map((t) => t.text),
-    streak: 0, // TODO: derive a real review streak from the ledger
+    streak: s.byteStreak.count,
     nextLabel: reviewsDue > 0 ? `${reviewsDue} waiting` : 'all caught up',
     quote: q.text,
     quoteAuthor: q.author,

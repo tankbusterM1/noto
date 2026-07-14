@@ -26,6 +26,40 @@ struct StreakFlame: View {
   }
 }
 
+// A deep-link pill. Tapping it opens Noto at the URL, which App.tsx handles:
+// noto://done checks off the top todo, noto://review jumps to the Review tab.
+// (Interactive Live Activity taps; the activity then updates itself.)
+@available(iOS 16.1, *)
+struct NudgeButton: View {
+  let title: String
+  let symbol: String
+  let url: String
+  var body: some View {
+    Link(destination: URL(string: url)!) {
+      HStack(spacing: 4) {
+        Image(systemName: symbol).font(.system(size: 10, weight: .semibold))
+        Text(title).font(.notoMono(11))
+      }
+      .foregroundColor(.notoAmber)
+      .padding(.vertical, 6)
+      .padding(.horizontal, 13)
+      .overlay(Capsule().stroke(Color.notoAmber.opacity(0.55), lineWidth: 1))
+    }
+  }
+}
+
+// The Done / Review actions, shown only when there's something to act on.
+@available(iOS 16.1, *)
+struct NudgeActions: View {
+  let s: NotoTodoAttributes.ContentState
+  var body: some View {
+    HStack(spacing: 8) {
+      if s.todos > 0 { NudgeButton(title: "Done", symbol: "checkmark", url: "noto://done") }
+      if s.due > 0 { NudgeButton(title: "Review", symbol: "arrow.right", url: "noto://review") }
+    }
+  }
+}
+
 // The lock-screen / banner presentation of the daily nudge.
 @available(iOS 16.1, *)
 struct LockScreenNudgeView: View {
@@ -33,7 +67,7 @@ struct LockScreenNudgeView: View {
   var body: some View {
     let s = context.state
     let done = s.due + s.todos == 0
-    VStack(alignment: .leading, spacing: 11) {
+    VStack(alignment: .leading, spacing: 10) {
       HStack {
         HStack(spacing: 7) {
           NotoDiamond(size: 11)
@@ -45,7 +79,7 @@ struct LockScreenNudgeView: View {
       Text(s.line)
         .font(.notoSerif(17)).italic()
         .foregroundColor(.white)
-        .lineLimit(3)
+        .lineLimit(2)
         .fixedSize(horizontal: false, vertical: true)
       ProgressView(value: nudgeProgress(s)).tint(done ? Color.notoSafe : .notoAmber)
       HStack {
@@ -56,6 +90,9 @@ struct LockScreenNudgeView: View {
         }
         Spacer()
         Text("\(s.doneToday) of \(s.totalToday) done").font(.notoMono(10)).foregroundColor(.white.opacity(0.5))
+      }
+      if !done {
+        NudgeActions(s: s).padding(.top, 2)
       }
     }
     .padding(16)
@@ -91,13 +128,16 @@ struct NotoTodoLiveActivity: Widget {
             .padding(.top, 2)
         }
         DynamicIslandExpandedRegion(.bottom) {
-          VStack(spacing: 6) {
+          VStack(spacing: 7) {
             ProgressView(value: nudgeProgress(s)).tint(done ? Color.notoSafe : .notoAmber)
             HStack {
               Text(done ? "streak safe" : "\(s.due + s.todos) to clear")
                 .font(.notoSerif(13)).foregroundColor(done ? Color.notoSafe : .white)
               Spacer()
               Text("\(s.doneToday) of \(s.totalToday) done").font(.notoMono(10)).foregroundColor(.white.opacity(0.5))
+            }
+            if !done {
+              NudgeActions(s: s).padding(.top, 1)
             }
           }
         }
