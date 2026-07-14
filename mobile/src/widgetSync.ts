@@ -180,3 +180,14 @@ export function endTestActivities(): void {
   Widgets.endReview();
   Widgets.endTodos();
 }
+
+/**
+ * Root-cause readout for the Settings test panel. `supported` is false when the
+ * native widget bridge isn't in this build (Expo Go, or the module didn't link);
+ * `enabled` is false when Live Activities are switched off for Noto in iOS
+ * Settings. A test fire that does nothing is always one of these two.
+ */
+export function liveActivityDiag(): { supported: boolean; enabled: boolean } {
+  const supported = Widgets.isSupported();
+  return { supported, enabled: supported ? Widgets.liveActivitiesEnabled() : false };
+}

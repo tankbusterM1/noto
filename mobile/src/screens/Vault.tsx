@@ -20,7 +20,7 @@ import { Card, LargeTitle, Screen, useBottomInset } from '../ui';
 import { haptics, Press, Rise } from '../motion';
 import { deviceSalt } from '../db';
 import { useData } from '../store';
-import { testNudgeActivity, testReviewActivity, endTestActivities } from '../widgetSync';
+import { testNudgeActivity, testReviewActivity, endTestActivities, liveActivityDiag } from '../widgetSync';
 import { connect, createPrivateRepo, disconnect, savedRepo, type Connection } from '../github';
 import { dates, gitapi, notify } from '../../core';
 import type { SyncOutcome } from '../vault';
@@ -398,6 +398,8 @@ export function SettingsScreen() {
   useEffect(() => setNameDraft(userName), [userName]);
   const [notifySent, setNotifySent] = useState<string | null>(null);
   const [liveSent, setLiveSent] = useState<string | null>(null);
+  const [diag, setDiag] = useState<{ supported: boolean; enabled: boolean } | null>(null);
+  useEffect(() => setDiag(liveActivityDiag()), []);
 
   const fireTest = async (mode: Exclude<notify.NotifyMode, 'off'>) => {
     haptics.selection();
@@ -407,16 +409,26 @@ export function SettingsScreen() {
 
   const fireLive = (kind: 'nudge' | 'review' | 'end') => {
     haptics.selection();
+    const d = liveActivityDiag();
+    setDiag(d);
     if (kind === 'end') {
       endTestActivities();
       setLiveSent('Ended any running Live Activity.');
       return;
     }
+    if (!d.supported) {
+      setLiveSent('✗ The widget bridge isn’t in this build. Rebuild from Actions (make sure the run was green), or you’re in Expo Go — Live Activities need a native build.');
+      return;
+    }
+    if (!d.enabled) {
+      setLiveSent('✗ Live Activities are OFF for Noto. Open iOS Settings ▸ Noto ▸ Live Activities, turn it on, then tap again.');
+      return;
+    }
     const ok = kind === 'nudge' ? testNudgeActivity() : testReviewActivity();
     setLiveSent(
       ok
-        ? `Fired the ${kind === 'nudge' ? 'daily nudge' : 'review session'} — lock your phone (or check the Dynamic Island) to see it.`
-        : 'Turn on Live Activities first (Settings ▸ Noto), or you’re in Expo Go.',
+        ? `Fired the ${kind === 'nudge' ? 'daily nudge' : 'review session'} — lock your phone, or long-press the Dynamic Island (iPhone 14 Pro+).`
+        : '✗ Enabled but the fire returned nothing — send me a screenshot and I’ll dig in.',
     );
   };
 
@@ -608,6 +620,11 @@ export function SettingsScreen() {
           <Text style={st.note}>
             Fire a sample onto your lock screen, then lock the phone or swipe home to see it — on iPhone 14 Pro and newer it also rides the Dynamic Island.
           </Text>
+          {diag ? (
+            <Text style={[st.note, { fontFamily: mono, color: diag.supported && diag.enabled ? c.green : c.red }]}>
+              module {diag.supported ? 'linked ✓' : 'MISSING ✗'} · Live Activities {diag.supported ? (diag.enabled ? 'on ✓' : 'OFF ✗') : '—'}
+            </Text>
+          ) : null}
           <View style={st.testRow}>
             <Press haptic={false} onPress={() => fireLive('nudge')} style={st.testBtn}>
               <Text style={st.testText}>daily nudge</Text>
