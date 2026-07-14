@@ -75,6 +75,23 @@ jobs:
         # --no-install so npm/pods don't run twice; we drive CocoaPods ourselves.
         run: npx expo prebuild --platform ios --clean --no-install
 
+      - name: DIAGNOSE autolinking (capture why noto-widgets is dropped)
+        working-directory: mobile
+        # Non-failing: prints the autolinking internals from the pod-install
+        # context so we can see the actual cause instead of guessing.
+        run: |
+          set +e
+          echo "===== node_modules/noto-widgets ====="
+          if [ -L node_modules/noto-widgets ]; then echo "SYMLINK -> $(readlink node_modules/noto-widgets)"; else echo "real dir or absent"; fi
+          ls node_modules/noto-widgets 2>&1 | head -8
+          echo ""
+          echo "===== appRoot + modules/ existence, seen from ios/ ====="
+          (cd ios && node -e "const p=require('path'),f=require('fs');let d=process.cwd();while(p.dirname(d)!==d){if(f.existsSync(p.join(d,'package.json'))){console.log('appRoot =',d);console.log('appRoot/modules exists =',f.existsSync(p.join(d,'modules')));console.log('node_modules/noto-widgets is symlink =', (()=>{try{return f.lstatSync(p.join(d,'node_modules','noto-widgets')).isSymbolicLink()}catch(e){return 'absent'}})());break}d=p.dirname(d)}")
+          echo ""
+          echo "===== resolve from ios/ (pod install's cwd): is noto-widgets in it? ====="
+          (cd ios && npx expo-modules-autolinking resolve --platform apple --json > /tmp/r.json 2>/dev/null)
+          node -e "const f=require('fs');let j={};try{j=JSON.parse(f.readFileSync('/tmp/r.json','utf8'))}catch(e){console.log('resolve parse failed');process.exit(0)}const m=(j.modules||[]).find(x=>x.packageName==='noto-widgets');console.log(m?('noto-widgets FOUND -> pods '+JSON.stringify(m.pods)):'noto-widgets NOT in resolve from ios/');console.log('total resolved:',(j.modules||[]).length)"
+
       - name: Install CocoaPods
         working-directory: mobile/ios
         run: pod install --repo-update
