@@ -66,6 +66,24 @@ jobs:
         working-directory: mobile/ios
         run: pod install --repo-update
 
+      - name: Verify the NotoWidgets app bridge linked
+        working-directory: mobile
+        # The widget EXTENSION and the app-side MODULE are separate targets: the
+        # extension can embed fine while the bridge the JS calls (NotoWidgets) is
+        # missing from the app, in which case every Live Activity call silently
+        # no-ops at runtime. Catch that here instead of on the device.
+        run: |
+          set +e
+          echo "== is NotoWidgetsModule registered in the ExpoModulesProvider? =="
+          if find ios -name ExpoModulesProvider.swift -exec grep -l "NotoWidgetsModule" {} + >/dev/null 2>&1; then
+            echo "OK — the NotoWidgets bridge is registered; Live Activity calls will reach native."
+          else
+            echo "::error:: NotoWidgetsModule is NOT registered — the app bridge is MISSING, so Live Activities no-op."
+            echo "-- providers found --"; find ios -name ExpoModulesProvider.swift
+            echo "-- modules that ARE registered --"; find ios -name ExpoModulesProvider.swift -exec grep -ohE '[A-Za-z0-9]+Module' {} + 2>/dev/null | sort -u
+            exit 1
+          fi
+
       - name: Build (code signing fully disabled)
         working-directory: mobile
         run: |

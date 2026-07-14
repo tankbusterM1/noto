@@ -1,0 +1,7 @@
+{
+  "name": "noto-widgets",
+  "version": "1.0.0",
+  "description": "Noto widgets, Live Activity + Dynamic Island bridge (local Expo module).",
+  "main": "index.ts",
+  "private": true
+}
