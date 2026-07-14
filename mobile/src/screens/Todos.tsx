@@ -62,6 +62,8 @@ export function TodosScreen({ navigation }: Props) {
   const todos = useData((s) => s.todos);
   const addTodo = useData((s) => s.addTodo);
   const refreshSignals = useData((s) => s.refreshSignals);
+  const todosPinned = useData((s) => s.todosPinned);
+  const setTodosPinned = useData((s) => s.setTodosPinned);
   const bottom = useBottomInset();
   const [draft, setDraft] = useState('');
 
@@ -90,6 +92,20 @@ export function TodosScreen({ navigation }: Props) {
       </View>
 
       <LargeTitle kicker={`${open} open · ${todos.length - open} done`} title="Todos" />
+
+      <Press
+        haptic={false}
+        onPress={() => {
+          haptics.selection();
+          void setTodosPinned(!todosPinned);
+        }}
+        style={todosPinned ? [st.pin, st.pinOn] : st.pin}
+      >
+        <Ionicons name={todosPinned ? 'flame' : 'flame-outline'} size={15} color={todosPinned ? c.bg : c.amber} />
+        <Text style={[st.pinText, todosPinned && st.pinTextOn]}>
+          {todosPinned ? 'On your lock screen — keeping the streak' : 'Pin to lock screen'}
+        </Text>
+      </Press>
 
       <View style={st.inputWrap}>
         <TextInput
@@ -120,6 +136,24 @@ const st = StyleSheet.create({
   navBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, height: 44 },
   back: { flexDirection: 'row', alignItems: 'center' },
   backText: { ...t.body, color: c.accent, marginLeft: 2 },
+
+  pin: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    alignSelf: 'flex-start',
+    marginHorizontal: 20,
+    marginBottom: 14,
+    paddingHorizontal: 13,
+    paddingVertical: 9,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: c.amber,
+    backgroundColor: c.surface,
+  },
+  pinOn: { backgroundColor: c.amber, borderColor: c.amber },
+  pinText: { ...t.footnote, fontWeight: '600', color: c.amber },
+  pinTextOn: { color: c.bg },
 
   inputWrap: { paddingHorizontal: 20, paddingBottom: 12 },
   input: {

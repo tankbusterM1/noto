@@ -65,5 +65,50 @@ public class NotoWidgetsModule: Module {
         }
       }
     }
+
+    // Start the daily-nudge Live Activity; returns its id (or nil if unavailable).
+    Function("startTodos") { (title: String, name: String, due: Int, todos: Int, streak: Int, line: String, doneToday: Int, totalToday: Int) -> String? in
+      guard #available(iOS 16.1, *), ActivityAuthorizationInfo().areActivitiesEnabled else { return nil }
+      let attributes = NotoTodoAttributes(title: title)
+      let state = NotoTodoAttributes.ContentState(name: name, due: due, todos: todos, streak: streak, line: line, doneToday: doneToday, totalToday: totalToday)
+      do {
+        let activity: Activity<NotoTodoAttributes>
+        if #available(iOS 16.2, *) {
+          activity = try Activity.request(attributes: attributes, content: ActivityContent(state: state, staleDate: nil), pushType: nil)
+        } else {
+          activity = try Activity.request(attributes: attributes, contentState: state, pushType: nil)
+        }
+        return activity.id
+      } catch {
+        return nil
+      }
+    }
+
+    Function("updateTodos") { (name: String, due: Int, todos: Int, streak: Int, line: String, doneToday: Int, totalToday: Int) in
+      guard #available(iOS 16.1, *) else { return }
+      let state = NotoTodoAttributes.ContentState(name: name, due: due, todos: todos, streak: streak, line: line, doneToday: doneToday, totalToday: totalToday)
+      Task {
+        for activity in Activity<NotoTodoAttributes>.activities {
+          if #available(iOS 16.2, *) {
+            await activity.update(ActivityContent(state: state, staleDate: nil))
+          } else {
+            await activity.update(using: state)
+          }
+        }
+      }
+    }
+
+    Function("endTodos") {
+      guard #available(iOS 16.1, *) else { return }
+      Task {
+        for activity in Activity<NotoTodoAttributes>.activities {
+          if #available(iOS 16.2, *) {
+            await activity.end(nil, dismissalPolicy: .immediate)
+          } else {
+            await activity.end(dismissalPolicy: .immediate)
+          }
+        }
+      }
+    }
   }
 }

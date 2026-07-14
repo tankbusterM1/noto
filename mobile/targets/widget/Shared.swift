@@ -53,3 +53,19 @@ struct NotoReviewAttributes: ActivityAttributes {
   }
   var title: String
 }
+
+// The daily-nudge Live Activity. MUST stay byte-identical to the copy in
+// modules/noto-widgets/ios/NotoTodoAttributes.swift. `line` is generated app-side
+// by the notify engine (same voice as the push notifications).
+struct NotoTodoAttributes: ActivityAttributes {
+  public struct ContentState: Codable, Hashable {
+    var name: String
+    var due: Int
+    var todos: Int
+    var streak: Int
+    var line: String
+    var doneToday: Int
+    var totalToday: Int
+  }
+  var title: String
+}

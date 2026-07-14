@@ -236,6 +236,7 @@ struct NotoWidgetBundle: WidgetBundle {
     CombinedWidget()
     if #available(iOS 16.1, *) {
       NotoReviewLiveActivity()
+      NotoTodoLiveActivity()
     }
   }
 }

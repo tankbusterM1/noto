@@ -98,6 +98,8 @@ interface State {
   folders: Folder[];
   memory: Record<string, NoteMemory>;
   todos: Todo[];
+  /** Whether the user pinned today's todos to the lock screen (session-only). */
+  todosPinned: boolean;
   watch: WatchItem[];
   /** Decrypted, in memory only, and only while unlocked. */
   journal: JournalEntry[];
@@ -160,6 +162,7 @@ interface State {
   addTodo: (raw: string) => Promise<void>;
   toggleTodo: (id: string) => Promise<void>;
   removeTodo: (id: string) => Promise<void>;
+  setTodosPinned: (v: boolean) => void;
   addWatch: (url: string) => Promise<string | null>;
   toggleWatch: (id: string) => Promise<void>;
   removeWatch: (id: string) => Promise<void>;
@@ -367,6 +370,7 @@ export const useData = create<State>((set, get) => ({
   folders: [],
   memory: {},
   todos: [],
+  todosPinned: false,
   watch: [],
   journal: [],
   journalUnlocked: false,
@@ -808,6 +812,10 @@ export const useData = create<State>((set, get) => ({
     set({ todos: get().todos.filter((t) => t.id !== id) });
     void get().refreshSignals();
   },
+
+  // The widget-sync subscription (see widgetSync.ts) reacts to this to start or
+  // end the today's-list Live Activity; the setter itself just flips the flag.
+  setTodosPinned: (v) => set({ todosPinned: v }),
 
   addWatch: async (rawUrl) => {
     if (!vault) return null;

@@ -20,6 +20,7 @@ import { Card, LargeTitle, Screen, useBottomInset } from '../ui';
 import { haptics, Press, Rise } from '../motion';
 import { deviceSalt } from '../db';
 import { useData } from '../store';
+import { testNudgeActivity, testReviewActivity, endTestActivities } from '../widgetSync';
 import { connect, createPrivateRepo, disconnect, savedRepo, type Connection } from '../github';
 import { dates, gitapi, notify } from '../../core';
 import type { SyncOutcome } from '../vault';
@@ -396,11 +397,27 @@ export function SettingsScreen() {
   const [nameDraft, setNameDraft] = useState(userName);
   useEffect(() => setNameDraft(userName), [userName]);
   const [notifySent, setNotifySent] = useState<string | null>(null);
+  const [liveSent, setLiveSent] = useState<string | null>(null);
 
   const fireTest = async (mode: Exclude<notify.NotifyMode, 'off'>) => {
     haptics.selection();
     const ok = await testNotify(mode);
     setNotifySent(ok ? `Sent a "${mode}" nudge — it lands in ~2s.` : 'Turn on notifications first (iOS will ask when you pick a mode).');
+  };
+
+  const fireLive = (kind: 'nudge' | 'review' | 'end') => {
+    haptics.selection();
+    if (kind === 'end') {
+      endTestActivities();
+      setLiveSent('Ended any running Live Activity.');
+      return;
+    }
+    const ok = kind === 'nudge' ? testNudgeActivity() : testReviewActivity();
+    setLiveSent(
+      ok
+        ? `Fired the ${kind === 'nudge' ? 'daily nudge' : 'review session'} — lock your phone (or check the Dynamic Island) to see it.`
+        : 'Turn on Live Activities first (Settings ▸ Noto), or you’re in Expo Go.',
+    );
   };
 
   const doSync = async () => {
@@ -583,6 +600,28 @@ export function SettingsScreen() {
           <Text style={st.note}>
             The app icon always carries the open-todo count
             {todos.filter((t) => !t.done).length > 0 ? ` (${todos.filter((t) => !t.done).length} now)` : ''}. Local reminders only — no push, no account, nothing to buy.
+          </Text>
+        </Card>
+
+        <Card>
+          <Text style={st.kicker}>LIVE ACTIVITY</Text>
+          <Text style={st.note}>
+            Fire a sample onto your lock screen, then lock the phone or swipe home to see it — on iPhone 14 Pro and newer it also rides the Dynamic Island.
+          </Text>
+          <View style={st.testRow}>
+            <Press haptic={false} onPress={() => fireLive('nudge')} style={st.testBtn}>
+              <Text style={st.testText}>daily nudge</Text>
+            </Press>
+            <Press haptic={false} onPress={() => fireLive('review')} style={st.testBtn}>
+              <Text style={st.testText}>review</Text>
+            </Press>
+            <Press haptic={false} onPress={() => fireLive('end')} style={st.testBtn}>
+              <Text style={st.testText}>end</Text>
+            </Press>
+          </View>
+          {liveSent ? <Text style={[st.note, { color: c.amber, marginTop: 10 }]}>{liveSent}</Text> : null}
+          <Text style={st.note}>
+            The daily nudge borrows your name and mode from above. Pin it for real from the Todos tab; the review one runs while you grade.
           </Text>
         </Card>
 

@@ -8,6 +8,9 @@ const Native = requireOptionalNativeModule<{
   startReview(title: string, total: number, remaining: number, quote: string, streak: number): string | null;
   updateReview(remaining: number, total: number, quote: string, streak: number): void;
   endReview(): void;
+  startTodos(title: string, name: string, due: number, todos: number, streak: number, line: string, doneToday: number, totalToday: number): string | null;
+  updateTodos(name: string, due: number, todos: number, streak: number, line: string, doneToday: number, totalToday: number): void;
+  endTodos(): void;
 }>('NotoWidgets');
 
 /** Everything the widgets render — written to the shared App Group. */
@@ -52,4 +55,33 @@ export function updateReview(remaining: number, total: number, quote: string, st
 
 export function endReview(): void {
   Native?.endReview();
+}
+
+export function startTodos(
+  name: string,
+  due: number,
+  todos: number,
+  streak: number,
+  line: string,
+  doneToday: number,
+  totalToday: number,
+  title = 'Today',
+): string | null {
+  return Native?.startTodos(title, name, due, todos, streak, line, doneToday, totalToday) ?? null;
+}
+
+export function updateTodos(
+  name: string,
+  due: number,
+  todos: number,
+  streak: number,
+  line: string,
+  doneToday: number,
+  totalToday: number,
+): void {
+  Native?.updateTodos(name, due, todos, streak, line, doneToday, totalToday);
+}
+
+export function endTodos(): void {
+  Native?.endTodos();
 }
