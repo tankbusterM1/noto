@@ -26,6 +26,23 @@ and widgets are gated by the *native extension*, not the SDK version. (One pin
 was added — `@expo/prebuild-config@54.0.8` as a devDependency — because
 `@bacons/apple-targets` resolves it from the top level and SDK 54 nests it.)
 
+## Free account vs paid — what actually runs
+
+This branch is configured for a **free Apple account** (Sideloadly signing):
+
+- ✅ **Live Activity + Dynamic Island** work. ActivityKit carries their data
+  directly (see `NotoWidgetsModule.startReview/update/end`) — no App Group, no
+  push, no paid membership.
+- ⚠️ **Home-screen widgets** install and render, but show the *placeholder*
+  snapshot, not your live data. Reading live data needs an **App Group**, which a
+  free personal team can't provision — so the group entitlement is intentionally
+  **removed** from `app.json` and `targets/widget/expo-target.config.js`.
+
+To light up live home-widget data on a **paid** account, add back in both files:
+```
+entitlements: { 'com.apple.security.application-groups': ['group.com.noto.vault'] }
+```
+
 ## One-time setup (on a Mac)
 
 1. **Add your Apple Team ID** to `app.json` — the config warns until you do:
@@ -33,10 +50,7 @@ was added — `@expo/prebuild-config@54.0.8` as a devDependency — because
    "ios": { "appleTeamId": "XXXXXXXXXX", ... }
    ```
    Find it in Xcode ▸ Settings ▸ Accounts, or at developer.apple.com ▸ Membership.
-
-2. **App Group** — the app and widget share `group.com.noto.vault` (already in
-   `app.json` and `expo-target.config.js`). Xcode's automatic signing will create
-   it; or add it once in the Apple Developer portal under Identifiers.
+   (A free personal team still has a Team ID — use it.)
 
 ## Build
 
