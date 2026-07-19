@@ -89,6 +89,12 @@ interface DataState {
   scratchpad: string
   /** Set once a passphrase exists; null = journal is plaintext. */
   journalCrypto: JournalCrypto | null
+  /**
+   * The reset is a single-use escape hatch. Once fired it burns itself (a local,
+   * per-device marker, never synced) so a "wipe the journal" button can't sit in
+   * the app forever waiting for an accidental or hostile click.
+   */
+  journalResetBurned: boolean
   /** In-memory AES key while unlocked; null = locked (or no passphrase). */
   journalKey: CryptoKey | null
   tagsPool: string[]
@@ -155,6 +161,13 @@ interface DataState {
   setJournalPassphrase: (pass: string) => Promise<void>
   unlockJournalCrypto: (pass: string) => Promise<boolean>
   lockJournalCrypto: () => void
+  /**
+   * Forgot the passphrase and the entries are disposable? Wipe the journal on
+   * THIS device — every entry (tombstoned so it doesn't resurrect on sync), the
+   * scratchpad, the key parameters — and burn the hatch for good. Journal only;
+   * notes/todos/reviews untouched. Returns the entry count, or -1 if already spent.
+   */
+  resetJournal: () => Promise<number>
   exportData: () => Promise<string>
   importData: (json: string) => Promise<boolean>
   resetData: () => Promise<void>
@@ -396,6 +409,7 @@ async function hydrateImpl(set: (partial: Partial<DataState>) => void): Promise<
   if (lastRitualDay !== today) await db.meta.put({ key: 'ritualDay', value: today })
   const journalCrypto =
     (metaRows.find((m) => m.key === 'journalCrypto')?.value as JournalCrypto | undefined) ?? null
+  const journalResetBurned = metaRows.find((m) => m.key === 'journalResetBurned')?.value === '1'
   // Encrypted journals stay locked (empty) until the passphrase is entered.
   const journal: JournalEntry[] = journalCrypto
     ? []
@@ -453,6 +467,7 @@ async function hydrateImpl(set: (partial: Partial<DataState>) => void): Promise<
     githubToken,
     scratchpad,
     journalCrypto,
+    journalResetBurned,
     ledgerByDay,
     doneToday,
     trash,
@@ -478,6 +493,7 @@ export const useData = create<DataState>()((set, get) => ({
   githubToken: '',
   autoSyncOn: true,
   journalCrypto: null,
+  journalResetBurned: false,
   journalKey: null,
   tagsPool: [],
   doneToday: 0,
@@ -1150,6 +1166,29 @@ export const useData = create<DataState>()((set, get) => ({
     return true
   },
   lockJournalCrypto: () => set({ journalKey: null, journal: [], scratchpad: '' }),
+
+  resetJournal: async () => {
+    // Single-use, for life: a spent reset is dead no matter what.
+    if (get().journalResetBurned) return -1
+    const rows = await db.journal.toArray()
+    // Tombstone by the SYNC id (sid, or the day-derived id for pre-v4 rows) so the
+    // entries don't resurrect on the next pull, then drop the local rows.
+    for (const r of rows) tombstone(r.sid ?? journalId(r.day ?? 0))
+    await db.journal.clear()
+    await db.meta.delete('scratchpadEnc')
+    await db.meta.delete('scratchpadAt')
+    await db.meta.delete('journalCrypto')
+    // Burn the hatch — permanently, on this device.
+    await db.meta.put({ key: 'journalResetBurned', value: '1' })
+    set({
+      journalKey: null,
+      journalCrypto: null,
+      journal: [],
+      scratchpad: '',
+      journalResetBurned: true,
+    })
+    return rows.length
+  },
 
   exportData: async () => {
     const dump: Record<string, unknown> = {

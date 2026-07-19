@@ -47,6 +47,8 @@ export function Journal() {
   const setJournalPassphrase = useData((s) => s.setJournalPassphrase)
   const unlockJournalCrypto = useData((s) => s.unlockJournalCrypto)
   const lockJournalCrypto = useData((s) => s.lockJournalCrypto)
+  const resetJournal = useData((s) => s.resetJournal)
+  const resetBurned = useData((s) => s.journalResetBurned)
   const jLocked = useUI((s) => s.jLocked)
   const jMode = useUI((s) => s.jMode)
   const setJMode = useUI((s) => s.setJMode)
@@ -62,6 +64,7 @@ export function Journal() {
   const scratchRef = useRef<HTMLDivElement>(null)
   const [unlockPass, setUnlockPass] = useState('')
   const [setupPass, setSetupPass] = useState('')
+  const [resetArmed, setResetArmed] = useState(false)
   const [setupOpen, setSetupOpen] = useState(false)
   /** Which earlier entry is expanded to full text (they collapse to 2 lines). */
   const [openEntry, setOpenEntry] = useState<number | null>(null)
@@ -110,6 +113,14 @@ export function Journal() {
     } else {
       unlockJournal()
     }
+  }
+  const doReset = async () => {
+    const n = await resetJournal()
+    setResetArmed(false)
+    if (n < 0) return // already spent
+    showToast(
+      `Journal reset — ${n} ${n === 1 ? 'entry' : 'entries'} cleared. Finish on your phone + delete the vault's journal folder, then set a new passphrase.`,
+    )
   }
   const doSetup = async () => {
     await setJournalPassphrase(setupPass)
@@ -276,6 +287,30 @@ export function Journal() {
                     style={passInput}
                   />
                   <button className="btn-dark" onClick={doUnlock} style={darkBtn}>Unlock</button>
+                  {resetBurned ? (
+                    <div style={{ fontSize: 11, color: 'var(--ink3)', lineHeight: 1.5, marginTop: 4 }}>
+                      Journal reset was used — it’s a one-time hatch, now disabled.
+                    </div>
+                  ) : resetArmed ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
+                      <div style={{ fontSize: 11, color: 'var(--g1)', lineHeight: 1.5 }}>
+                        Erases every entry on this device and clears the passphrase. Can’t be undone, and it’s a
+                        one-time reset — only if these entries don’t matter.
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button onClick={doReset} style={{ ...darkBtn, background: 'var(--g1)', color: '#fff', flex: 1 }}>
+                          Reset the journal
+                        </button>
+                        <button onClick={() => setResetArmed(false)} style={{ background: 'transparent', border: 'none', color: 'var(--ink3)', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>
+                          cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button onClick={() => setResetArmed(true)} style={{ background: 'transparent', border: 'none', color: 'var(--g1)', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', opacity: 0.85, marginTop: 2 }}>
+                      Forgot it? Reset the journal
+                    </button>
+                  )}
                 </div>
               ) : setupOpen ? (
                 <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>

@@ -115,6 +115,12 @@ interface State {
   journalCrypto: VaultCrypto | null;
   /** True when the derived key is cached, so Face ID alone opens the journal. */
   journalCached: boolean;
+  /**
+   * The reset is a single-use escape hatch. Once fired it burns itself (a local,
+   * per-device marker — never synced) so a "wipe the journal" button can't sit in
+   * the app forever waiting for an accidental or hostile tap. Dead means dead.
+   */
+  journalResetBurned: boolean;
   /** Face ID path. False means "no cached key" — ask for the passphrase. */
   unlockJournal: () => Promise<boolean>;
   /** Passphrase path: derive, verify, then cache behind Face ID. */
@@ -397,10 +403,11 @@ export const useData = create<State>((set, get) => ({
   bytes: [],
   byteMemory: {},
   byteStreak: { count: 0, last: 0 },
+  journalResetBurned: false,
 
   hydrate: async () => {
     vault = await openVault();
-    const [noteRows, folderRows, srsRows, ledger, todoRows, watchRows, journalRows, digest, cryptoRaw, hapticRaw, byteRows, byteMemRaw, byteStreakRaw, notifyRaw, userNameRaw] = await Promise.all([
+    const [noteRows, folderRows, srsRows, ledger, todoRows, watchRows, journalRows, digest, cryptoRaw, hapticRaw, byteRows, byteMemRaw, byteStreakRaw, notifyRaw, userNameRaw, resetBurnedRaw] = await Promise.all([
       vault.notes(),
       vault.folders(),
       vault.srs(),
@@ -416,6 +423,7 @@ export const useData = create<State>((set, get) => ({
       vault.getMeta('byteStreak'),
       vault.getMeta('notifyMode'),
       vault.getMeta('userName'),
+      vault.getMeta('journalResetBurned'),
     ]);
 
     const bytes = (byteRows as sync.SyncRow[]).map(bytesLib.toCard).filter((c): c is bytesLib.ByteCard => !!c);
@@ -464,6 +472,7 @@ export const useData = create<State>((set, get) => ({
       journaledToday: journalRows.some((r) => r.day === dates.todayEpochDay()),
       journalCrypto,
       journalCached: journalCrypto ? await hasCachedKey(journalCrypto.salt) : false,
+      journalResetBurned: resetBurnedRaw === '1',
       // Auto-sync defaults ON; only an explicit '0' turns it off.
       autoSyncOn: (await vault.getMeta('autoSync')) !== '0',
       notifyMode,
@@ -548,6 +557,9 @@ export const useData = create<State>((set, get) => ({
 
   resetJournal: async () => {
     if (!vault) return 0;
+    // Single-use, for life: a spent reset is dead no matter what. Even if the UI
+    // somehow offered it again, the function itself refuses.
+    if (get().journalResetBurned) return -1;
     const now = Date.now();
     // Enumerate every sealed row by id (day is plain metadata, so this works
     // locked) and tombstone each — a bare delete would just resurrect on sync.
@@ -559,6 +571,8 @@ export const useData = create<State>((set, get) => ({
     // Empty crypto meta parses back to null → the journal returns to "create" mode.
     await vault.setMeta('journalCrypto', '');
     await forgetKey(); // drop the cached derived key from the Keychain
+    // Burn the hatch — permanently, on this device.
+    await vault.setMeta('journalResetBurned', '1');
     journalKey = null;
     set({
       journal: [],
@@ -567,6 +581,7 @@ export const useData = create<State>((set, get) => ({
       journalCached: false,
       journalUnlocked: false,
       journaledToday: false,
+      journalResetBurned: true,
     });
     return rows.length;
   },
