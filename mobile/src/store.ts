@@ -116,9 +116,10 @@ interface State {
   /** True when the derived key is cached, so Face ID alone opens the journal. */
   journalCached: boolean;
   /**
-   * The reset is a single-use escape hatch. Once fired it burns itself (a local,
-   * per-device marker — never synced) so a "wipe the journal" button can't sit in
-   * the app forever waiting for an accidental or hostile tap. Dead means dead.
+   * Whether a reset has run on this device. Kept for hydrate compatibility but no
+   * longer gates the reset: a permanent burn stranded a locked-out user (a spent
+   * hatch + a re-seeded passphrase = no way back in), so the reset now stays
+   * available whenever the journal is locked. The two-step confirm guards accidents.
    */
   journalResetBurned: boolean;
   /** Face ID path. False means "no cached key" — ask for the passphrase. */
@@ -557,9 +558,6 @@ export const useData = create<State>((set, get) => ({
 
   resetJournal: async () => {
     if (!vault) return 0;
-    // Single-use, for life: a spent reset is dead no matter what. Even if the UI
-    // somehow offered it again, the function itself refuses.
-    if (get().journalResetBurned) return -1;
     const now = Date.now();
     // Enumerate every sealed row by id (day is plain metadata, so this works
     // locked) and tombstone each — a bare delete would just resurrect on sync.
@@ -571,8 +569,9 @@ export const useData = create<State>((set, get) => ({
     // Empty crypto meta parses back to null → the journal returns to "create" mode.
     await vault.setMeta('journalCrypto', '');
     await forgetKey(); // drop the cached derived key from the Keychain
-    // Burn the hatch — permanently, on this device.
-    await vault.setMeta('journalResetBurned', '1');
+    // Clear any stale burn marker — a re-seeded/locked-out journal must never be
+    // stranded by a spent reset. The two-step confirm is the accident guard.
+    await vault.setMeta('journalResetBurned', '');
     journalKey = null;
     set({
       journal: [],
@@ -581,7 +580,7 @@ export const useData = create<State>((set, get) => ({
       journalCached: false,
       journalUnlocked: false,
       journaledToday: false,
-      journalResetBurned: true,
+      journalResetBurned: false,
     });
     return rows.length;
   },

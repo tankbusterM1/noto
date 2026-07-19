@@ -90,9 +90,10 @@ interface DataState {
   /** Set once a passphrase exists; null = journal is plaintext. */
   journalCrypto: JournalCrypto | null
   /**
-   * The reset is a single-use escape hatch. Once fired it burns itself (a local,
-   * per-device marker, never synced) so a "wipe the journal" button can't sit in
-   * the app forever waiting for an accidental or hostile click.
+   * Whether a reset has run on this device. Kept for hydrate compatibility but no
+   * longer gates the reset: a permanent burn stranded a locked-out user (a spent
+   * hatch + a re-seeded passphrase = no way back in), so the reset now stays
+   * available whenever the journal is locked. The two-step confirm guards accidents.
    */
   journalResetBurned: boolean
   /** In-memory AES key while unlocked; null = locked (or no passphrase). */
@@ -1168,8 +1169,6 @@ export const useData = create<DataState>()((set, get) => ({
   lockJournalCrypto: () => set({ journalKey: null, journal: [], scratchpad: '' }),
 
   resetJournal: async () => {
-    // Single-use, for life: a spent reset is dead no matter what.
-    if (get().journalResetBurned) return -1
     const rows = await db.journal.toArray()
     // Tombstone by the SYNC id (sid, or the day-derived id for pre-v4 rows) so the
     // entries don't resurrect on the next pull, then drop the local rows.
@@ -1178,14 +1177,15 @@ export const useData = create<DataState>()((set, get) => ({
     await db.meta.delete('scratchpadEnc')
     await db.meta.delete('scratchpadAt')
     await db.meta.delete('journalCrypto')
-    // Burn the hatch — permanently, on this device.
-    await db.meta.put({ key: 'journalResetBurned', value: '1' })
+    // Clear any stale burn marker — a re-seeded/locked-out journal must never be
+    // stranded by a spent reset. The two-step confirm is the accident guard.
+    await db.meta.delete('journalResetBurned')
     set({
       journalKey: null,
       journalCrypto: null,
       journal: [],
       scratchpad: '',
-      journalResetBurned: true,
+      journalResetBurned: false,
     })
     return rows.length
   },

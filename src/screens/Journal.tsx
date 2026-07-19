@@ -48,7 +48,6 @@ export function Journal() {
   const unlockJournalCrypto = useData((s) => s.unlockJournalCrypto)
   const lockJournalCrypto = useData((s) => s.lockJournalCrypto)
   const resetJournal = useData((s) => s.resetJournal)
-  const resetBurned = useData((s) => s.journalResetBurned)
   const jLocked = useUI((s) => s.jLocked)
   const jMode = useUI((s) => s.jMode)
   const setJMode = useUI((s) => s.setJMode)
@@ -287,11 +286,7 @@ export function Journal() {
                     style={passInput}
                   />
                   <button className="btn-dark" onClick={doUnlock} style={darkBtn}>Unlock</button>
-                  {resetBurned ? (
-                    <div style={{ fontSize: 11, color: 'var(--ink3)', lineHeight: 1.5, marginTop: 4 }}>
-                      Journal reset was used — it’s a one-time hatch, now disabled.
-                    </div>
-                  ) : resetArmed ? (
+                  {resetArmed ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
                       <div style={{ fontSize: 11, color: 'var(--g1)', lineHeight: 1.5 }}>
                         Erases every entry on this device and clears the passphrase. Can’t be undone, and it’s a

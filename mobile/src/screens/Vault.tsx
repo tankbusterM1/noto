@@ -71,13 +71,10 @@ export function JournalScreen() {
   const addEntry = useData((s) => s.addJournalEntry);
   const removeEntry = useData((s) => s.removeJournalEntry);
   const resetJournal = useData((s) => s.resetJournal);
-  const resetBurned = useData((s) => s.journalResetBurned);
 
   // Forgot the passphrase, entries are disposable. Two taps of confirmation
   // because it's irreversible; the cross-device finish is spelled out after.
   const doReset = () => {
-    if (resetBurned) return; // spent — dead for good
-
     Alert.alert(
       'Reset the journal?',
       'This erases every entry on this phone and clears the passphrase, so you can set a new one. It cannot be undone — only do it if these entries don’t matter.',
@@ -376,9 +373,7 @@ export function JournalScreen() {
             {err ? <Text style={st.err}>{err}</Text> : null}
             {code && code !== 'user_cancel' ? <Text style={st.diag}>error code: {code}</Text> : null}
 
-            {resetBurned ? (
-              <Text style={st.resetSpent}>Journal reset was used — it’s a one-time hatch, now disabled.</Text>
-            ) : mode !== 'create' ? (
+            {mode !== 'create' ? (
               <Press haptic={false} onPress={doReset}>
                 <Text style={st.resetLink}>Forgot it? Reset the journal</Text>
               </Press>
@@ -874,7 +869,6 @@ const st = StyleSheet.create({
   },
   linkText: { ...t.footnote, color: c.accent, marginTop: 10, textAlign: 'center' },
   resetLink: { ...t.caption1, color: c.red, marginTop: 18, textAlign: 'center', opacity: 0.85 },
-  resetSpent: { ...t.caption2, color: c.ink3, marginTop: 18, textAlign: 'center' },
   kicker: { ...t.caption2, fontFamily: mono, letterSpacing: 1.6, color: c.ink3 },
   body: { ...t.footnote, color: c.ink2, lineHeight: 19, marginTop: 8 },
   note: { ...t.caption1, color: c.ink3, lineHeight: 17, marginTop: 12 },
