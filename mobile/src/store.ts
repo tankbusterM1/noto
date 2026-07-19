@@ -950,6 +950,29 @@ useData.subscribe((s, prev) => {
   }
 });
 
+/*
+ * Arriving is not the same as editing. Edits can settle — hence the 12s debounce
+ * above. But opening the app (or coming back to it) means the laptop may have
+ * moved on while we were away, so we pull straight away instead of waiting for a
+ * local edit to happen to trigger it.
+ *
+ * This deliberately does NOT reuse `lastSyncAt`: that one is seeded to launch
+ * time to suppress the debounced path, which would swallow the very first pull.
+ * `lastActiveSyncAt` starts at 0 so launch always syncs, and a short cooldown
+ * keeps app-switching from hammering the network.
+ */
+let lastActiveSyncAt = 0;
+const ACTIVE_MIN_GAP = 20_000;
+
+/** Pull anything new on launch and whenever the app returns to the foreground. */
+export async function syncOnAppActive(): Promise<void> {
+  if (autoBlocked || suspend || syncInFlight) return;
+  if (!useData.getState().autoSyncOn) return;
+  if (Date.now() - lastActiveSyncAt < ACTIVE_MIN_GAP) return;
+  lastActiveSyncAt = Date.now();
+  await useData.getState().syncNow(); // no-ops cleanly when no vault is linked
+}
+
 /** Snippet via the shared markdown -> blocks -> snippet path. */
 export function snippet(body: string): string {
   if (!body.trim()) return 'empty note';

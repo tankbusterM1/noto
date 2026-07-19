@@ -11,7 +11,7 @@ import { c } from './src/theme';
 import { useAppFonts } from './src/fonts';
 import { Launch } from './src/Launch';
 import { FloatingTabBar } from './src/FloatingTabBar';
-import { useData } from './src/store';
+import { useData, syncOnAppActive } from './src/store';
 import { NotesScreen } from './src/screens/Notes';
 import { NoteScreen } from './src/screens/Note';
 import { TodayScreen } from './src/screens/Today';
@@ -103,11 +103,24 @@ function Boot() {
     void hydrate();
   }, [hydrate]);
 
+  // Pull whatever changed while we were gone, the moment the vault is loaded.
+  // Local edits have their own debounced path; this is the other half — what the
+  // laptop did in the meantime, fetched on arrival instead of waiting for an edit
+  // here to happen to trigger a sync.
+  useEffect(() => {
+    if (!ready) return;
+    void syncOnAppActive();
+  }, [ready]);
+
   // Re-badge on foreground: todos may have been completed on another device, and
   // the daily digest's body is frozen at schedule time, so it needs re-arming.
+  // Coming back also counts as arriving, so pull again (cooldown-guarded).
   useEffect(() => {
     const sub = AppState.addEventListener('change', (s) => {
-      if (s === 'active') void refreshSignals();
+      if (s === 'active') {
+        void refreshSignals();
+        void syncOnAppActive();
+      }
     });
     return () => sub.remove();
   }, [refreshSignals]);
