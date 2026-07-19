@@ -135,7 +135,9 @@ export async function scheduleNudges(mode: notify.NotifyMode, ctx: notify.Notify
   if (mode === 'off') return;
   if (!(await ensureNotificationPermission())) return;
 
-  if (mode === 'normal' && ctx.due + ctx.todos === 0) return; // polite: nothing to interrupt for
+  // Polite: nothing to interrupt for. A blank journal page still counts as
+  // something waiting, so normal mode speaks up for that too.
+  if (mode === 'normal' && ctx.due + ctx.todos === 0 && ctx.journaled) return;
 
   const hours = notify.NOTIFY_HOURS[mode];
   try {

@@ -104,6 +104,12 @@ interface State {
   journalUnlocked: boolean;
   /** How many sealed entries exist — visible even when locked. */
   journalCount: number;
+  /**
+   * Whether today already has an entry. Derived from the row's plain `day`, so
+   * it's known while the journal is still sealed — the nudge can ask for today's
+   * page without ever opening yesterday's.
+   */
+  journaledToday: boolean;
   /** Null until a passphrase exists anywhere in the vault. */
   journalCrypto: VaultCrypto | null;
   /** True when the derived key is cached, so Face ID alone opens the journal. */
@@ -371,6 +377,7 @@ export const useData = create<State>((set, get) => ({
   journal: [],
   journalUnlocked: false,
   journalCount: 0,
+  journaledToday: false,
   journalCrypto: null,
   journalCached: false,
   autoSyncOn: true,
@@ -442,6 +449,9 @@ export const useData = create<State>((set, get) => ({
       journal: [],
       journalUnlocked: false,
       journalCount: journalRows.length,
+      // `day` is plain metadata on a sealed row, so today's page can be checked
+      // without a passphrase.
+      journaledToday: journalRows.some((r) => r.day === dates.todayEpochDay()),
       journalCrypto,
       journalCached: journalCrypto ? await hasCachedKey(journalCrypto.salt) : false,
       // Auto-sync defaults ON; only an explicit '0' turns it off.
@@ -554,14 +564,22 @@ export const useData = create<State>((set, get) => ({
     set({
       journal: [entry, ...rest].sort((a, b) => b.day - a.day),
       journalCount: rest.length + 1,
+      journaledToday: true, // this entry IS today's — stop the nudge asking
     });
+    void get().refreshSignals(); // re-word the day's nudges now the page is filled
   },
 
   removeJournalEntry: async (id) => {
     if (!vault) return;
     await vault.deleteJournal(id);
     await vault.tombstone(id, Date.now()); // or the laptop syncs it straight back
-    set({ journal: get().journal.filter((e) => e.id !== id), journalCount: Math.max(0, get().journalCount - 1) });
+    set({
+      journal: get().journal.filter((e) => e.id !== id),
+      journalCount: Math.max(0, get().journalCount - 1),
+      // Deleting today's entry leaves the page blank again.
+      journaledToday: id === sync.journalId(dates.todayEpochDay()) ? false : get().journaledToday,
+    });
+    void get().refreshSignals();
   },
 
   syncNow: async () => {
@@ -601,7 +619,13 @@ export const useData = create<State>((set, get) => ({
     const s = get();
     const open = s.todos.filter((t) => !t.done).length;
     await syncBadge(open);
-    const ctx: notify.NotifyCtx = { name: s.userName, due: dueCount(s.memory), todos: open, streak: s.byteStreak.count };
+    const ctx: notify.NotifyCtx = {
+      name: s.userName,
+      due: dueCount(s.memory),
+      todos: open,
+      streak: s.byteStreak.count,
+      journaled: s.journaledToday,
+    };
     await scheduleNudges(s.notifyMode, ctx, dates.todayEpochDay());
   },
 
@@ -621,7 +645,13 @@ export const useData = create<State>((set, get) => ({
   testNotify: async (mode) => {
     const s = get();
     const open = s.todos.filter((t) => !t.done).length;
-    const ctx: notify.NotifyCtx = { name: s.userName, due: dueCount(s.memory), todos: open, streak: s.byteStreak.count };
+    const ctx: notify.NotifyCtx = {
+      name: s.userName,
+      due: dueCount(s.memory),
+      todos: open,
+      streak: s.byteStreak.count,
+      journaled: s.journaledToday,
+    };
     return fireTestNotify(mode, ctx, Date.now()); // a fresh line each tap
   },
 

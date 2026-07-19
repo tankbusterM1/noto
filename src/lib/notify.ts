@@ -23,6 +23,12 @@ export interface NotifyCtx {
   todos: number;
   /** Current study streak in days. */
   streak: number;
+  /**
+   * Whether today's journal entry already exists. Read from the entry's `day`,
+   * which is plain row metadata — so this is known WITHOUT unlocking the journal
+   * or decrypting a single word of it.
+   */
+  journaled: boolean;
 }
 
 export interface NotifyModeInfo {
@@ -170,11 +176,53 @@ const OBSESSED: string[] = [
   "{name}. Final warning. (There will be more warnings.) {due} reviews.",
 ];
 
+/*
+ * Journal nudges. Deliberately count-free — they join the pool only while
+ * today's entry is missing, and drop out the moment you've written, so it can
+ * never nag about something already done.
+ */
+const JOURNAL_NORMAL: string[] = [
+  "Today's page is still blank, {name}.",
+  'A line or two before the day closes, {name}?',
+  'The journal is waiting, {name}. One sentence counts.',
+  'Nothing written today, {name}. What happened?',
+  '{name}, today goes unrecorded unless you say something.',
+];
+
+const JOURNAL_HIGH: string[] = [
+  "Don't leave today blank, {name}. Write something.",
+  "{name}, you haven't journaled today. Two minutes.",
+  'The page is empty, {name}. Fix it before bed.',
+  'One entry, {name}. That is the whole ask.',
+  "{name}, today's still unwritten. Don't let it slide.",
+];
+
+const JOURNAL_OBSESSED: string[] = [
+  '{name} the journal is EMPTY. Today. Nothing. Write.',
+  "Not one word today, {name}. NOT ONE. I'm unwell about it.",
+  '{name}, the blank page is staring at me and I am staring at YOU.',
+  'You lived an entire day and wrote NOTHING, {name}?',
+  '{name} I will not rest until today has a sentence. WRITE.',
+];
+
 const POOL: Record<Exclude<NotifyMode, 'off'>, string[]> = { normal: NORMAL, high: HIGH, obsessed: OBSESSED };
+
+const JOURNAL_POOL: Record<Exclude<NotifyMode, 'off'>, string[]> = {
+  normal: JOURNAL_NORMAL,
+  high: JOURNAL_HIGH,
+  obsessed: JOURNAL_OBSESSED,
+};
 
 /** Total distinct lines shipped (for the settings/test copy). */
 export function variationCount(): number {
-  return NORMAL.length + HIGH.length + OBSESSED.length;
+  return (
+    NORMAL.length +
+    HIGH.length +
+    OBSESSED.length +
+    JOURNAL_NORMAL.length +
+    JOURNAL_HIGH.length +
+    JOURNAL_OBSESSED.length
+  );
 }
 
 const COUNT_RE = /\{n\}|\{due\}|\{todos\}/;
@@ -191,14 +239,17 @@ function fill(s: string, ctx: NotifyCtx, name: string): string {
 /**
  * Compose a notification for the mode + context. `seed` makes it deterministic
  * (pass a slot index or a day number). Lines that mention a count are skipped
- * when nothing is pending, so it never says "0 reviews".
+ * when nothing is pending, so it never says "0 reviews"; journal lines join the
+ * pool only while today's entry is still missing.
  */
 export function composeNotify(mode: Exclude<NotifyMode, 'off'>, ctx: NotifyCtx, seed: number): { title: string; body: string } {
   const name = ctx.name.trim() || 'you';
   const pending = ctx.due + ctx.todos;
   const lines = POOL[mode];
   const usable = pending > 0 ? lines : lines.filter((l) => !COUNT_RE.test(l));
-  const bodyPool = usable.length ? usable : lines;
+  // A blank page earns its own nudges; once today is written they drop out.
+  const pool = ctx.journaled ? usable : [...usable, ...JOURNAL_POOL[mode]];
+  const bodyPool = pool.length ? pool : lines;
   const s = Math.abs(Math.floor(seed));
   const body = fill(bodyPool[s % bodyPool.length], ctx, name);
   const titles = TITLES[mode];

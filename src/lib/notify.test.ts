@@ -1,7 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import { composeNotify, variationCount, NOTIFY_MODE_INFO, NOTIFY_HOURS, type NotifyCtx } from './notify';
 
-const ctx = (over: Partial<NotifyCtx> = {}): NotifyCtx => ({ name: 'Alex', due: 3, todos: 2, streak: 7, ...over });
+// Defaults to journaled so the existing cases keep testing the review/todo pool;
+// the journal cases opt in explicitly.
+const ctx = (over: Partial<NotifyCtx> = {}): NotifyCtx => ({
+  name: 'Alex',
+  due: 3,
+  todos: 2,
+  streak: 7,
+  journaled: true,
+  ...over,
+});
 
 describe('notify', () => {
   it('ships well over 100 variations', () => {
@@ -46,6 +55,25 @@ describe('notify', () => {
     const a = composeNotify('high', ctx(), 42);
     const b = composeNotify('high', ctx(), 42);
     expect(a).toEqual(b);
+  });
+
+  it('nudges about the journal only while today is unwritten', () => {
+    const journalish = /journal|page|blank|wrote|unrecorded|sentence|word/i;
+    const bodies = (journaled: boolean) =>
+      new Set(Array.from({ length: 200 }, (_, s) => composeNotify('normal', ctx({ journaled }), s).body));
+
+    // A blank page earns its own lines...
+    expect([...bodies(false)].some((b) => journalish.test(b))).toBe(true);
+    // ...and they vanish the moment today is written, so it never nags twice.
+    expect([...bodies(true)].some((b) => journalish.test(b))).toBe(false);
+  });
+
+  it('journal lines never quote a count, so they are safe when nothing is pending', () => {
+    for (let s = 0; s < 200; s++) {
+      const { body } = composeNotify('obsessed', ctx({ due: 0, todos: 0, journaled: false }), s);
+      expect(body, `#${s}`).not.toMatch(/\b0\b/);
+      expect(body).not.toMatch(/\{/);
+    }
   });
 
   it('each mode has a distinct frequency + a description', () => {
