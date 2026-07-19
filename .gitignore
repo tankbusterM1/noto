@@ -30,3 +30,8 @@ coverage
 
 # vite-plugin-pwa dev output
 dev-dist
+
+# secrets — a local env file must never reach the public repo
+.env
+.env.*
+!.env.example
