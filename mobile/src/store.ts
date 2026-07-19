@@ -23,6 +23,7 @@ import {
   deriveKey,
   destroyLegacyKey,
   encryptJSON,
+  forgetKey,
   isLegacyEnvelope,
   legacyKey,
   makeVerifier,
@@ -121,6 +122,15 @@ interface State {
   /** First passphrase for a vault that has none. Encrypts whatever is already here. */
   setJournalPassphrase: (pass: string) => Promise<{ ok: boolean; error?: string }>;
   lockJournal: () => void;
+  /**
+   * Forgot the passphrase and the entries are disposable? Wipe the journal on
+   * THIS device — every entry (tombstoned so it doesn't resurrect), the key
+   * parameters, and the cached key — leaving it in "set a new passphrase" state.
+   * Journal only; notes/todos/reviews are untouched. Returns how many entries
+   * were cleared. NOTE: because the crypto is shared, a full reset also needs the
+   * vault + the other device cleared — see the reset flow the UI links to.
+   */
+  resetJournal: () => Promise<number>;
   addJournalEntry: (text: string) => Promise<void>;
   removeJournalEntry: (id: string) => Promise<void>;
   syncNow: () => Promise<SyncOutcome>;
@@ -534,6 +544,31 @@ export const useData = create<State>((set, get) => ({
   lockJournal: () => {
     journalKey = null;
     set({ journal: [], journalUnlocked: false });
+  },
+
+  resetJournal: async () => {
+    if (!vault) return 0;
+    const now = Date.now();
+    // Enumerate every sealed row by id (day is plain metadata, so this works
+    // locked) and tombstone each — a bare delete would just resurrect on sync.
+    const rows = await vault.journal();
+    for (const r of rows) {
+      await vault.deleteJournal(r.id);
+      await vault.tombstone(r.id, now);
+    }
+    // Empty crypto meta parses back to null → the journal returns to "create" mode.
+    await vault.setMeta('journalCrypto', '');
+    await forgetKey(); // drop the cached derived key from the Keychain
+    journalKey = null;
+    set({
+      journal: [],
+      journalCount: 0,
+      journalCrypto: null,
+      journalCached: false,
+      journalUnlocked: false,
+      journaledToday: false,
+    });
+    return rows.length;
   },
 
   /*

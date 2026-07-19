@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Linking,
   Platform,
   Pressable,
@@ -69,6 +70,33 @@ export function JournalScreen() {
   const lockJournal = useData((s) => s.lockJournal);
   const addEntry = useData((s) => s.addJournalEntry);
   const removeEntry = useData((s) => s.removeJournalEntry);
+  const resetJournal = useData((s) => s.resetJournal);
+
+  // Forgot the passphrase, entries are disposable. Two taps of confirmation
+  // because it's irreversible; the cross-device finish is spelled out after.
+  const doReset = () => {
+    Alert.alert(
+      'Reset the journal?',
+      'This erases every entry on this phone and clears the passphrase, so you can set a new one. It cannot be undone — only do it if these entries don’t matter.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset',
+          style: 'destructive',
+          onPress: () => {
+            haptics.warning();
+            void resetJournal().then((n) => {
+              haptics.success();
+              Alert.alert(
+                'Journal reset on this phone',
+                `${n} ${n === 1 ? 'entry' : 'entries'} cleared. To finish everywhere: turn OFF auto-sync (Settings), do this same reset on your laptop, then delete the "journal" folder in your vault repo on github.com. Turn sync back on and set a fresh passphrase.`,
+              );
+            });
+          },
+        },
+      ],
+    );
+  };
 
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -344,6 +372,12 @@ export function JournalScreen() {
 
             {err ? <Text style={st.err}>{err}</Text> : null}
             {code && code !== 'user_cancel' ? <Text style={st.diag}>error code: {code}</Text> : null}
+
+            {mode !== 'create' ? (
+              <Press haptic={false} onPress={doReset}>
+                <Text style={st.resetLink}>Forgot it? Reset the journal</Text>
+              </Press>
+            ) : null}
 
             {bio ? (
               <Text style={st.diag}>
@@ -834,6 +868,7 @@ const st = StyleSheet.create({
     marginBottom: 10,
   },
   linkText: { ...t.footnote, color: c.accent, marginTop: 10, textAlign: 'center' },
+  resetLink: { ...t.caption1, color: c.red, marginTop: 18, textAlign: 'center', opacity: 0.85 },
   kicker: { ...t.caption2, fontFamily: mono, letterSpacing: 1.6, color: c.ink3 },
   body: { ...t.footnote, color: c.ink2, lineHeight: 19, marginTop: 8 },
   note: { ...t.caption1, color: c.ink3, lineHeight: 17, marginTop: 12 },
