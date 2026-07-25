@@ -22,6 +22,7 @@ import { useData } from '../store/data'
 import { useUI } from '../store/ui'
 import { blocksToMarkdown, markdownToBlocks } from '../lib/markdown'
 import { WIKI_RE } from '../lib/loom'
+import { PENS, PEN_KEY, HL_SRC, TC_SRC, type Pen } from '../lib/ink'
 import { rankWeave, type WeaveGroup } from '../lib/weave'
 import type { Note } from '../lib/types'
 
@@ -209,6 +210,75 @@ const wikilinks = ViewPlugin.fromClass(
   { decorations: (v) => v.decorations },
 )
 
+// ── Highlighter + text colour ────────────────────────────────────────
+// Syntax + palette live in lib/ink.ts, shared with the read view.
+const HL_RE = new RegExp(HL_SRC, 'g')
+const TC_RE = new RegExp(TC_SRC, 'g')
+
+/**
+ * Paint both inline forms. Like the wikilink pass, the raw markers stay visible
+ * while the cursor is inside — you can always see and edit what you typed.
+ */
+function buildInk(view: EditorView): DecorationSet {
+  const b = new RangeSetBuilder<Decoration>()
+  const sel = view.state.selection.ranges
+  const touches = (from: number, to: number) => sel.some((r) => r.to >= from && r.from <= to)
+  type Hit = { start: number; end: number; lead: number; tail: number; cls: string }
+
+  for (const { from, to } of view.visibleRanges) {
+    const text = view.state.doc.sliceString(from, to)
+    const hits: Hit[] = []
+    for (const [re, kind] of [
+      [HL_RE, 'hl'],
+      [TC_RE, 'tc'],
+    ] as const) {
+      re.lastIndex = 0
+      let m: RegExpExecArray | null
+      while ((m = re.exec(text))) {
+        const pen = (m[1] ?? 'amber') as Pen
+        const marker = kind === 'hl' ? 2 : 2
+        hits.push({
+          start: from + m.index,
+          end: from + m.index + m[0].length,
+          // opening marker + optional "name:" prefix
+          lead: marker + (m[1] ? m[1].length + 1 : 0),
+          tail: marker,
+          cls: `nt-${kind} nt-${kind}-${PEN_KEY[pen]}`,
+        })
+      }
+    }
+    // One builder, so ranges must go in document order.
+    hits.sort((x, y) => x.start - y.start)
+    let last = -1
+    for (const h of hits) {
+      if (h.start < last) continue // overlapping matches — first one wins
+      last = h.end
+      const mark = Decoration.mark({ class: h.cls })
+      if (touches(h.start, h.end)) {
+        b.add(h.start, h.end, mark)
+      } else {
+        b.add(h.start, h.start + h.lead, Decoration.replace({}))
+        b.add(h.start + h.lead, h.end - h.tail, mark)
+        b.add(h.end - h.tail, h.end, Decoration.replace({}))
+      }
+    }
+  }
+  return b.finish()
+}
+
+const ink = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet
+    constructor(view: EditorView) {
+      this.decorations = buildInk(view)
+    }
+    update(u: ViewUpdate) {
+      if (u.docChanged || u.selectionSet || u.viewportChanged) this.decorations = buildInk(u.view)
+    }
+  },
+  { decorations: (v) => v.decorations },
+)
+
 // ── Inline images (Notion/Obsidian "live" images) ─────────────────────
 // A pasted image is stored as `![caption](data:…base64…)` — hundreds of raw
 // characters. Without this it shows as that wall of base64 in the editor while
@@ -313,8 +383,18 @@ const theme = EditorView.theme(
     '.cm-content': { padding: '2px 0', caretColor: 'var(--am)' },
     '.cm-line': { padding: '0 2px 0 0' },
     '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--am)', borderLeftWidth: '2px' },
-    '.cm-selectionBackground': { backgroundColor: 'rgba(184,122,38,0.16)' },
-    '&.cm-focused .cm-selectionBackground': { backgroundColor: 'rgba(184,122,38,0.22)' },
+    /*
+     * CodeMirror's baseTheme styles the selection through a long path
+     * (`&light.cm-focused > .cm-scroller > .cm-selectionLayer …`). A short
+     * `.cm-selectionBackground` rule loses on specificity, so the built-in
+     * LIGHT default (#d7d4f0, a pale lavender) was painting the selection —
+     * invisible against dark paper. Match that path so ours wins, and read the
+     * colour from a token so it follows the theme instead of being frozen.
+     */
+    '.cm-selectionLayer .cm-selectionBackground': { backgroundColor: 'var(--sel)' },
+    '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground': {
+      backgroundColor: 'var(--sel)',
+    },
     '&.cm-focused .cm-matchingBracket': { backgroundColor: 'var(--sf2)', outline: 'none' },
     '.cm-placeholder': { color: 'var(--ink3)', fontStyle: 'italic' },
     '.nt-wl': {
@@ -324,6 +404,16 @@ const theme = EditorView.theme(
       textDecorationColor: 'rgba(53,81,142,0.35)',
       textUnderlineOffset: '3px',
     },
+    // Highlighter pens — translucent tints, so one value works on both papers.
+    '.nt-hl': { borderRadius: '3px', padding: '0.05em 0.15em', boxDecorationBreak: 'clone' },
+    '.nt-hl-a': { backgroundColor: 'var(--hl-a)' },
+    '.nt-hl-g': { backgroundColor: 'var(--hl-g)' },
+    '.nt-hl-b': { backgroundColor: 'var(--hl-b)' },
+    '.nt-hl-p': { backgroundColor: 'var(--hl-p)' },
+    '.nt-tc-a': { color: 'var(--tc-a)' },
+    '.nt-tc-g': { color: 'var(--tc-g)' },
+    '.nt-tc-b': { color: 'var(--tc-b)' },
+    '.nt-tc-p': { color: 'var(--tc-p)' },
     '.nt-img': { display: 'block', margin: '6px 0' },
     '.nt-img img': {
       maxWidth: '100%',
@@ -488,6 +578,48 @@ function makeLink(view: EditorView, r: Sel) {
   view.focus()
 }
 
+/**
+ * Highlighter / text colour. Toggles: painting with the pen already on the
+ * selection strips it instead of nesting a second layer.
+ */
+function paintSel(view: EditorView, r: Sel, kind: 'hl' | 'tc', pen: Pen) {
+  const text = view.state.sliceDoc(r.from, r.to)
+  if (!text) return view.focus()
+  const wrap = kind === 'hl' ? '==' : '%%'
+  // The amber pen is the default, so `==text==` needs no prefix; text colour
+  // always names its pen (there is no "default" ink).
+  const named = new RegExp(`^${wrap}(?:(amber|green|blue|rose):)?([\\s\\S]+)${wrap}$`)
+  const m = text.match(named)
+  const insert =
+    m && (m[1] ?? 'amber') === pen
+      ? m[2] // same pen twice → lift it back off
+      : `${wrap}${kind === 'hl' && pen === 'amber' ? '' : pen + ':'}${m ? m[2] : text}${wrap}`
+  view.dispatch({
+    changes: { from: r.from, to: r.to, insert },
+    selection: EditorSelection.range(r.from, r.from + insert.length),
+  })
+  view.focus()
+}
+
+/**
+ * A `---` rule on its own line — the divider.
+ *
+ * It only reads as its own block when a BLANK line fences it above: markdown
+ * folds consecutive lines into one paragraph, so a `---` written straight under
+ * prose becomes part of that paragraph instead of a rule.
+ */
+function insertRule(view: EditorView, r: Sel) {
+  const doc = view.state.doc
+  const line = doc.lineAt(r.head)
+  const onBlankLine = line.text.trim() === ''
+  const prevBlank = line.number === 1 || doc.line(line.number - 1).text.trim() === ''
+  const at = onBlankLine ? line.from : line.to
+  const lead = onBlankLine ? (prevBlank ? '' : '\n') : '\n\n'
+  const insert = lead + '---\n\n'
+  view.dispatch({ changes: { from: at, to: at, insert }, selection: EditorSelection.cursor(at + insert.length) })
+  view.focus()
+}
+
 // ── Format palette (right-click) ──────────────────────────────────────
 // Minimalist: three rows of square cells — inline styles, text sizes,
 // blocks. Each glyph wears its own effect (the B is bold, the i is serif
@@ -627,6 +759,41 @@ function FormatMenu({ fm, view, onClose }: { fm: FmState | null; view: EditorVie
         <Cell title="Weave [[note link]]" onPick={pick((v, s) => wrapSel(v, s, '[[', ']]'))}>
           <span style={{ fontFamily: MONO, fontSize: 9, color: 'var(--ac)' }}>[[ ]]</span>
         </Cell>
+        <Cell title="Divider — a line across the page" onPick={pick((v, s) => insertRule(v, s))}>
+          <span style={{ width: 13, height: 2, background: 'var(--ink3)', borderRadius: 1 }} />
+        </Cell>
+      </div>
+      <div style={rule} />
+      {/* Highlighter pens, then the same four as text colour. */}
+      <div style={row}>
+        {PENS.map((p) => (
+          <Cell key={p} title={`Highlight — ${p}`} onPick={pick((v, s) => paintSel(v, s, 'hl', p))}>
+            <span
+              style={{
+                width: 15,
+                height: 15,
+                borderRadius: 4,
+                background: `var(--hl-${PEN_KEY[p]})`,
+                border: '1px solid var(--ln)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontFamily: SERIF,
+                fontSize: 10,
+                color: 'var(--ink2)',
+              }}
+            >
+              A
+            </span>
+          </Cell>
+        ))}
+      </div>
+      <div style={row}>
+        {PENS.map((p) => (
+          <Cell key={p} title={`Text colour — ${p}`} onPick={pick((v, s) => paintSel(v, s, 'tc', p))}>
+            <span style={{ fontFamily: SERIF, fontSize: 14, fontWeight: 600, color: `var(--tc-${PEN_KEY[p]})` }}>A</span>
+          </Cell>
+        ))}
       </div>
       <div style={{ fontFamily: MONO, fontSize: 8, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--ink3)', textAlign: 'center', paddingTop: 5 }}>
         format
@@ -717,6 +884,7 @@ export function MarkdownEditor({ note, apiRef }: { note: Note; apiRef?: React.Mu
           livePreview,
           images,
           wikilinks,
+          ink,
           autocompletion({ override: [wikiSource(noteId)], icons: false }),
           syntaxHighlighting(highlight),
           theme,

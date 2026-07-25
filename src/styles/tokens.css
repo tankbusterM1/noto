@@ -26,6 +26,29 @@
 
   --ac: var(--accent-base); /* primary accent (user-tweakable) */
   --acI: #f7f5ee; /* ink on primary accent */
+
+  /*
+   * Editor selection. CodeMirror paints its own selection layer, so this is the
+   * one place both it and native ::selection read from.
+   */
+  --sel: rgba(184, 122, 38, 0.22);
+
+  /*
+   * Highlighter pens. Deliberately TRANSLUCENT: a tint over whatever paper is
+   * behind it, so the same value reads correctly on light and dark and the text
+   * on top stays --ink. Never give these an opaque colour — that's what made a
+   * pasted highlight turn into an unreadable light block in dark mode.
+   */
+  --hl-a: rgba(184, 122, 38, 0.3); /* amber  */
+  --hl-g: rgba(74, 115, 80, 0.28); /* green  */
+  --hl-b: rgba(53, 81, 142, 0.24); /* blue   */
+  --hl-p: rgba(176, 82, 60, 0.26); /* rose   */
+
+  /* Text colours. Opaque, so these DO need a per-theme value for contrast. */
+  --tc-a: #96631f;
+  --tc-g: #3f6a46;
+  --tc-b: #35518e;
+  --tc-p: #a5492f;
 }
 
 /* ── Dark ────────────────────────────────────────────────────────── */
@@ -46,4 +69,19 @@
   /* dark accent is desaturated toward the paper */
   --ac: color-mix(in oklab, var(--accent-base) 45%, #e8e4d8);
   --acI: #14110c;
+
+  /* Warmer and a touch stronger — a 0.22 tint disappears on near-black paper. */
+  --sel: rgba(217, 164, 92, 0.28);
+
+  /* Same pens, nudged up: translucent tints need more presence over dark paper. */
+  --hl-a: rgba(217, 164, 92, 0.32);
+  --hl-g: rgba(147, 187, 152, 0.28);
+  --hl-b: rgba(143, 176, 232, 0.26);
+  --hl-p: rgba(217, 141, 119, 0.28);
+
+  /* Lifted off the floor so they stay legible on dark paper. */
+  --tc-a: #e0b268;
+  --tc-g: #93bb98;
+  --tc-b: #93b0e6;
+  --tc-p: #e0958a;
 }

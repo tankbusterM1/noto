@@ -4,6 +4,7 @@ import { useUI } from '../store/ui'
 import { LANGS } from '../lib/constants'
 import { MONO } from '../lib/ui'
 import { safeHref } from '../lib/url'
+import { HL_SRC, TC_SRC, HL_SCAN, TC_SCAN, PEN_KEY, RULE_RE, type Pen } from '../lib/ink'
 import { ImageIcon, ExternalArrow, LightbulbIcon } from './icons'
 import type { Block, Note } from '../lib/types'
 import s from './NoteBlocks.module.css'
@@ -19,9 +20,14 @@ import s from './NoteBlocks.module.css'
  * style text inside the contentEditable path.
  */
 
-// One-level inline markdown for read views: wikilink, bold, italic, strike,
-// code, link.
-const INLINE_RE = /(\[\[[^[\]]+\]\]|\*\*[^*]+\*\*|\*[^*]+\*|~~[^~]+~~|`[^`]+`|\[[^\]]+\]\([^)\s]+\))/g
+// One-level inline markdown for read views: wikilink, highlight, text colour,
+// bold, italic, strike, code, link.
+const INLINE_RE = new RegExp(
+  '(\\[\\[[^[\\]]+\\]\\]|' + HL_SCAN + '|' + TC_SCAN + '|\\*\\*[^*]+\\*\\*|\\*[^*]+\\*|~~[^~]+~~|`[^`]+`|\\[[^\\]]+\\]\\([^)\\s]+\\))',
+  'g',
+)
+const HL_ONE = new RegExp('^' + HL_SRC + '$')
+const TC_ONE = new RegExp('^' + TC_SRC + '$')
 
 /** Open a [[wikilink]] target by title (toast when it doesn't exist). */
 function openByTitle(title: string) {
@@ -53,6 +59,29 @@ export function Inline({ text }: { text?: string }): ReactNode {
             </span>
           )
         }
+        m = p.match(HL_ONE)
+        if (m)
+          return (
+            <mark
+              key={i}
+              style={{
+                background: `var(--hl-${PEN_KEY[(m[1] as Pen) ?? 'amber']})`,
+                color: 'inherit',
+                borderRadius: 3,
+                padding: '0.05em 0.15em',
+                boxDecorationBreak: 'clone',
+              }}
+            >
+              {m[2]}
+            </mark>
+          )
+        m = p.match(TC_ONE)
+        if (m)
+          return (
+            <span key={i} style={{ color: `var(--tc-${PEN_KEY[m[1] as Pen]})` }}>
+              {m[2]}
+            </span>
+          )
         m = p.match(/^\*\*([^*]+)\*\*$/)
         if (m) return <strong key={i}>{m[1]}</strong>
         m = p.match(/^\*([^*]+)\*$/)
@@ -130,6 +159,11 @@ export function NoteBlocks({ note, readOnly = false, full = false }: { note: Not
             )
           }
           case 'p':
+            // A paragraph that is only `---` is markdown's horizontal rule. It
+            // stays a plain paragraph in storage (nothing to migrate, nothing
+            // for sync to learn) and simply draws as a line when read.
+            if (readOnly && RULE_RE.test(b.text ?? ''))
+              return <hr key={key} style={{ border: 0, borderTop: '1px solid var(--ln)', margin: '26px 0' }} />
             return (
               <p key={key} className={s.p} {...editable} onBlur={onBlurText(i)}>
                 {txt(b.text)}
