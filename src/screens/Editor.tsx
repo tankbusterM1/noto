@@ -13,7 +13,7 @@ import { MarkdownEditor, type EditorWeaveApi } from '../components/MarkdownEdito
 import { NoteBlocks } from '../components/NoteBlocks'
 import { LocalLoom } from '../components/LocalLoom'
 import { threadColor, unwovenMentions } from '../lib/loom'
-import { TrashIcon, HistoryIcon } from '../components/icons'
+import { TrashIcon, HistoryIcon, Caret } from '../components/icons'
 
 const railLabel: CSSProperties = {
   fontFamily: MONO,
@@ -51,6 +51,8 @@ export function Editor() {
   const setNoteReading = useUI((s) => s.setNoteReading)
   const openHistory = useUI((s) => s.openHistory)
   const editorEpoch = useUI((s) => s.editorEpoch)
+  const memRailOpen = useUI((s) => s.memRailOpen)
+  const toggleMemRail = useUI((s) => s.toggleMemRail)
 
   const [tagInput, setTagInput] = useState('')
   const [armed, setArmed] = useState(false)
@@ -162,6 +164,17 @@ export function Editor() {
               <HistoryIcon size={12} />
               edited {ago(note.updated)}
             </span>
+            {/* Push the memory rail away — the note takes the whole window, which is
+                what you want with a browser parked on the other half of the screen. */}
+            <span
+              className="crumb"
+              onClick={toggleMemRail}
+              title={memRailOpen ? 'Hide the memory rail — wider page · ⌘⇧\\' : 'Show the memory rail · ⌘⇧\\'}
+              style={{ display: 'flex', alignItems: 'center', gap: 4, fontFamily: MONO, fontSize: 10, cursor: 'pointer', color: 'var(--ink3)', transition: 'color 0.15s ease' }}
+            >
+              <Caret size={9} style={{ transform: memRailOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease' }} />
+              memory
+            </span>
           </div>
 
           {/* Ink trail — the path of notes hopped through this session */}
@@ -259,8 +272,9 @@ export function Editor() {
         </div>
       </div>
 
-      {/* Memory rail */}
-      <div style={{ width: 290, flexShrink: 0, borderLeft: '1px solid var(--ln)', padding: '30px 22px 120px', display: 'flex', flexDirection: 'column', gap: 22 }}>
+      {/* Memory rail — collapsible (⌘⇧\), so the page can have the full width */}
+      {memRailOpen && (
+      <div style={{ width: 290, flexShrink: 0, borderLeft: '1px solid var(--ln)', padding: '30px 22px 120px', display: 'flex', flexDirection: 'column', gap: 22, animation: 'fadein 0.25s ease both' }}>
         <div>
           <div style={{ ...railLabel, marginBottom: 12 }}>Memory</div>
           {sr ? (
@@ -441,6 +455,7 @@ export function Editor() {
           </button>
         </div>
       </div>
+      )}
     </div>
   )
 }

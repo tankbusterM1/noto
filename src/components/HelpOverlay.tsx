@@ -67,6 +67,7 @@ export function HelpOverlay() {
             <div style={groupLabel}>Everywhere</div>
             <Row keys={['⌘K']}>search everything · run actions · create a note</Row>
             <Row keys={['⌘\\']}>hide / show the sidebar — full-screen writing</Row>
+            <Row keys={['⌘⇧\\']}>hide / show the note's memory rail — wider page</Row>
             <Row keys={['?']}>this sheet</Row>
             <Row keys={['esc']}>close whatever is on top</Row>
 

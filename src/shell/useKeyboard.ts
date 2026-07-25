@@ -7,6 +7,7 @@ import type { Grade } from '../lib/types'
  * Global keyboard handling:
  *  - ⌘/Ctrl-K toggles the command palette (its input owns ↑/↓/↵)
  *  - ⌘/Ctrl-\ toggles the sidebar (full-screen writing)
+ *  - ⌘/Ctrl-⇧-\ toggles the editor's memory rail (the other half of that)
  *  - in a session: `1–4` grade the whole note directly (no reveal gate)
  *  - `esc` closes palette → settings → thread → watch drawer → session
  */
@@ -18,6 +19,13 @@ export function useKeyboard() {
       const target = e.target as HTMLElement | null
       const typing = !!target && (target.tagName === 'INPUT' || target.isContentEditable)
 
+      // ⌘/Ctrl-⇧-\ toggles the editor's memory rail — the mirror of ⌘\ for the
+      // right-hand side. Shift-\ arrives as '|', so it can't hit the case below.
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === '|' || e.key === '\\')) {
+        e.preventDefault()
+        ui.toggleMemRail()
+        return
+      }
       // ⌘/Ctrl-\ toggles the sidebar (Obsidian/Notion-style full-screen writing).
       if ((e.metaKey || e.ctrlKey) && e.key === '\\') {
         e.preventDefault()

@@ -42,6 +42,11 @@ interface UIState {
   sbOpen: boolean
   /** Notes library's folder rail expanded? false = collapsed to a slim strip. */
   railOpen: boolean
+  /**
+   * Editor's right-hand memory rail visible? false = the note gets the whole
+   * window — for writing beside a browser on a split screen.
+   */
+  memRailOpen: boolean
   accent: Accent
   inkFade: boolean
   /** Per-note reading mode (true = reading). Sticks until you flip it back. */
@@ -81,6 +86,7 @@ interface UIState {
   toggleSidebar: () => void
   /** Collapse/expand the folder rail inside the Notes library. */
   toggleRail: () => void
+  toggleMemRail: () => void
   setAccent: (accent: Accent) => void
   setInkFade: (inkFade: boolean) => void
   /** Remember a note's reading/edit mode. */
@@ -140,6 +146,7 @@ export const useUI = create<UIState>()(
       slim: false,
       sbOpen: true,
       railOpen: true,
+      memRailOpen: true,
       accent: '#35518E',
       inkFade: true,
       noteMode: {},
@@ -171,6 +178,7 @@ export const useUI = create<UIState>()(
       // Reopening always returns to the full-width sidebar (never slim).
       toggleSidebar: () => set((s) => (s.sbOpen ? { sbOpen: false } : { sbOpen: true, slim: false })),
       toggleRail: () => set((s) => ({ railOpen: !s.railOpen })),
+      toggleMemRail: () => set((s) => ({ memRailOpen: !s.memRailOpen })),
       setAccent: (accent) => set({ accent }),
       setInkFade: (inkFade) => set({ inkFade }),
       setNoteReading: (id, reading) => set((s) => ({ noteMode: { ...s.noteMode, [id]: reading } })),
@@ -233,6 +241,7 @@ export const useUI = create<UIState>()(
         slim: s.slim,
         sbOpen: s.sbOpen,
         railOpen: s.railOpen,
+        memRailOpen: s.memRailOpen,
         accent: s.accent,
         inkFade: s.inkFade,
         noteMode: s.noteMode,
