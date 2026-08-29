@@ -13,11 +13,14 @@ export function NoteCard({
   note,
   variant,
   index = 0,
+  resumed = false,
   onContextMenu,
 }: {
   note: Note
   variant: 'recent' | 'grid'
   index?: number
+  /** The note you left off in — wears a ribbon. */
+  resumed?: boolean
   onContextMenu?: (e: React.MouseEvent) => void
 }) {
   const folders = useData((s) => s.folders)
@@ -26,7 +29,10 @@ export function NoteCard({
   const openNote = useUI((s) => s.openNote)
 
   const sr = srs[note.id]
-  const ink = inkOpacity(sr, inkFade)
+  // Floor at 0.62: a faded note must still be readable. The previous build let
+  // this fall to 0.55 and below, which is the complaint that started the
+  // redesign. Hover restores it to 1 (see .ink-card in global.css).
+  const ink = Math.max(0.62, inkOpacity(sr, inkFade))
   const pill = srsPill(sr)
   const folder = folderName(folders, note.folderId)
   const pillStyle = { fontFamily: MONO, fontSize: 10, color: pill.color, fontWeight: pill.bold ? 600 : undefined }
@@ -80,13 +86,14 @@ export function NoteCard({
 
   return (
     <div
-      className="ink-card lift-2"
+      className="ink-card paper-stack"
       onClick={() => openNote(note.id)}
       onContextMenu={onContextMenu}
       style={{
+        position: 'relative',
         background: 'var(--sf)',
         border: '1px solid var(--ln)',
-        borderRadius: 15,
+        borderRadius: 14,
         padding: '17px 19px',
         cursor: 'pointer',
         display: 'flex',
@@ -95,6 +102,7 @@ export function NoteCard({
         ...rise(index),
       }}
     >
+      {resumed && <span className="ribbon-card" aria-hidden />}
       <div className="ink-body" style={{ opacity: ink }}>
         <div style={{ fontFamily: SERIF, fontSize: 18.5, fontWeight: 500, lineHeight: 1.25 }}>
           {note.title}

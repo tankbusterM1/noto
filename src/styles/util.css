@@ -289,3 +289,44 @@
   opacity: 1;
   border-color: var(--ink3);
 }
+
+/* ── paper stacks (Notes library cards) ──────────────────────────────
+   The shadow is an OFFSET, not a blur: a second sheet of paper under the
+   first. Hover lifts the top sheet 3px and deepens the offset. */
+.paper-stack {
+  box-shadow: 0 2px 0 -0.5px var(--sf2);
+  transition:
+    transform var(--t-base) var(--t-ease),
+    box-shadow var(--t-base) var(--t-ease);
+}
+.paper-stack:hover {
+  transform: translateY(-3px);
+  box-shadow: 7px 8px 0 -1px var(--sf2);
+}
+
+/* ── the bookmark ribbon ─────────────────────────────────────────────
+   Notched at the bottom with a clip-path, and scaled in from the top so it
+   drops into place like a real bookmark. */
+.ribbon-band,
+.ribbon-card {
+  position: absolute;
+  top: 0;
+  background: var(--ink2);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 78%, 0 100%);
+  transform-origin: top;
+  animation: t-ribbon var(--t-base) var(--t-spring) both;
+}
+.ribbon-band {
+  left: 20px;
+  width: 11px;
+  height: 46px;
+}
+.ribbon-card {
+  right: 22px;
+  width: 10px;
+  height: 38px;
+}
+@keyframes t-ribbon {
+  from { transform: scaleY(0); }
+  to   { transform: scaleY(1); }
+}

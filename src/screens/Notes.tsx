@@ -3,6 +3,8 @@ import { useData } from '../store/data'
 import { useUI } from '../store/ui'
 import { kidsOf, notesIn, countRec, pathOf } from '../lib/tree'
 import { noteFullText } from '../lib/format'
+import { ago } from '../lib/dates'
+import { srsPill } from '../lib/srs'
 import { MONO, SERIF, kicker, rise } from '../lib/ui'
 import { NoteCard } from '../components/NoteCard'
 import { EmptyState } from '../components/EmptyState'
@@ -46,6 +48,10 @@ export function Notes() {
   const toggleRail = useUI((s) => s.toggleRail)
 
   const [menu, setMenu] = useState<MenuState | null>(null)
+  const [searchFocus, setSearchFocus] = useState(false)
+  const trail = useUI((st) => st.trail)
+  const resumeId = trail[trail.length - 1]
+  const resumeNote = notes.find((n) => n.id === resumeId) ?? null
 
   // Deleting a folder is now a safe, recoverable subtree delete (its notes go to
   // the recycle bin), so it takes a confirm: first click arms the row and toasts
@@ -163,16 +169,32 @@ export function Notes() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
-          <div style={kicker}>Library · {notes.length} notes</div>
-          <h1 style={{ fontFamily: SERIF, fontSize: 36, fontWeight: 500, letterSpacing: '-0.015em', margin: '6px 0 0' }}>Notes</h1>
+          <h1 style={{ fontFamily: SERIF, fontSize: 30, fontWeight: 500, letterSpacing: '-0.01em', margin: 0 }}>Library</h1>
+          <div style={{ ...kicker, marginTop: 8 }}>
+            {folders.length} folders · {notes.length} notes · {notes.filter((n) => srs[n.id]).length} in review
+          </div>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--sf)', border: '1px solid var(--ln)', borderRadius: 10, padding: '8px 12px', width: 230 }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              background: 'var(--sf)',
+              border: `1px solid ${searchFocus ? 'var(--ink3)' : 'var(--ln)'}`,
+              borderRadius: 9,
+              padding: '8px 12px',
+              width: searchFocus ? 290 : 220,
+              transition: 'width var(--t-base) var(--t-ease), border-color var(--t-fast) var(--t-ease)',
+            }}
+          >
             <SearchIcon style={{ color: 'var(--ink3)' }} />
             <input
               value={libQ}
               onChange={(e) => setLibQ(e.target.value)}
               onKeyDown={(e) => e.key === 'Escape' && setLibQ('')}
+              onFocus={() => setSearchFocus(true)}
+              onBlur={() => setSearchFocus(false)}
               placeholder="Search all notes…"
               style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 13, fontFamily: 'inherit', color: 'var(--ink)', width: '100%' }}
             />
@@ -248,6 +270,7 @@ export function Notes() {
               fontWeight: 500,
               color: selFolder === 'all' && !isSearching ? 'var(--ink)' : 'var(--ink2)',
               background: selFolder === 'all' && !isSearching ? 'var(--sf2)' : undefined,
+              boxShadow: selFolder === 'all' && !isSearching ? 'inset 2px 0 0 var(--ink3)' : undefined,
             }}
           >
             <GridIcon />
@@ -282,6 +305,7 @@ export function Notes() {
                     fontWeight: r.active ? 600 : 500,
                     color: r.active ? 'var(--ink)' : 'var(--ink2)',
                     background: r.active ? 'var(--sf2)' : undefined,
+                    boxShadow: r.active ? 'inset 2px 0 0 var(--ink3)' : undefined,
                   }}
                 >
                   <div
@@ -361,9 +385,44 @@ export function Notes() {
 
         {/* Folder contents */}
         <div style={{ flex: 1, minWidth: 0 }} onContextMenu={bgMenu}>
+          {/* Where you left off — the last note you opened, hidden while searching. */}
+          {!isSearching && resumeNote && (
+            <div
+              className="paper-stack"
+              onClick={() => openNote(resumeNote.id)}
+              style={{
+                position: 'relative',
+                background: 'var(--sf)',
+                border: '1px solid var(--ln)',
+                borderRadius: 14,
+                padding: '22px 26px 22px 34px',
+                marginBottom: 22,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 24,
+              }}
+            >
+              <span className="ribbon-band" aria-hidden />
+              <div style={{ minWidth: 0 }}>
+                <div style={{ ...kicker, marginBottom: 7 }}>Where you left off</div>
+                <div style={{ fontFamily: SERIF, fontSize: 21, fontWeight: 500, lineHeight: 1.2 }}>{resumeNote.title}</div>
+              </div>
+              <div style={{ textAlign: 'right', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 5 }}>
+                <span style={{ fontFamily: MONO, fontSize: 9.5, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink3)' }}>
+                  {pathOf(folders, resumeNote.folderId).map((f) => f.name).join(' / ')}
+                </span>
+                <span style={{ fontFamily: MONO, fontSize: 9.5, color: 'var(--ink3)' }}>edited {ago(resumeNote.updated)}</span>
+                <span style={{ fontFamily: MONO, fontSize: 10, color: srsPill(srs[resumeNote.id]).color, fontWeight: 600 }}>
+                  {srsPill(srs[resumeNote.id]).label}
+                </span>
+              </div>
+            </div>
+          )}
           {isSearching ? (
             <div style={{ fontFamily: MONO, fontSize: 11, color: 'var(--ink3)', marginBottom: 14 }}>
-              results for "{libQ}" · {searchResults.length} {searchResults.length === 1 ? 'note' : 'notes'}
+              {searchResults.length} {searchResults.length === 1 ? 'note' : 'notes'} for "{libQ}"
             </div>
           ) : (
             <>
@@ -406,9 +465,16 @@ export function Notes() {
             </>
           )}
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
             {gridSrc.map((n, i) => (
-              <NoteCard key={n.id} note={n} variant="grid" index={i} onContextMenu={(e) => noteMenu(e, n)} />
+              <NoteCard
+                key={n.id}
+                note={n}
+                variant="grid"
+                index={i}
+                resumed={n.id === resumeId}
+                onContextMenu={(e) => noteMenu(e, n)}
+              />
             ))}
           </div>
           {folderEmpty && (
