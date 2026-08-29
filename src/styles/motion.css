@@ -1,0 +1,147 @@
+/*
+ * Noto Calm — motion layer.
+ * Append to src/styles/global.css (or import after tokens.css).
+ *
+ * THREE RULES:
+ *  1. Large surfaces (drawers, modals, panels, screens) animate transform +
+ *     opacity ONLY. No filter:blur() on anything big — it repaints every
+ *     frame and is what made the previous build feel choppy.
+ *  2. Blur is allowed only on small things: single words, icons, numbers.
+ *  3. Never animate `transform` from a keyframe on an element that also needs
+ *     a static transform — the keyframe wins and the element jumps from the
+ *     wrong place. Bake the static transform into every frame instead:
+ *     t-pop-d carries rotate(45deg), t-seltb carries translate(-50%,-100%).
+ */
+
+:root {
+  --t-fast: 260ms;
+  --t-base: 560ms;
+  --t-slow: 900ms;
+  --t-air: 1300ms;
+  --t-ease: cubic-bezier(0.22, 1, 0.36, 1);      /* expo-out, long tail */
+  --t-spring: cubic-bezier(0.34, 1.24, 0.5, 1);  /* one soft overshoot */
+  --t-soft: cubic-bezier(0.45, 0.05, 0.25, 1);   /* ambient loops */
+}
+
+/* ── screens, rows, blocks ───────────────────────────────────────────── */
+@keyframes t-page-in {
+  from { opacity: 0; transform: translateY(22px) scale(0.995); filter: blur(10px); }
+  55%  { filter: blur(0); }
+  to   { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+}
+@keyframes t-row-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── text ────────────────────────────────────────────────────────────── */
+@keyframes t-word-in {
+  from { opacity: 0; transform: translateY(16px); filter: blur(9px); }
+  60%  { filter: blur(0); }
+  to   { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+@keyframes t-swap-in {
+  from { opacity: 0; transform: translateY(8px); filter: blur(7px); }
+  to   { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+@keyframes t-num-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ── ink: rules, threads, drawn paths ────────────────────────────────── */
+@keyframes t-rule   { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes t-thread { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes t-dash   { from { stroke-dashoffset: 640; } to { stroke-dashoffset: 0; } }
+@keyframes t-draw   { from { stroke-dashoffset: 26; }  to { stroke-dashoffset: 0; } }
+
+/* ── overlays ────────────────────────────────────────────────────────── */
+@keyframes t-modal-in {
+  from { opacity: 0; transform: scale(0.975) translateY(14px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes t-panel-in {
+  from { opacity: 0; transform: translateX(36px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes t-toast-in {
+  from { opacity: 0; transform: translate(-50%, 18px) scale(0.96); }
+  to   { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+/* carries the toolbar's own centring offset — see rule 3 */
+@keyframes t-seltb {
+  from { opacity: 0; transform: translate(-50%, -100%) translateY(5px) scale(0.97); }
+  to   { opacity: 1; transform: translate(-50%, -100%) translateY(0) scale(1); }
+}
+
+/* ── marks, stamps, seals ────────────────────────────────────────────── */
+@keyframes t-pop {
+  from { opacity: 0; transform: scale(0.2); }
+  to   { opacity: 1; transform: scale(1); }
+}
+/* diamond variant: keeps the 45° rotation through the whole animation */
+@keyframes t-pop-d {
+  from { opacity: 0; transform: rotate(45deg) scale(0.2); }
+  to   { opacity: 1; transform: rotate(45deg) scale(1); }
+}
+@keyframes t-cell-in {
+  from { opacity: 0; transform: scale(0.35); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes t-check-in {
+  0%   { opacity: 0; transform: rotate(45deg) scale(0.6); }
+  62%  { opacity: 1; transform: rotate(45deg) scale(1.05); }
+  80%  { transform: rotate(45deg) scale(0.99); }
+  100% { opacity: 1; transform: rotate(45deg) scale(1); }
+}
+@keyframes t-seal {
+  0%   { opacity: 0; transform: rotate(-14deg) scale(0.45); }
+  58%  { opacity: 1; transform: rotate(3deg) scale(1.08); }
+  78%  { transform: rotate(-1deg) scale(0.98); }
+  100% { opacity: 1; transform: rotate(0deg) scale(1); }
+}
+@keyframes t-icon-in {
+  from { opacity: 0; transform: scale(0.72); filter: blur(5px); }
+  to   { opacity: 1; transform: scale(1); filter: blur(0); }
+}
+
+/* ── feedback & ambience ─────────────────────────────────────────────── */
+@keyframes t-shake {
+  0%, 100% { transform: translateX(0); }
+  18%  { transform: translateX(-5px); }
+  38%  { transform: translateX(4px); }
+  58%  { transform: translateX(-2.5px); }
+  80%  { transform: translateX(1px); }
+}
+@keyframes t-shine {
+  0%   { transform: translateX(-130%); opacity: 0; }
+  18%  { opacity: 1; }
+  100% { transform: translateX(130%); opacity: 0; }
+}
+@keyframes t-dot {
+  0%, 100% { opacity: 0.16; transform: scale(0.72); }
+  50%      { opacity: 0.85; transform: scale(1); }
+}
+@keyframes t-mote {
+  0%   { opacity: 0; transform: translateY(6px) scale(0.6); }
+  25%  { opacity: 0.5; }
+  100% { opacity: 0; transform: translateY(-54px) scale(1); }
+}
+@keyframes t-breathe {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50%      { opacity: 1; transform: scale(1.35); }
+}
+
+/* ── legacy names still referenced by the prototype ──────────────────── */
+@keyframes rise   { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+@keyframes growx  { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

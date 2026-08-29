@@ -29,7 +29,7 @@ export function Notes() {
   const deleteFolder = useData((s) => s.deleteFolder)
   const deleteNote = useData((s) => s.deleteNote)
   const addToReview = useData((s) => s.addToReview)
-  const startSession = useData((s) => s.startSession)
+  const startReview = useUI((s) => s.startReview)
   const openNote = useUI((s) => s.openNote)
   const selFolder = useUI((s) => s.selFolder)
   const libQ = useUI((s) => s.libQ)
@@ -91,7 +91,7 @@ export function Notes() {
       items: [
         { label: 'Open', onClick: () => openNote(note.id) },
         inReview
-          ? { label: 'Review now', icon: <ReviewIcon size={13} />, onClick: () => startSession([note.id]) }
+          ? { label: 'Review now', icon: <ReviewIcon size={13} />, onClick: () => startReview(note.id) }
           : { label: 'Add to review', icon: <ReviewIcon size={13} />, onClick: () => addToReview(note.id) },
         { label: '', onClick: () => {}, divider: true },
         { label: 'Delete note', icon: <TrashIcon size={12} />, danger: true, onClick: () => deleteNote(note.id) },

@@ -22,7 +22,7 @@ import s from './Sidebar.module.css'
 /** Which nav row is highlighted for the current screen. */
 function isActive(navId: Screen, screen: Screen): boolean {
   if (navId === 'notes') return screen === 'notes' || screen === 'editor'
-  if (navId === 'queue') return screen === 'queue' || screen === 'session'
+  if (navId === 'queue') return screen === 'queue' || screen === 'review'
   return screen === navId
 }
 
@@ -86,7 +86,7 @@ export function Sidebar() {
   const reviewsWeek = reviewsLastWeek(ledgerByDay, todayEpochDay())
   const vaultFiles = notes.length + watch.length + journal.length + todos.length
 
-  const width = screen === 'session' || !sbOpen ? 0 : slim ? 64 : 236
+  const width = screen === 'review' || !sbOpen ? 0 : slim ? 64 : 193
   const go = (target: Screen) => () => setScreen(target)
 
   // Caret cycles wide → icon rail → fully hidden (Obsidian-style focus mode);
@@ -261,7 +261,7 @@ export function Sidebar() {
     </aside>
 
     {/* Floating reopen chip — the only chrome left in full-screen mode. */}
-    {!sbOpen && screen !== 'session' && (
+    {!sbOpen && screen !== 'review' && (
       <button
         type="button"
         className={s.reopen}

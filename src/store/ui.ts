@@ -14,7 +14,7 @@ export type Screen =
   | 'editor'
   | 'loom'
   | 'queue'
-  | 'session'
+  | 'review'
   | 'journal'
   | 'todos'
   | 'watch'
@@ -55,6 +55,11 @@ interface UIState {
   // navigation / view state (ephemeral)
   screen: Screen
   noteId: string
+  /**
+   * The note being reviewed, or null. Reviewing is one note at a time, opened
+   * from the Review list — there is no session queue and no reveal step.
+   */
+  reviewId: string | null
   selFolder: string
   libQ: string
   expanded: Record<string, boolean>
@@ -94,6 +99,10 @@ interface UIState {
 
   // navigation actions
   setScreen: (screen: Screen) => void
+  /** Open one note for review. */
+  startReview: (id: string) => void
+  /** Leave reviewing and return to the list. */
+  endReview: () => void
   openNote: (id: string) => void
   openWatchItem: (id: string) => void
   closeWatch: () => void
@@ -153,6 +162,7 @@ export const useUI = create<UIState>()(
 
       screen: 'today',
       noteId: 'n2',
+      reviewId: null,
       selFolder: 'all',
       libQ: '',
       expanded: { f1: true, f6: true },
@@ -184,6 +194,8 @@ export const useUI = create<UIState>()(
       setNoteReading: (id, reading) => set((s) => ({ noteMode: { ...s.noteMode, [id]: reading } })),
 
       setScreen: (screen) => set({ screen }),
+      startReview: (id) => set({ reviewId: id, screen: 'review' }),
+      endReview: () => set({ reviewId: null, screen: 'queue' }),
       openNote: (id) =>
         set((s) => ({
           noteId: id,

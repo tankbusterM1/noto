@@ -8,7 +8,7 @@ import type { Grade } from '../lib/types'
  *  - ⌘/Ctrl-K toggles the command palette (its input owns ↑/↓/↵)
  *  - ⌘/Ctrl-\ toggles the sidebar (full-screen writing)
  *  - ⌘/Ctrl-⇧-\ toggles the editor's memory rail (the other half of that)
- *  - in a session: `1–4` grade the whole note directly (no reveal gate)
+ *  - while reviewing: `1–4` grade, `space` = Good, `esc` = back to the list
  *  - `esc` closes palette → settings → thread → watch drawer → session
  */
 export function useKeyboard() {
@@ -63,11 +63,17 @@ export function useKeyboard() {
         return
       }
 
-      // Whole-note review: no reveal gate — 1-4 grade the note directly.
-      const s = data.session
-      if (s && ui.screen === 'session' && s.idx < s.queue.length) {
-        if (['1', '2', '3', '4'].includes(e.key) && !typing) {
+      // Whole-note review: no reveal gate — 1-4 grade the open note directly,
+      // and space is the one you reach for most (Good).
+      if (ui.screen === 'review' && ui.reviewId && !typing) {
+        if (['1', '2', '3', '4'].includes(e.key)) {
+          e.preventDefault()
           data.grade(Number(e.key) as Grade)
+          return
+        }
+        if (e.key === ' ') {
+          e.preventDefault()
+          data.grade(3)
           return
         }
       }
@@ -75,7 +81,7 @@ export function useKeyboard() {
       if (e.key === 'Escape') {
         if (ui.thread) ui.setThread(null)
         else if (ui.wOpenId) ui.closeWatch()
-        else if (ui.screen === 'session') data.endSession()
+        else if (ui.screen === 'review') ui.endReview()
       }
     }
     window.addEventListener('keydown', onKey)

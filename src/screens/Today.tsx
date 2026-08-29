@@ -31,7 +31,6 @@ export function Today() {
   const todos = useData((s) => s.todos)
   const watch = useData((s) => s.watch)
   const journal = useData((s) => s.journal)
-  const startSession = useData((s) => s.startSession)
   const setScreen = useUI((s) => s.setScreen)
   const openWatchItem = useUI((s) => s.openWatchItem)
   const openNote = useUI((s) => s.openNote)
@@ -112,10 +111,10 @@ export function Today() {
                 {dueCount > 0 && (
                   <button
                     className="btn-lift"
-                    onClick={() => startSession()}
+                    onClick={() => setScreen('queue')}
                     style={{ marginTop: 18, background: 'var(--acI)', color: 'var(--ac)', border: 'none', borderRadius: 10, padding: '10px 18px', fontSize: 13.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
                   >
-                    Start review session →
+                    Go to review →
                   </button>
                 )}
               </div>

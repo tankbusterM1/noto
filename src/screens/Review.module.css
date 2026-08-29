@@ -1,0 +1,171 @@
+/*
+ * Reviewing — one note under a fixed rating footer.
+ * Spec: 680px card on --sf, radius 18, floating-panel shadow, t-page-in.
+ */
+
+.wrap {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── header ───────────────────────────────────────────────────────── */
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 30px 56px 0;
+}
+.back {
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink2);
+  cursor: pointer;
+  padding: 4px 0;
+  transition: color var(--t-fast) var(--t-ease);
+}
+.back:hover {
+  color: var(--ink);
+}
+.headMeta {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink3);
+}
+
+/* ── the note ─────────────────────────────────────────────────────── */
+.scroll {
+  flex: 1;
+  padding: 34px 56px 190px;
+}
+.card {
+  max-width: 680px;
+  margin: 0 auto;
+  background: var(--sf);
+  border-radius: 18px;
+  padding: 34px 38px 40px;
+  box-shadow: 0 18px 44px rgba(24, 19, 10, 0.07);
+  animation: t-page-in var(--t-slow) var(--t-ease) both;
+}
+.cardTop {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+.cardMeta,
+.openNote {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink3);
+}
+.openNote {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  white-space: nowrap;
+  transition: color var(--t-fast) var(--t-ease);
+}
+.openNote:hover {
+  color: var(--ink);
+}
+.title {
+  font-family: 'Newsreader', Georgia, serif;
+  font-size: 30px;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  line-height: 1.16;
+  margin: 14px 0 0;
+  text-wrap: pretty;
+}
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+.tag {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 11px;
+  color: var(--ink3);
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  transition: color var(--t-fast) var(--t-ease);
+}
+.tag:hover {
+  color: var(--ac);
+}
+
+/* ── rating footer ────────────────────────────────────────────────── */
+.footer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 40px 56px 26px;
+  /* A gradient of the page itself, so the note dissolves under the ratings
+     instead of hitting a hard edge. */
+  background: linear-gradient(to bottom, transparent, var(--bg) 42%);
+  pointer-events: none;
+  z-index: 20;
+}
+.footInner {
+  max-width: 680px;
+  margin: 0 auto;
+  pointer-events: auto;
+}
+.footLabel {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink3);
+  text-align: center;
+  margin-bottom: 12px;
+}
+.grades {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.grade {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid;
+  border-radius: 9px;
+  background: var(--bg);
+  padding: 11px 8px 9px;
+  cursor: pointer;
+  font-family: inherit;
+  transition:
+    background var(--t-fast) var(--t-ease),
+    transform var(--t-fast) var(--t-ease);
+}
+.grade:hover {
+  background: var(--sf2);
+}
+.grade:active {
+  transform: translateY(1px);
+}
+.gradeName {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.gradeHint {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  opacity: 0.72;
+}

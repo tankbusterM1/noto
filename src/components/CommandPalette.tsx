@@ -32,7 +32,6 @@ export function CommandPalette() {
   const srs = useData((s) => s.srs)
   const watch = useData((s) => s.watch)
   const todos = useData((s) => s.todos)
-  const startSession = useData((s) => s.startSession)
   const newNote = useData((s) => s.newNote)
 
   const pal = useUI((s) => s.pal)
@@ -53,7 +52,7 @@ export function CommandPalette() {
 
   const dueCount = dueNotes(notes, srs).length
   const actions: PalItem[] = [
-    { kind: 'action', label: 'Start review session', meta: dueCount + ' due', go: () => { closePalette(); startSession() } },
+    { kind: 'action', label: 'Go to review', meta: dueCount + ' due', go: () => { closePalette(); setScreen('queue') } },
     { kind: 'action', label: "Write today's journal", meta: 'journal', go: () => { closePalette(); setScreen('journal') } },
     { kind: 'action', label: 'Toggle appearance', meta: dark ? 'to light' : 'to dark', go: () => { closePalette(); toggleTheme() } },
     { kind: 'action', label: 'Toggle sidebar', meta: '⌘\\', go: () => { closePalette(); toggleSidebar() } },

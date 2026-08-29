@@ -10,7 +10,7 @@ import { seedDatabase } from '../data/seed'
 import { todayEpochDay, agoMs } from '../lib/dates'
 import { domainOf } from '../lib/format'
 import { scrapeLink, type Scraped } from '../lib/scrape'
-import { applyGrade, dueNotes } from '../lib/srs'
+import { applyGrade } from '../lib/srs'
 import { changeChars, shouldSnapshot, draftsToPrune, MIN_GAP_MS } from '../lib/history'
 import {
   allHistory,
@@ -57,12 +57,6 @@ import type {
   WeekItem,
 } from '../lib/types'
 
-export interface Session {
-  queue: string[]
-  idx: number
-  log: Grade[]
-}
-
 /*
  * Data store — the in-memory working set, hydrated once from Dexie and kept in
  * the prototype's exact shapes (note dates and srs `due`/`hist.d` as day
@@ -102,7 +96,6 @@ interface DataState {
   doneToday: number
   /** Review counts keyed by absolute epoch-day (from the ledger). */
   ledgerByDay: Record<number, number>
-  session: Session | null
   /** Non-null if the last hydrate attempt failed (App shows a retry screen). */
   hydrateError: string | null
   /** Deleted notes, most-recent first (the recycle bin). */
@@ -111,9 +104,8 @@ interface DataState {
   revisions: RevisionRow[]
 
   hydrate: () => Promise<void>
-  startSession: (ids?: string[]) => void
+  /** Grade the note currently open for review (ui.reviewId), then return to the list. */
   grade: (g: Grade) => void
-  endSession: () => void
   toggleTodo: (id: string) => void
   toggleGoal: (id: string) => void
   toggleWeek: (id: string) => void
@@ -499,7 +491,6 @@ export const useData = create<DataState>()((set, get) => ({
   tagsPool: [],
   doneToday: 0,
   ledgerByDay: {},
-  session: null,
   hydrateError: null,
   trash: [],
   revisions: [],
@@ -518,27 +509,19 @@ export const useData = create<DataState>()((set, get) => ({
     return hydrating
   },
 
-  startSession: (ids) => {
-    const queue = ids ?? dueNotes(get().notes, get().srs).map((n) => n.id)
-    if (!queue.length) {
-      useUI.getState().showToast('Nothing due — your ink is dark')
-      return
-    }
-    set({ session: { queue, idx: 0, log: [] } })
-    useUI.getState().setScreen('session')
-  },
   grade: (g) => {
-    const s = get().session
-    if (!s || s.idx >= s.queue.length) return
-    const id = s.queue[s.idx]
+    // Reviewing is one note at a time: the subject is whatever the Review list
+    // opened, not the head of a queue.
+    const id = useUI.getState().reviewId
+    if (!id) return
     const cur = get().srs[id]
     if (!cur) return
-    const { state: next, requeue, toast } = applyGrade(cur, g)
+    const { state: next, toast } = applyGrade(cur, g)
 
     // Adaptive layer (lib/adaptive.ts): fold this review into the FSRS memory
     // model, then let it — calibrated against the user's own recall history —
     // pick the actual next review date. The classic engine above still drives
-    // ease stats and the Again requeue.
+    // ease stats.
     const last = cur.hist[cur.hist.length - 1]
     const elapsed = last ? Math.max(0, -last.d) : 0
     const mem0 = memoryOf(cur)
@@ -560,19 +543,12 @@ export const useData = create<DataState>()((set, get) => ({
 
     set({
       srs: { ...get().srs, [id]: final },
-      session: {
-        queue: requeue ? [...s.queue, id] : s.queue,
-        idx: s.idx + 1,
-        log: [...s.log, g],
-      },
       doneToday: get().doneToday + 1,
       ledgerByDay: { ...get().ledgerByDay, [today]: (get().ledgerByDay[today] ?? 0) + 1 },
     })
+    // Back to the list, and say what the rating bought.
+    useUI.getState().endReview()
     useUI.getState().showToast(msg)
-  },
-  endSession: () => {
-    set({ session: null })
-    useUI.getState().setScreen('queue')
   },
 
   // Every list write stamps `updatedAt`: without it, two devices that both ticked

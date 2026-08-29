@@ -4,6 +4,7 @@ import './fonts'
 import App from './App.tsx'
 import { keepAppFresh } from './pwa'
 import './styles/tokens.css'
+import './styles/motion.css'
 import './styles/global.css'
 import './styles/util.css'
 

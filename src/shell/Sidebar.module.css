@@ -1,6 +1,6 @@
 /*
  * Collapsible left sidebar (README "Global chrome").
- * 236px expanded → 64px slim icon-rail → 0 during a review session.
+ * 193px expanded → 64px slim icon-rail → 0 while reviewing.
  * Caret rotates 180°, labels fade (display:none), section headers collapse to 0.
  */
 
@@ -146,11 +146,11 @@
 .navItem {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 11px;
   padding: 8px 11px;
   border-radius: 9px;
   cursor: pointer;
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--ink2);
   transition: background 0.15s ease;
@@ -176,6 +176,11 @@
 .navIcon {
   flex-shrink: 0;
   display: flex;
+  color: var(--ink3);
+}
+/* The active row's icon joins its label in full ink. */
+.navItem.active .navIcon {
+  color: var(--ink);
 }
 .navLabel {
   flex: 1;
@@ -211,10 +216,8 @@
   font-family: 'JetBrains Mono', ui-monospace, monospace;
   font-size: 10.5px;
   font-weight: 600;
-  background: var(--am);
-  color: var(--bg);
-  border-radius: 999px;
-  padding: 2px 7px;
+  color: var(--am);
+  letter-spacing: 0.06em;
   /* Pulse a few times to catch the eye when work is waiting, then rest — a
      forever-breathing badge reads as nagging (and never lets the page settle). */
   animation: badgepulse 3.2s ease-in-out 3;
@@ -245,7 +248,8 @@
 }
 .vault {
   font-family: 'JetBrains Mono', ui-monospace, monospace;
-  font-size: 10px;
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
   color: var(--ink3);
   line-height: 1.7;
   white-space: nowrap;

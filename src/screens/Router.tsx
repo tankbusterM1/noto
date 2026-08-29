@@ -4,7 +4,7 @@ import { Notes } from './Notes'
 import { Editor } from './Editor'
 import { Loom } from './Loom'
 import { Queue } from './Queue'
-import { Session } from './Session'
+import { Review } from './Review'
 import { Journal } from './Journal'
 import { Todos } from './Todos'
 import { Watch } from './Watch'
@@ -25,8 +25,8 @@ export function Router() {
       return <Loom />
     case 'queue':
       return <Queue />
-    case 'session':
-      return <Session />
+    case 'review':
+      return <Review />
     case 'journal':
       return <Journal />
     case 'todos':

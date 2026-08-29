@@ -11,17 +11,17 @@
 
 /* ── Light (default) ─────────────────────────────────────────────── */
 .theme-light {
-  --bg: #f4f1e9; /* app background (warm paper) */
+  --bg: #f6f3ec; /* app background (warm paper) */
   --sf: #fbf9f3; /* surface / card */
   --sf2: #ede9dd; /* secondary surface / chip / track */
   --ink: #211d14; /* primary text */
   --ink2: #6e6557; /* secondary text */
   --ink3: #a79d8c; /* tertiary text / muted / placeholder */
-  --ln: #e3dccc; /* hairline borders / dividers */
+  --ln: #e7e1d2; /* hairline borders / dividers */
   --cd: #221e15; /* code-block background */
-  --am: #b87a26; /* amber accent (SRS "due", streaks, tags) */
-  --g1: #b0523c; /* grade "Again" (terracotta) */
-  --g2: #b87a26; /* grade "Hard" (amber) */
+  --am: #a2731f; /* amber accent (SRS "due", streaks, tags) */
+  --g1: #a65238; /* grade "Again" (terracotta) */
+  --g2: #a2731f; /* grade "Hard" (amber) */
   --g4: #4a7350; /* grade "Easy" (green); "Good" uses --ac */
 
   --ac: var(--accent-base); /* primary accent (user-tweakable) */
@@ -31,7 +31,7 @@
    * Editor selection. CodeMirror paints its own selection layer, so this is the
    * one place both it and native ::selection read from.
    */
-  --sel: rgba(184, 122, 38, 0.22);
+  --sel: rgba(162, 115, 31, 0.22);
 
   /*
    * Highlighter pens. Deliberately TRANSLUCENT: a tint over whatever paper is
@@ -39,49 +39,50 @@
    * on top stays --ink. Never give these an opaque colour — that's what made a
    * pasted highlight turn into an unreadable light block in dark mode.
    */
-  --hl-a: rgba(184, 122, 38, 0.3); /* amber  */
+  --hl-a: rgba(162, 115, 31, 0.3); /* amber  */
   --hl-g: rgba(74, 115, 80, 0.28); /* green  */
   --hl-b: rgba(53, 81, 142, 0.24); /* blue   */
-  --hl-p: rgba(176, 82, 60, 0.26); /* rose   */
+  --hl-p: rgba(166, 82, 56, 0.26); /* rose   */
 
   /* Text colours. Opaque, so these DO need a per-theme value for contrast. */
-  --tc-a: #96631f;
+  --tc-a: #8a601a;
   --tc-g: #3f6a46;
   --tc-b: #35518e;
-  --tc-p: #a5492f;
+  --tc-p: #a65238;
 }
 
 /* ── Dark ────────────────────────────────────────────────────────── */
 .theme-dark {
-  --bg: #14110c;
-  --sf: #1d1912;
-  --sf2: #282218;
-  --ink: #ece6d8;
-  --ink2: #a69c89;
-  --ink3: #6e6557;
-  --ln: #2e2820;
-  --cd: #0e0c08;
-  --am: #d9a45c;
-  --g1: #d98d77;
-  --g2: #d9a45c;
-  --g4: #93bb98;
+  --bg: #15120d;
+  --sf: #1c1913;
+  --sf2: #262119;
+  --ink: #ede8db;
+  --ink2: #a79d8b;
+  --ink3: #736a5b;
+  --ln: #2c261e;
+  --cd: #100e0a;
+  --am: #d2a264;
+  --g1: #ce8b78;
+  --g2: #d2a264;
+  --g4: #8fb395;
 
-  /* dark accent is desaturated toward the paper */
-  --ac: color-mix(in oklab, var(--accent-base) 45%, #e8e4d8);
-  --acI: #14110c;
+  /* Dark accent stays DERIVED so the accent picker keeps working; the mix is
+     tuned so the default #35518e lands on the spec's #8fa7d6. */
+  --ac: color-mix(in oklab, var(--accent-base) 52%, #e4ecfb);
+  --acI: #15120d;
 
   /* Warmer and a touch stronger — a 0.22 tint disappears on near-black paper. */
-  --sel: rgba(217, 164, 92, 0.28);
+  --sel: rgba(210, 162, 100, 0.28);
 
   /* Same pens, nudged up: translucent tints need more presence over dark paper. */
-  --hl-a: rgba(217, 164, 92, 0.32);
-  --hl-g: rgba(147, 187, 152, 0.28);
+  --hl-a: rgba(210, 162, 100, 0.32);
+  --hl-g: rgba(143, 179, 149, 0.28);
   --hl-b: rgba(143, 176, 232, 0.26);
-  --hl-p: rgba(217, 141, 119, 0.28);
+  --hl-p: rgba(206, 139, 120, 0.28);
 
   /* Lifted off the floor so they stay legible on dark paper. */
-  --tc-a: #e0b268;
-  --tc-g: #93bb98;
+  --tc-a: #d2a264;
+  --tc-g: #8fb395;
   --tc-b: #93b0e6;
-  --tc-p: #e0958a;
+  --tc-p: #ce8b78;
 }

@@ -39,7 +39,7 @@ export function Editor() {
   const noteAddTag = useData((s) => s.noteAddTag)
   const noteRemoveTag = useData((s) => s.noteRemoveTag)
   const addToReview = useData((s) => s.addToReview)
-  const startSession = useData((s) => s.startSession)
+  const startReview = useUI((s) => s.startReview)
   const noteId = useUI((s) => s.noteId)
   const openNote = useUI((s) => s.openNote)
   const setScreen = useUI((s) => s.setScreen)
@@ -317,7 +317,7 @@ export function Editor() {
                 {sr.due <= 0 && (
                   <button
                     className="btn-accent"
-                    onClick={() => startSession([note.id])}
+                    onClick={() => startReview(note.id)}
                     style={{ width: '100%', marginTop: 14, background: 'var(--ac)', color: 'var(--acI)', border: 'none', borderRadius: 9, padding: '9px 0', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
                   >
                     Review this note now
