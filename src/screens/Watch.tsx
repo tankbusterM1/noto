@@ -9,19 +9,19 @@ import { EmptyState } from '../components/EmptyState'
 import { LinkIcon, PlayTriangle, ArticleIcon, PaperIcon, WatchIcon } from '../components/icons'
 import type { Watch as WatchItem } from '../lib/types'
 
-const shimmer =
-  'linear-gradient(90deg, var(--sf2) 25%, var(--sf) 37%, var(--sf2) 63%)'
 const KINDS: WatchFilter[] = ['All', 'Video', 'Article', 'Paper']
 
 export function Watch() {
   const watch = useData((s) => s.watch)
   const tagsPool = useData((s) => s.tagsPool)
   const watchAdd = useData((s) => s.watchAdd)
+  const showToast = useUI((s) => s.showToast)
   const wFilter = useUI((s) => s.wFilter)
   const wTagF = useUI((s) => s.wTagF)
   const setWFilter = useUI((s) => s.setWFilter)
   const setWTagF = useUI((s) => s.setWTagF)
   const [url, setUrl] = useState('')
+  const [shake, setShake] = useState(false)
 
   const queued = watch.filter((w) => !w.done && !w.loading)
   const finished = watch.filter((w) => w.done).length
@@ -34,6 +34,13 @@ export function Watch() {
   )
 
   const save = () => {
+    if (!url.trim()) {
+      // Nothing to save: shake the field rather than silently doing nothing.
+      setShake(true)
+      setTimeout(() => setShake(false), 480)
+      showToast('Paste a link first')
+      return
+    }
     watchAdd(url)
     setUrl('')
   }
@@ -69,7 +76,20 @@ export function Watch() {
           <h1 style={{ fontFamily: SERIF, fontSize: 36, fontWeight: 500, letterSpacing: '-0.015em', margin: '6px 0 0' }}>Watch Later</h1>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--sf)', border: '1px solid var(--ln)', borderRadius: 11, padding: '9px 13px', width: 320 }}>
+          <div
+            className={shake ? 'shake' : undefined}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              background: 'var(--sf)',
+              border: `1px solid ${shake ? 'var(--g1)' : 'var(--ln)'}`,
+              borderRadius: 9,
+              padding: '9px 13px',
+              width: 320,
+              transition: 'border-color var(--t-fast) var(--t-ease)',
+            }}
+          >
             <LinkIcon size={13} style={{ color: 'var(--ink3)' }} />
             <input
               value={url}
@@ -100,11 +120,14 @@ export function Watch() {
         ))}
       </div>
 
-      {/* Card grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 15 }}>
+      {/* The shelf */}
+      <div style={{ fontFamily: MONO, fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ink3)', marginBottom: 16 }}>
+        On the shelf
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 16 }}>
         {filtered.map((w, i) => (
-          <div key={w.id} style={rise(i)}>
-            {w.loading ? <Skeleton /> : <WatchCard item={w} />}
+          <div key={w.id} className="slip-case" style={rise(i)}>
+            {w.loading ? <DotLoader /> : <WatchCard item={w} />}
           </div>
         ))}
       </div>
@@ -119,15 +142,30 @@ export function Watch() {
   )
 }
 
-function Skeleton() {
-  const bar: CSSProperties = { background: shimmer, backgroundSize: '520px 100%', animation: 'shimmer 1.2s linear infinite' }
+/**
+ * The 4x4 dot-matrix loader — what a link looks like while it is being read.
+ * Staggered by row + column so the pulse crosses the grid diagonally.
+ */
+function DotLoader() {
   return (
-    <div style={{ background: 'var(--sf)', border: '1px solid var(--ln)', borderRadius: 16, overflow: 'hidden' }}>
-      <div style={{ height: 110, ...bar }} />
-      <div style={{ padding: '14px 16px' }}>
-        <div style={{ height: 13, width: '80%', borderRadius: 6, ...bar }} />
-        <div style={{ height: 10, width: '45%', borderRadius: 6, marginTop: 9, ...bar }} />
-        <div style={{ fontFamily: MONO, fontSize: 9.5, color: 'var(--ink3)', marginTop: 11 }}>scraping title · thumbnail…</div>
+    <div style={{ background: 'var(--sf)', border: '1px solid var(--ln)', borderRadius: 14, padding: '34px 0 30px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 6px)', gap: 7 }}>
+        {Array.from({ length: 16 }, (_, i) => (
+          <span
+            key={i}
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: 99,
+              background: 'var(--ink2)',
+              animation: 'dot-pulse 1.6s var(--t-soft) infinite',
+              animationDelay: `${((i % 4) + Math.floor(i / 4)) * 110}ms`,
+            }}
+          />
+        ))}
+      </div>
+      <div style={{ fontFamily: MONO, fontSize: 9.5, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink3)' }}>
+        reading the link
       </div>
     </div>
   )

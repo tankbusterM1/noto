@@ -118,25 +118,36 @@ export function Todos() {
     }
   })
 
-  const seg = (id: TodoSeg, label: string) => (
-    <button
-      onClick={() => setTSeg(id)}
-      style={{
-        border: 'none',
-        borderRadius: 8,
-        padding: '7px 16px',
-        fontSize: 12.5,
-        fontWeight: 600,
-        cursor: 'pointer',
-        fontFamily: 'inherit',
-        background: tSeg === id ? 'var(--sf2)' : 'transparent',
-        color: tSeg === id ? 'var(--ink)' : 'var(--ink2)',
-        transition: 'all 0.15s ease',
-      }}
-    >
-      {label}
-    </button>
-  )
+  /*
+   * Ledger tabs: index tabs notched into the page edge. The active one loses its
+   * bottom border and sits on --bg, so it merges into the page below the rule —
+   * hence margin-bottom:-1px, which pulls it over that hairline.
+   */
+  const seg = (id: TodoSeg, label: string) => {
+    const on = tSeg === id
+    return (
+      <button
+        onClick={() => setTSeg(id)}
+        style={{
+          width: 104,
+          border: '1px solid var(--ln)',
+          borderBottom: on ? 'none' : '1px solid var(--ln)',
+          borderRadius: '9px 9px 0 0',
+          marginBottom: -1,
+          padding: on ? '11px 0 12px' : '9px 0 10px',
+          fontSize: 12.5,
+          fontWeight: on ? 600 : 500,
+          cursor: 'pointer',
+          fontFamily: 'inherit',
+          background: on ? 'var(--bg)' : 'var(--sf2)',
+          color: on ? 'var(--ink)' : 'var(--ink2)',
+          transition: 'background var(--t-fast) var(--t-ease), color var(--t-fast) var(--t-ease)',
+        }}
+      >
+        {label}
+      </button>
+    )
+  }
 
   return (
     <div style={{ maxWidth: 1060, margin: '0 auto', padding: '44px 48px 120px', animation: 'fadein 0.3s ease both' }}>
@@ -145,12 +156,22 @@ export function Todos() {
           <div style={kicker}>{dateLine}</div>
           <h1 style={{ fontFamily: SERIF, fontSize: 36, fontWeight: 500, letterSpacing: '-0.015em', margin: '6px 0 0' }}>Todos</h1>
         </div>
-        <div style={{ display: 'flex', background: 'var(--sf)', border: '1px solid var(--ln)', borderRadius: 11, padding: 4, gap: 3 }}>
+        <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end' }}>
           {seg('today', 'Today')}
           {seg('week', 'This week')}
           {seg('month', 'Month')}
         </div>
       </div>
+      {/* The page edge the tabs are notched into. */}
+      <div
+        style={{
+          height: 1,
+          background: 'var(--ln)',
+          marginBottom: 30,
+          transformOrigin: 'left',
+          animation: 'ledger-rule var(--t-air) var(--t-ease) both',
+        }}
+      />
 
       {tSeg === 'today' && (
         <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 22, alignItems: 'start' }}>

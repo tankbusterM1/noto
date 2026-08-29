@@ -330,3 +330,83 @@
   from { transform: scaleY(0); }
   to   { transform: scaleY(1); }
 }
+
+/* ── the wax seal (Journal) ──────────────────────────────────────────
+   A pressed disc, not an icon: an off-centre highlight, a soft drop, and a
+   rotated ring pressed into the wax. Stamped with t-seal. */
+.wax-seal {
+  position: relative;
+  width: 62px;
+  height: 62px;
+  margin: 0 auto;
+  border-radius: 99px;
+  background: radial-gradient(circle at 34% 30%, var(--ink2), var(--ink) 78%);
+  box-shadow:
+    0 8px 20px rgba(24, 19, 10, 0.22),
+    inset 0 1px 2px rgba(255, 255, 255, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: t-seal var(--t-slow) var(--t-spring) both;
+}
+.wax-ring {
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid rgba(255, 255, 255, 0.28);
+  transform: rotate(45deg);
+}
+/* Small seal stamped beside the save hint. */
+.wax-seal-sm {
+  display: inline-block;
+  width: 15px;
+  height: 15px;
+  border-radius: 99px;
+  background: radial-gradient(circle at 34% 30%, var(--ink2), var(--ink) 78%);
+  animation: t-seal var(--t-base) var(--t-spring) both;
+}
+@keyframes t-seal {
+  0%   { opacity: 0; transform: rotate(-14deg) scale(0.45); }
+  58%  { opacity: 1; transform: rotate(3deg) scale(1.08); }
+  78%  { transform: rotate(-1deg) scale(0.98); }
+  100% { opacity: 1; transform: rotate(0deg) scale(1); }
+}
+
+/* The Todos page-edge rule draws itself in (global: used from an inline style). */
+@keyframes ledger-rule {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+/* Invalid input: one short shake. */
+.shake {
+  animation: t-shake 460ms var(--t-ease) both;
+}
+@keyframes t-shake {
+  0%, 100% { transform: translateX(0); }
+  18%  { transform: translateX(-5px); }
+  38%  { transform: translateX(4px); }
+  58%  { transform: translateX(-2.5px); }
+  80%  { transform: translateX(1px); }
+}
+
+/* Dot-matrix loader pulse. */
+@keyframes dot-pulse {
+  0%, 100% { opacity: 0.16; transform: scale(0.72); }
+  50%      { opacity: 0.85; transform: scale(1); }
+}
+
+/* ── slip-case shelf (Watch later) ───────────────────────────────────
+   Each card sits in a case: the shadow is the case edge, and hover lifts the
+   item 8px out of it. */
+.slip-case > * {
+  box-shadow: 0 4px 0 -1px var(--sf2);
+  transition:
+    transform var(--t-base) var(--t-ease),
+    box-shadow var(--t-base) var(--t-ease);
+}
+.slip-case:hover > * {
+  transform: translateY(-8px);
+  box-shadow:
+    0 14px 0 -7px var(--sf2),
+    0 20px 30px rgba(24, 19, 10, 0.09);
+}

@@ -262,16 +262,15 @@ export function Journal() {
         {locked && (
           <div style={{ position: 'absolute', inset: -12, display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'fadein 0.35s ease both' }}>
             <div style={{ background: 'var(--sf)', border: '1px solid var(--ln)', borderRadius: 18, padding: '28px 34px', textAlign: 'center', boxShadow: '0 18px 44px rgba(30,24,12,0.14)', width: 320 }}>
-              <div style={{ width: 40, height: 40, margin: '0 auto 12px', borderRadius: 99, background: 'var(--sf2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--am)' }}>
-                <LockIcon size={16} locked />
+              {/* The wax seal — stamped, not drawn. */}
+              <div className="wax-seal" aria-hidden>
+                <span className="wax-ring" />
               </div>
-              <div style={{ fontFamily: SERIF, fontSize: 20, fontWeight: 500 }}>
-                {hasPassphrase ? 'This journal is encrypted.' : 'This journal is private.'}
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.55, marginTop: 6 }}>
+              <div style={{ fontFamily: SERIF, fontSize: 22, fontWeight: 500, marginTop: 16 }}>Sealed.</div>
+              <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 13.5, color: 'var(--ink2)', lineHeight: 1.55, marginTop: 8 }}>
                 {hasPassphrase
-                  ? 'Enter your passphrase to decrypt it on this device.'
-                  : 'Blurred on this device. Set a passphrase to encrypt it for real.'}
+                  ? 'Nothing here is readable until you break the seal — and it never leaves this device.'
+                  : 'Blurred on this device. Set a passphrase to seal it for real.'}
               </div>
 
               {hasPassphrase ? (
@@ -285,7 +284,7 @@ export function Journal() {
                     placeholder="Passphrase"
                     style={passInput}
                   />
-                  <button className="btn-dark" onClick={doUnlock} style={darkBtn}>Unlock</button>
+                  <button className="btn-dark" onClick={doUnlock} style={darkBtn}>Break the seal</button>
                   {resetArmed ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
                       <div style={{ fontSize: 11, color: 'var(--g1)', lineHeight: 1.5 }}>
@@ -326,7 +325,7 @@ export function Journal() {
                 </div>
               ) : (
                 <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <button className="btn-dark" onClick={unlockJournal} style={darkBtn}>Unlock (blur only)</button>
+                  <button className="btn-dark" onClick={unlockJournal} style={darkBtn}>Break the seal</button>
                   <button onClick={() => setSetupOpen(true)} style={{ background: 'transparent', border: '1px solid var(--ln)', color: 'var(--ink2)', borderRadius: 9, padding: '8px 16px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
                     Encrypt with a passphrase →
                   </button>
