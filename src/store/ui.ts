@@ -49,6 +49,13 @@ interface UIState {
   memRailOpen: boolean
   accent: Accent
   inkFade: boolean
+  /**
+   * 'system' honours prefers-reduced-motion (the default, and what the design
+   * asks for). 'full' is a deliberate opt-in: play the motion even though the OS
+   * asked for less — for people whose Windows animation effects are off but who
+   * still want the app to move.
+   */
+  motion: 'system' | 'full'
   /** Per-note reading mode (true = reading). Sticks until you flip it back. */
   noteMode: Record<string, boolean>
 
@@ -94,6 +101,7 @@ interface UIState {
   toggleMemRail: () => void
   setAccent: (accent: Accent) => void
   setInkFade: (inkFade: boolean) => void
+  setMotion: (motion: 'system' | 'full') => void
   /** Remember a note's reading/edit mode. */
   setNoteReading: (id: string, reading: boolean) => void
 
@@ -158,6 +166,7 @@ export const useUI = create<UIState>()(
       memRailOpen: true,
       accent: '#35518E',
       inkFade: true,
+      motion: 'system',
       noteMode: {},
 
       screen: 'today',
@@ -191,6 +200,7 @@ export const useUI = create<UIState>()(
       toggleMemRail: () => set((s) => ({ memRailOpen: !s.memRailOpen })),
       setAccent: (accent) => set({ accent }),
       setInkFade: (inkFade) => set({ inkFade }),
+      setMotion: (motion) => set({ motion }),
       setNoteReading: (id, reading) => set((s) => ({ noteMode: { ...s.noteMode, [id]: reading } })),
 
       setScreen: (screen) => set({ screen }),
@@ -256,6 +266,7 @@ export const useUI = create<UIState>()(
         memRailOpen: s.memRailOpen,
         accent: s.accent,
         inkFade: s.inkFade,
+        motion: s.motion,
         noteMode: s.noteMode,
       }),
     },

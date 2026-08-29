@@ -15,6 +15,7 @@ import { useKeyboard } from './shell/useKeyboard'
 export default function App() {
   const dark = useUI((s) => s.dark)
   const accent = useUI((s) => s.accent)
+  const motion = useUI((s) => s.motion)
   const hydrated = useData((s) => s.hydrated)
   const hydrate = useData((s) => s.hydrate)
   const hydrateError = useData((s) => s.hydrateError)
@@ -49,6 +50,12 @@ export default function App() {
       events.forEach((e) => window.removeEventListener(e, arm))
     }
   }, [journalKey, lockJournalCrypto])
+
+  // The motion override lives on <html>, because the reduced-motion guard in
+  // motion.css is a global `*` rule and has to be scoped above everything.
+  useEffect(() => {
+    document.documentElement.classList.toggle('motion-full', motion === 'full')
+  }, [motion])
 
   // The theme wrapper sets --accent-base; tokens.css derives --ac/--acI from it.
   const rootStyle = {

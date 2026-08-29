@@ -32,6 +32,9 @@ export function Settings() {
   const accent = useUI((s) => s.accent)
   const setAccent = useUI((s) => s.setAccent)
   const inkFade = useUI((s) => s.inkFade)
+  const motion = useUI((s) => s.motion)
+  const setMotion = useUI((s) => s.setMotion)
+  const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
   const setInkFade = useUI((s) => s.setInkFade)
   const showToast = useUI((s) => s.showToast)
   const exportData = useData((s) => s.exportData)
@@ -157,6 +160,40 @@ export function Settings() {
             >
               <span style={{ position: 'absolute', top: 3, left: inkFade ? 21 : 3, width: 18, height: 18, borderRadius: 99, background: 'var(--bg)', transition: 'left 0.2s cubic-bezier(0.65,0,0.35,1)' }} />
             </button>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 }}>
+            <div>
+              <div style={{ fontSize: 13, color: 'var(--ink2)' }}>Motion</div>
+              <div style={{ fontSize: 11, color: 'var(--ink3)', marginTop: 2 }}>
+                {reduced
+                  ? 'Your system asks for reduced motion — “Always on” plays it anyway'
+                  : 'Follows your system’s reduced-motion setting'}
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 2, background: 'var(--sf2)', borderRadius: 8, padding: 2 }}>
+              {(['system', 'full'] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setMotion(m)}
+                  style={{
+                    border: 'none',
+                    borderRadius: 6,
+                    padding: '5px 11px',
+                    fontFamily: MONO,
+                    fontSize: 9.5,
+                    letterSpacing: '0.08em',
+                    textTransform: 'uppercase',
+                    cursor: 'pointer',
+                    background: motion === m ? 'var(--sf)' : 'transparent',
+                    color: motion === m ? 'var(--ink)' : 'var(--ink3)',
+                    fontWeight: motion === m ? 600 : 500,
+                  }}
+                >
+                  {m === 'system' ? 'follow system' : 'always on'}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div style={{ height: 1, background: 'var(--ln)', margin: '22px 0' }} />

@@ -138,7 +138,15 @@
 @keyframes growx  { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 
 @media (prefers-reduced-motion: reduce) {
-  * {
+  /*
+   * `html.motion-full` is the in-app override (Settings → Motion). Without it
+   * this guard is absolute, which is correct by default — but it also means a
+   * machine with Windows' animation effects switched off sees NO motion at all,
+   * and there was no way to ask for it back from inside the app.
+   */
+  html:not(.motion-full) *,
+  html:not(.motion-full) *::before,
+  html:not(.motion-full) *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     /*
