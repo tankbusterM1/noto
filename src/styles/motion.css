@@ -141,7 +141,15 @@
   * {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+    /*
+     * Delays must go too. Staggered reveals (t-word-in, t-row-in, t-cell-in)
+     * pair a delay with `both`, which holds the FROM frame — opacity 0 — until
+     * the delay elapses. Zeroing only the duration leaves the text invisible for
+     * up to a second and a half with reduce-motion on.
+     */
+    animation-delay: 0s !important;
     transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
     scroll-behavior: auto !important;
   }
 }

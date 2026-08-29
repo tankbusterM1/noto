@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import { useData } from '../store/data'
 import { useUI } from '../store/ui'
 import { dueNotes, dueLabel } from '../lib/srs'
@@ -20,10 +21,14 @@ const dayLetters = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 function Statement({ text }: { text: string }) {
   return (
     <h1 className={s.statement}>
+      {/* The space must sit OUTSIDE the inline-block: a trailing space inside
+          one collapses at the edge of the box and the words run together. */}
       {text.split(' ').map((w, i) => (
-        <span key={i} className={s.word} style={{ animationDelay: `${140 + i * 105}ms` }}>
-          {w}{' '}
-        </span>
+        <Fragment key={i}>
+          <span className={s.word} style={{ animationDelay: `${140 + i * 105}ms` }}>
+            {w}
+          </span>{' '}
+        </Fragment>
       ))}
     </h1>
   )

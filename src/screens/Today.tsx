@@ -1,284 +1,288 @@
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { useData } from '../store/data'
 import { useUI } from '../store/ui'
-import { forecastCounts, dueNotes } from '../lib/srs'
+import { dueNotes } from '../lib/srs'
+import { forecastDays } from '../lib/horizon'
 import { PROMPTS } from '../lib/constants'
 import { addDays, todayEpochDay } from '../lib/dates'
 import { fmtMins, journalStreak, snippet } from '../lib/format'
-import { MONO, SERIF, kicker } from '../lib/ui'
-import { useMounted } from '../lib/useMounted'
-import { NoteCard } from '../components/NoteCard'
-import { TodoLine } from '../components/TodoLine'
 import { PlayTriangle } from '../components/icons'
+import s from './Today.module.css'
 
-const label: React.CSSProperties = {
-  fontFamily: MONO,
-  fontSize: 10.5,
-  letterSpacing: '0.15em',
-  textTransform: 'uppercase',
-  color: 'var(--ink3)',
-}
-const linkText: React.CSSProperties = {
-  fontSize: 12,
-  fontWeight: 500,
-  color: 'var(--ac)',
-  cursor: 'pointer',
-}
+/*
+ * Today — the informative home.
+ *
+ * Everything here is a reading of where you actually are: how far through the
+ * day, how much ink is fading, what you touched last. Amber appears twice, and
+ * both times it means "now": the day-arc dot and the memory horizon.
+ */
+
 const dayLetters = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 
-export function Today() {
-  const notes = useData((s) => s.notes)
-  const srs = useData((s) => s.srs)
-  const todos = useData((s) => s.todos)
-  const watch = useData((s) => s.watch)
-  const journal = useData((s) => s.journal)
-  const setScreen = useUI((s) => s.setScreen)
-  const openWatchItem = useUI((s) => s.openWatchItem)
-  const openNote = useUI((s) => s.openNote)
-  const mounted = useMounted()
+/** Ramp 0 → value on a cubic ease-out, once, on mount. */
+function useCountUp(value: number, ms = 1500): number {
+  const [n, setN] = useState(0)
+  const raf = useRef(0)
+  useEffect(() => {
+    const start = performance.now()
+    const tick = (t: number) => {
+      const p = Math.min(1, (t - start) / ms)
+      const eased = 1 - Math.pow(1 - p, 3)
+      setN(Math.round(value * eased))
+      if (p < 1) raf.current = requestAnimationFrame(tick)
+    }
+    raf.current = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf.current)
+  }, [value, ms])
+  return n
+}
 
-  const now = new Date()
+function Stat({ value, label }: { value: number; label: string }) {
+  const n = useCountUp(value)
+  return (
+    <div className={s.stat}>
+      <div className={s.statValue}>{n}</div>
+      <div className={s.statLabel}>{label}</div>
+    </div>
+  )
+}
+
+function Words({ text, from = 140, gap = 130 }: { text: string; from?: number; gap?: number }) {
+  return (
+    <>
+      {/* The space must sit OUTSIDE the inline-block: a trailing space inside
+          one collapses at the edge of the box and the words run together. */}
+      {text.split(' ').map((w, i) => (
+        <Fragment key={i}>
+          <span className={s.word} style={{ animationDelay: `${from + i * gap}ms` }}>
+            {w}
+          </span>{' '}
+        </Fragment>
+      ))}
+    </>
+  )
+}
+
+function Rule({ delay = 0 }: { delay?: number }) {
+  return <div className={s.rule} style={{ animationDelay: `${delay}ms` }} />
+}
+
+/**
+ * The memory horizon — seven days of fading ink, as one drawn curve.
+ * 240×66, amber stroke over a 17% amber fill, a dot per day.
+ */
+function Horizon({ counts }: { counts: number[] }) {
+  const W = 240
+  const H = 66
+  const max = Math.max(1, ...counts)
+  const pts = counts.map((c, i) => {
+    const x = (i / (counts.length - 1)) * (W - 12) + 6
+    const y = H - 16 - (c / max) * (H - 30)
+    return { x, y, c }
+  })
+  const line = pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+  const area = `${pts[0].x},${H - 14} ${line} ${pts[pts.length - 1].x},${H - 14}`
+
+  return (
+    <div className={s.horizon}>
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} aria-hidden>
+        <polygon points={area} fill="var(--am)" opacity={0.17} />
+        <polyline points={line} fill="none" stroke="var(--am)" strokeWidth={2.1} strokeLinejoin="round" strokeLinecap="round" className={s.curve} />
+        {pts.map((p, i) =>
+          i === 0 ? (
+            <circle key={i} cx={p.x} cy={p.y} r={3.4} fill="var(--am)" opacity={p.c === 0 ? 0.3 : 1} />
+          ) : (
+            <circle key={i} cx={p.x} cy={p.y} r={2.2} fill="var(--sf)" stroke="var(--am)" strokeWidth={1.4} opacity={p.c === 0 ? 0.3 : 1} />
+          ),
+        )}
+      </svg>
+      <div className={s.horizonDays} style={{ width: W }}>
+        {counts.map((_, i) => (
+          <span key={i}>{i === 0 ? '·' : dayLetters[addDays(i).getDay()]}</span>
+        ))}
+      </div>
+      <div className={s.horizonLabel}>Seven days of fading</div>
+    </div>
+  )
+}
+
+export function Today() {
+  const notes = useData((d) => d.notes)
+  const srs = useData((d) => d.srs)
+  const todos = useData((d) => d.todos)
+  const watch = useData((d) => d.watch)
+  const journal = useData((d) => d.journal)
+  const ledgerByDay = useData((d) => d.ledgerByDay)
+  const setScreen = useUI((u) => u.setScreen)
+  const openWatchItem = useUI((u) => u.openWatchItem)
+  const openNote = useUI((u) => u.openNote)
+
+  // The clock ticks so the day arc stays honest without a reload.
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 30_000)
+    return () => clearInterval(t)
+  }, [])
+
   const hour = now.getHours()
   const greeting = hour < 12 ? 'Good morning.' : hour < 18 ? 'Good afternoon.' : 'Good evening.'
   const dateLine = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
 
+  // Day arc: 07:00 → 23:00 is the waking span the dot travels.
+  const mins = now.getHours() * 60 + now.getMinutes()
+  const arc = Math.max(0, Math.min(1, (mins - 420) / 960))
+  const leftMins = Math.max(0, 23 * 60 - mins)
+  const clock = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+
   const due = dueNotes(notes, srs)
-  const dueCount = due.length
-  const counts = forecastCounts(notes, srs)
-  const maxC = Math.max(1, ...counts)
-  const forecast = counts.map((c, i) => ({
-    d: i === 0 ? 'now' : dayLetters[addDays(i).getDay()],
-    h: 8 + Math.round((56 * c) / maxC),
-    op: c === 0 ? 0.22 : 0.45 + (0.55 * c) / maxC,
-  }))
+  const inReview = notes.filter((n) => srs[n.id]).length
+  const counts = forecastDays(notes, srs, 7)
+  const today = todayEpochDay()
+  const reviewedThisWeek = Array.from({ length: 7 }, (_, k) => ledgerByDay[today - k] ?? 0).reduce((a, b) => a + b, 0)
+  const toWatch = watch.filter((w) => !w.done).length
 
   const recent = notes.slice().sort((a, b) => b.updated - a.updated).slice(0, 3)
+  const openTodos = todos.filter((t) => !t.done)
   const doneN = todos.filter((t) => t.done).length
-  const tPct = todos.length ? Math.round((100 * doneN) / todos.length) : 0
-  const jStreak = '◆ ' + journalStreak(journal) + '-day streak'
+  const streak = journalStreak(journal)
   const jPrompt = PROMPTS[now.getDate() % PROMPTS.length]
   const jWeekDots = [6, 5, 4, 3, 2, 1, 0].map((k) => ({
     filled: journal.some((e) => e.off === -k),
-    today: k === 0,
+    letter: dayLetters[addDays(-k).getDay()],
   }))
-  const watchNext = watch.filter((w) => !w.done && !w.loading).slice(0, 2)
-
-  // Resurface — one old note a day, picked from what the SRS *won't* bring
-  // back soon (settled >7d out, or never added to review). Serendipity keeps
-  // long-term knowledge alive beyond the queue; deterministic per day.
-  const archive = notes.filter((n) => {
-    const sr = srs[n.id]
-    return !sr || sr.due > 7
-  })
-  // Anniversaries outrank the daily hash-pick: a note written exactly a
-  // month / quarter / half-year / year ago today is the resurface.
-  const ANNS: [number, string][] = [
-    [-365, 'written one year ago today'],
-    [-180, 'written six months ago today'],
-    [-90, 'written three months ago today'],
-    [-30, 'written one month ago today'],
-  ]
-  const ann = ANNS.map(([off, label]) => ({ n: archive.find((x) => x.created === off), label })).find((x) => x.n)
-  const resurface = ann?.n ?? (archive.length ? archive[Math.abs(Math.imul(todayEpochDay(), 2654435761)) % archive.length] : null)
-  const resurfaceTag = ann ? '✦ ' + ann.label : '◆ daily pick'
+  const nextWatch = watch.filter((w) => !w.done).slice(0, 2)
 
   return (
-    <div style={{ maxWidth: 1060, margin: '0 auto', padding: '44px 48px 120px', animation: 'rise 0.4s ease both' }}>
-      <div style={kicker}>{dateLine}</div>
-      <h1 style={{ fontFamily: SERIF, fontSize: 42, fontWeight: 500, letterSpacing: '-0.015em', margin: '8px 0 34px', lineHeight: 1.1 }}>
-        {greeting}
+    <div className={s.page}>
+      <div className={s.dateLine}>{dateLine}</div>
+      <h1 className={s.greeting}>
+        <Words text={greeting} />
       </h1>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 20, alignItems: 'start' }}>
-        {/* ── Left column ── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
-          {/* Review hero */}
-          <div style={{ background: 'var(--ac)', color: 'var(--acI)', borderRadius: 20, padding: '26px 28px', position: 'relative', overflow: 'hidden' }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 20 }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontFamily: MONO, fontSize: 10.5, letterSpacing: '0.15em', textTransform: 'uppercase', opacity: 0.72 }}>
-                  Memory · spaced review
-                </div>
-                <div style={{ fontFamily: SERIF, fontSize: 30, fontWeight: 500, marginTop: 9, lineHeight: 1.15 }}>
-                  {dueCount > 0
-                    ? `${dueCount}${dueCount === 1 ? ' note is fading.' : ' notes are fading.'}`
-                    : 'All ink is dark.'}
-                </div>
-                <div style={{ fontSize: 13, opacity: 0.78, marginTop: 8, lineHeight: 1.5 }}>
-                  {dueCount > 0
-                    ? 'Their ink is fading — a short session re-inks them before they slip away.'
-                    : 'Nothing due today. Come back tomorrow, or add more notes to review.'}
-                </div>
-                {dueCount > 0 && (
-                  <button
-                    className="btn-lift"
-                    onClick={() => setScreen('queue')}
-                    style={{ marginTop: 18, background: 'var(--acI)', color: 'var(--ac)', border: 'none', borderRadius: 10, padding: '10px 18px', fontSize: 13.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
-                  >
-                    Go to review →
-                  </button>
-                )}
-              </div>
-              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 5, height: 74, paddingTop: 4, flexShrink: 0 }}>
-                {forecast.map((f, i) => (
-                  <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
-                    <div
-                      style={{
-                        width: 16,
-                        borderRadius: 4,
-                        background: 'rgba(250,248,240,0.92)',
-                        transition: 'height 0.5s cubic-bezier(0.65,0,0.35,1), opacity 0.5s ease',
-                        height: mounted ? f.h : 4,
-                        opacity: f.op,
-                      }}
-                    />
-                    <div style={{ fontFamily: MONO, fontSize: 8.5, opacity: 0.62 }}>{f.d}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+      {/* ── the day arc ─────────────────────────────────────────── */}
+      <div className={s.arcWrap}>
+        <div className={s.arcTrack} />
+        <div className={s.arcFill} style={{ width: `${arc * 100}%` }} />
+        <span className={s.arcDot} style={{ left: `${arc * 100}%` }} />
+      </div>
+      <div className={s.arcLabel}>
+        {clock} · {Math.floor(leftMins / 60)}h {leftMins % 60}m of the day left
+      </div>
 
-          {/* Recently edited */}
-          <div>
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', padding: '0 2px 10px' }}>
-              <div style={label}>Recently edited</div>
-              <div style={linkText} onClick={() => setScreen('notes')}>
-                All notes →
-              </div>
+      {/* ── the strip ───────────────────────────────────────────── */}
+      <div className={s.stats}>
+        <Stat value={notes.length} label="notes" />
+        <Stat value={inReview} label="in review" />
+        <Stat value={reviewedThisWeek} label="reviewed this week" />
+        <Stat value={streak} label="journal streak" />
+        <Stat value={toWatch} label="to watch" />
+      </div>
+
+      <Rule delay={140} />
+
+      {/* ── review ──────────────────────────────────────────────── */}
+      <section className={s.reviewCard}>
+        <span className={s.shine} />
+        <div className={s.reviewBody}>
+          <h2 className={s.reviewHead}>
+            <Words text={due.length ? `${due.length} notes are fading.` : 'Every note is dark.'} from={260} gap={110} />
+          </h2>
+          <p className={s.reviewSub}>
+            {due.length
+              ? 'Their ink is thinning — read one and it darkens again.'
+              : 'Nothing is due. Come back tomorrow, or put another note on the thread.'}
+          </p>
+          <button type="button" className={s.inkBtn} onClick={() => setScreen('queue')}>
+            Go to review →
+          </button>
+        </div>
+        <Horizon counts={counts} />
+      </section>
+
+      <Rule delay={280} />
+
+      {/* ── two columns ─────────────────────────────────────────── */}
+      <div className={s.cols}>
+        <div className={s.col}>
+          <section>
+            <div className={s.sectionHead}>
+              <span className={s.sectionLabel}>Recently edited</span>
+              <button type="button" className={s.more} onClick={() => setScreen('notes')}>
+                all notes →
+              </button>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {recent.map((n, i) => (
-                <NoteCard key={n.id} note={n} variant="recent" index={i} />
+            <div className={s.rows}>
+              {recent.map((n) => (
+                <button type="button" key={n.id} className={s.row} onClick={() => openNote(n.id)}>
+                  <span className={s.rowTitle}>{n.title}</span>
+                  <span className={s.rowMeta}>{snippet(n)}</span>
+                </button>
               ))}
             </div>
-          </div>
+          </section>
+
+          <section>
+            <div className={s.sectionHead}>
+              <span className={s.sectionLabel}>Journal</span>
+              <span className={s.streak}>◆ {streak}-day streak</span>
+            </div>
+            <div className={s.weekDots}>
+              {jWeekDots.map((d, i) => (
+                <span key={i} className={s.weekDay}>
+                  <span className={`${s.dot} ${d.filled ? s.dotOn : ''}`} />
+                  <span className={s.weekLetter}>{d.letter}</span>
+                </span>
+              ))}
+            </div>
+            <p className={s.prompt}>“{jPrompt}”</p>
+            <button type="button" className={s.more} onClick={() => setScreen('journal')}>
+              write today's entry →
+            </button>
+          </section>
         </div>
 
-        {/* ── Right column ── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
-          {/* Today's list */}
-          <div style={{ background: 'var(--sf)', border: '1px solid var(--ln)', borderRadius: 16, padding: '18px 20px' }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-              <div style={label}>Today's list</div>
-              <div style={{ fontFamily: MONO, fontSize: 10, color: 'var(--ink3)' }}>
+        <div className={s.col}>
+          <section>
+            <div className={s.sectionHead}>
+              <span className={s.sectionLabel}>Today's list</span>
+              <span className={s.rowMeta}>
                 {doneN} of {todos.length} done
-              </div>
+              </span>
             </div>
-            <div style={{ height: 3, background: 'var(--sf2)', borderRadius: 99, margin: '12px 0 6px', overflow: 'hidden' }}>
-              <div style={{ height: '100%', background: 'var(--am)', borderRadius: 99, transition: 'width 0.45s cubic-bezier(0.65,0,0.35,1)', width: `${tPct}%` }} />
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              {todos.map((t) => (
-                <TodoLine key={t.id} todo={t} dense />
+            <div className={s.rows}>
+              {openTodos.slice(0, 5).map((t) => (
+                <button type="button" key={t.id} className={s.row} onClick={() => setScreen('todos')}>
+                  <span className={s.rowTitle}>{t.text}</span>
+                </button>
               ))}
-              {todos.length === 0 && (
-                <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 13, color: 'var(--ink3)', padding: '10px 2px 4px' }}>
-                  The day is unwritten — plan it in Todos.
-                </div>
-              )}
+              {openTodos.length === 0 && <div className={s.rowMeta}>nothing open</div>}
             </div>
-            <div style={{ ...linkText, paddingTop: 12 }} onClick={() => setScreen('todos')}>
-              Open todos →
-            </div>
-          </div>
+            <button type="button" className={s.more} onClick={() => setScreen('todos')}>
+              open todos →
+            </button>
+          </section>
 
-          {/* Journal teaser */}
-          <div
-            className="border-hover"
-            onClick={() => setScreen('journal')}
-            style={{ background: 'var(--sf)', border: '1px solid var(--ln)', borderRadius: 16, padding: '18px 20px', cursor: 'pointer' }}
-          >
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-              <div style={label}>Journal</div>
-              <div style={{ fontFamily: MONO, fontSize: 10, color: 'var(--am)' }}>{jStreak}</div>
+          <section>
+            <div className={s.sectionHead}>
+              <span className={s.sectionLabel}>Next to watch</span>
+              <button type="button" className={s.more} onClick={() => setScreen('watch')}>
+                all →
+              </button>
             </div>
-            <div style={{ display: 'flex', gap: 5, margin: '13px 0' }}>
-              {jWeekDots.map((d, i) => (
-                <div
-                  key={i}
-                  style={{
-                    width: 22,
-                    height: 5,
-                    borderRadius: 99,
-                    background: d.filled ? 'var(--am)' : d.today ? 'transparent' : 'var(--sf2)',
-                    border: !d.filled && d.today ? '1px dashed var(--ink3)' : undefined,
-                    transition: 'background 0.4s ease',
-                    animation: 'fadein 0.4s ease both',
-                    animationDelay: `${i * 0.05}s`,
-                  }}
-                />
+            <div className={s.rows}>
+              {nextWatch.map((w) => (
+                <button type="button" key={w.id} className={s.row} onClick={() => openWatchItem(w.id)}>
+                  <span className={s.rowTitle}>
+                    <PlayTriangle size={9} /> {w.title}
+                  </span>
+                  <span className={s.rowMeta}>
+                    {w.source} · {fmtMins(w.mins)}
+                  </span>
+                </button>
               ))}
+              {nextWatch.length === 0 && <div className={s.rowMeta}>the shelf is clear</div>}
             </div>
-            <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 15.5, color: 'var(--ink2)', lineHeight: 1.45 }}>
-              "{jPrompt}"
-            </div>
-            <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--ac)', marginTop: 12 }}>Write today's entry →</div>
-          </div>
-
-          {/* Resurface — serendipity from the archive */}
-          {resurface && (
-            <div
-              className="border-hover"
-              onClick={() => openNote(resurface.id)}
-              style={{ background: 'var(--sf)', border: '1px dashed var(--ln)', borderRadius: 16, padding: '18px 20px', cursor: 'pointer' }}
-            >
-              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-                <div style={label}>Resurface · from the archive</div>
-                <div style={{ fontFamily: MONO, fontSize: 9.5, color: 'var(--am)' }}>{resurfaceTag}</div>
-              </div>
-              <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 13, color: 'var(--ink3)', marginTop: 10 }}>
-                Do you still remember —
-              </div>
-              <div style={{ fontFamily: SERIF, fontSize: 17.5, fontWeight: 500, lineHeight: 1.3, marginTop: 3 }}>
-                {resurface.title}
-              </div>
-              {snippet(resurface) && (
-                <div style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.5, marginTop: 6, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                  {snippet(resurface)}
-                </div>
-              )}
-              <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--ac)', marginTop: 10 }}>Read it again →</div>
-            </div>
-          )}
-
-          {/* Up next · watch later */}
-          <div style={{ background: 'var(--sf)', border: '1px solid var(--ln)', borderRadius: 16, padding: '18px 20px' }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-              <div style={label}>Up next · watch later</div>
-              <div style={linkText} onClick={() => setScreen('watch')}>
-                All →
-              </div>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 13 }}>
-              {watchNext.map((w) => (
-                <div key={w.id} onClick={() => openWatchItem(w.id)} style={{ display: 'flex', gap: 11, alignItems: 'flex-start', cursor: 'pointer' }}>
-                  <div
-                    style={{
-                      width: 26,
-                      height: 26,
-                      borderRadius: 8,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0,
-                      color: 'rgba(250,248,240,0.95)',
-                      background: `linear-gradient(135deg, hsl(${w.hue},30%,62%), hsl(${w.hue + 34},32%,42%))`,
-                    }}
-                  >
-                    <PlayTriangle size={10} />
-                  </div>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 12.5, fontWeight: 500, lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                      {w.title}
-                    </div>
-                    <div style={{ fontFamily: MONO, fontSize: 9.5, color: 'var(--ink3)', marginTop: 3 }}>
-                      {w.source} · {w.mins ? fmtMins(w.mins) : '—'}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          </section>
         </div>
       </div>
     </div>
