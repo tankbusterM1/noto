@@ -174,7 +174,7 @@ export function Todos() {
       />
 
       {tSeg === 'today' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 22, alignItems: 'start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.5fr) minmax(0, 1fr)', gap: 22, alignItems: 'start' }}>
           <div style={card}>
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6 }}>
               <div style={cardTitle}>Today</div>
@@ -261,7 +261,7 @@ export function Todos() {
       )}
 
       {tSeg === 'week' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 10 }}>
           {dowNames.map((name, i) => {
             const d = addDays(monOff + i)
             const isToday = monOff + i === 0
@@ -362,12 +362,12 @@ function MonthView() {
           ))}
         </div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 7, marginBottom: 7 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 7, marginBottom: 7 }}>
         {dowNames.map((n) => (
           <div key={n} style={{ fontFamily: MONO, fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink3)', textAlign: 'center' }}>{n}</div>
         ))}
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 7 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 7 }}>
         {cells.map((c) =>
           c.empty ? (
             <div key={c.key} style={{ minHeight: 88, borderRadius: 11, padding: '8px 9px', background: 'transparent', border: '1px solid transparent' }} />

@@ -171,7 +171,7 @@ export function Journal() {
       {/* Blur-gated body */}
       <div style={{ position: 'relative' }}>
         <div key={loadKey} style={{ transition: 'filter 0.5s ease', filter: locked ? 'blur(9px)' : 'blur(0px)', pointerEvents: locked ? 'none' : undefined, userSelect: locked ? 'none' : undefined }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 22, alignItems: 'start' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.5fr) minmax(0, 1fr)', gap: 22, alignItems: 'start' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0 }}>
               {/* Today card */}
               <div style={{ background: 'var(--sf)', border: '1px solid var(--ln)', borderRadius: 18, padding: '28px 30px' }}>

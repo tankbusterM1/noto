@@ -96,7 +96,7 @@ export function Queue() {
                     className={s.fill}
                     style={{
                       ...shareFill(row.key),
-                      transform: `scaleX(${row.share})`,
+                      width: `${row.share * 100}%`,
                       animationDelay: `${260 + i * 90}ms`,
                     }}
                   />
@@ -143,8 +143,10 @@ export function Queue() {
               style={{
                 gridColumn: c.col + 1,
                 gridRow: c.row + 1,
-                background: c.level === 0 ? 'var(--sf2)' : 'var(--ink2)',
-                opacity: c.level === 0 ? 1 : c.level === 1 ? 0.3 : c.level === 2 ? 0.6 : 1,
+                background:
+                  c.level === 0
+                    ? 'var(--sf2)'
+                    : `color-mix(in srgb, var(--ink2) ${c.level === 1 ? 30 : c.level === 2 ? 60 : 100}%, var(--sf2))`,
                 // Diagonal cascade — the wave crosses the grid, not the rows.
                 animationDelay: `${(c.col + c.row) * 9}ms`,
               }}

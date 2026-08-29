@@ -58,7 +58,7 @@ export function HistoryDrawer() {
   return (
     <>
       <div onClick={closeHistory} style={{ position: 'fixed', inset: 0, zIndex: 132, background: 'rgba(24,19,10,0.38)', animation: 'fadein 0.25s ease both' }} />
-      <div style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 400, maxWidth: '92vw', zIndex: 133, background: 'var(--bg)', borderLeft: '1px solid var(--ln)', boxShadow: '-24px 0 60px rgba(24,19,10,0.18)', display: 'flex', flexDirection: 'column', animation: 'drawerin 0.35s cubic-bezier(0.3,0.7,0.3,1) both' }}>
+      <div style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 400, maxWidth: '92vw', zIndex: 133, background: 'var(--bg)', borderLeft: '1px solid var(--ln)', boxShadow: '-24px 0 60px rgba(24,19,10,0.18)', display: 'flex', flexDirection: 'column', animation: 'panel-in 420ms var(--t-ease) both' }}>
         {/* header */}
         <div style={{ padding: '24px 24px 16px', borderBottom: '1px solid var(--ln)', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>

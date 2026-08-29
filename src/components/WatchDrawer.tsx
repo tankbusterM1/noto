@@ -36,7 +36,7 @@ export function WatchDrawer() {
   return (
     <>
       <div onClick={closeWatch} style={{ position: 'fixed', inset: 0, zIndex: 130, background: 'rgba(24,19,10,0.38)', animation: 'fadein 0.25s ease both' }} />
-      <div style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 400, maxWidth: '92vw', zIndex: 131, background: 'var(--bg)', borderLeft: '1px solid var(--ln)', boxShadow: '-24px 0 60px rgba(24,19,10,0.18)', display: 'flex', flexDirection: 'column', animation: 'drawerin 0.35s cubic-bezier(0.3,0.7,0.3,1) both' }}>
+      <div style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 400, maxWidth: '92vw', zIndex: 131, background: 'var(--bg)', borderLeft: '1px solid var(--ln)', boxShadow: '-24px 0 60px rgba(24,19,10,0.18)', display: 'flex', flexDirection: 'column', animation: 'panel-in 420ms var(--t-ease) both' }}>
         {/* thumb */}
         <div style={{ height: 150, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(250,248,240,0.95)', flexShrink: 0, background: `linear-gradient(135deg, hsl(${dw.hue},30%,62%), hsl(${dw.hue + 34},32%,42%))` }}>
           {dw.thumb && (

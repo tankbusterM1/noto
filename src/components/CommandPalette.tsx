@@ -94,7 +94,7 @@ export function CommandPalette() {
   return (
     <>
       <div onClick={closePalette} style={{ position: 'fixed', inset: 0, zIndex: 150, background: 'rgba(24,19,10,0.42)', animation: 'fadein 0.2s ease both' }} />
-      <div style={{ position: 'fixed', top: '14%', left: 0, right: 0, margin: '0 auto', width: 560, maxWidth: '92vw', zIndex: 151, background: 'var(--bg)', border: '1px solid var(--ln)', borderRadius: 18, boxShadow: '0 30px 80px rgba(24,19,10,0.3)', overflow: 'hidden', animation: 'rise 0.25s cubic-bezier(0.3,0.7,0.3,1) both' }}>
+      <div style={{ position: 'fixed', top: '14%', left: 0, right: 0, margin: '0 auto', width: 560, maxWidth: '92vw', zIndex: 151, background: 'var(--bg)', border: '1px solid var(--ln)', borderRadius: 18, boxShadow: '0 30px 80px rgba(24,19,10,0.3)', overflow: 'hidden', animation: 'palette-in var(--t-fast) var(--t-ease) both' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '15px 18px', borderBottom: '1px solid var(--ln)' }}>
           <SearchIcon size={15} style={{ color: 'var(--ink3)' }} />
           <input
@@ -113,7 +113,7 @@ export function CommandPalette() {
           <span style={{ fontFamily: MONO, fontSize: 9.5, color: 'var(--ink3)', border: '1px solid var(--ln)', borderRadius: 5, padding: '2px 6px' }}>esc</span>
         </div>
 
-        <div style={{ maxHeight: 340, overflowY: 'auto', padding: 8 }}>
+        <div style={{ maxHeight: 340, overflowY: 'auto', overflowX: 'hidden', padding: 8 }}>
           {items.map((it, i) => (
             <div
               key={i}
@@ -133,10 +133,10 @@ export function CommandPalette() {
           )}
         </div>
 
-        <div style={{ display: 'flex', gap: 14, padding: '10px 18px', borderTop: '1px solid var(--ln)', fontFamily: MONO, fontSize: 9.5, color: 'var(--ink3)' }}>
-          <span>↑↓ navigate</span>
+        <div style={{ display: 'flex', gap: 14, padding: '10px 18px', borderTop: '1px solid var(--ln)', fontFamily: MONO, fontSize: 9.5, letterSpacing: '0.1em', color: 'var(--ink3)', flexShrink: 0 }}>
+          <span>↑↓ move</span>
           <span>↵ open</span>
-          <span>⌘K from anywhere</span>
+          <span>esc close</span>
         </div>
       </div>
     </>

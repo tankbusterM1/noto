@@ -97,6 +97,12 @@
   height: 100%;
   border-radius: 99px;
   transform-origin: left;
+  /*
+   * Motion rule 3: the value rides on WIDTH, never on transform. t-rule
+   * animates scaleX 0 -> 1 with fill `both`, so a static scaleX(share) here
+   * would be overwritten by the final frame and every bar would land full —
+   * which is exactly what a zero-count "overdue" row did.
+   */
   animation: t-rule var(--t-base) var(--t-ease) both;
 }
 .shareCount {
@@ -155,6 +161,11 @@
   width: 11px;
   height: 11px;
   border-radius: 2px;
+  /*
+   * Same rule, for opacity: t-cell-in ends at opacity 1, so volume can't be
+   * expressed as a static opacity — it would all flatten to full. The level is
+   * mixed into the background colour instead.
+   */
   animation: t-cell-in var(--t-base) var(--t-ease) both;
 }
 .legend {

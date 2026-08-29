@@ -20,7 +20,7 @@ export function Toast() {
         fontFamily: MONO,
         fontSize: 11,
         boxShadow: '0 12px 30px rgba(20,16,8,0.28)',
-        animation: 'popin 0.25s ease both',
+        animation: 'toast-in var(--t-base) var(--t-spring) both',
         whiteSpace: 'nowrap',
         display: 'flex',
         alignItems: 'center',

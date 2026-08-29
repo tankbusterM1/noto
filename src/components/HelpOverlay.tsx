@@ -62,7 +62,7 @@ export function HelpOverlay() {
           </div>
         </div>
 
-        <div style={{ padding: '20px 24px 24px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 34px', maxHeight: '72vh', overflowY: 'auto' }}>
+        <div style={{ padding: '20px 24px 24px', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '6px 34px', maxHeight: '72vh', overflowY: 'auto' }}>
           <div>
             <div style={groupLabel}>Everywhere</div>
             <Row keys={['⌘K']}>search everything · run actions · create a note</Row>
@@ -71,9 +71,10 @@ export function HelpOverlay() {
             <Row keys={['?']}>this sheet</Row>
             <Row keys={['esc']}>close whatever is on top</Row>
 
-            <div style={{ ...groupLabel, marginTop: 18 }}>Review session</div>
+            <div style={{ ...groupLabel, marginTop: 18 }}>While reviewing</div>
             <Row keys={['1', '2', '3', '4']}>grade — again · hard · good · easy</Row>
-            <Row keys={['esc']}>end the session</Row>
+            <Row keys={['space']}>good</Row>
+            <Row keys={['esc']}>back to the review list</Row>
           </div>
 
           <div>
@@ -84,6 +85,8 @@ export function HelpOverlay() {
             <Row keys={['⌘B', '⌘I']}>bold · italic</Row>
             <Row keys={['⌘E']}>reading ⇄ edit mode</Row>
             <Row keys={['⌘S']}>save now (it autosaves anyway)</Row>
+            <Row keys={['/']}>on an empty block — the block menu</Row>
+            <Row keys={['↵']}>split a block · backspace on empty removes it</Row>
             <Row keys={['⌘click']}>follow a [[wikilink]] — creates it if missing</Row>
           </div>
         </div>
