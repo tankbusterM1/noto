@@ -15,6 +15,11 @@ export function blocksToMarkdown(blocks: Block[]): string {
           return '#'.repeat(Math.min(6, Math.max(1, b.level ?? 2))) + ' ' + (b.text ?? '')
         case 'ul':
           return (b.items ?? []).map((it) => '- ' + it).join('\n')
+        // A task-list item: standard markdown, so other editors keep the tick.
+        case 'todo':
+          return '- [' + (b.done ? 'x' : ' ') + '] ' + (b.text ?? '')
+        case 'div':
+          return '---'
         case 'code':
           return '```' + (b.lang ?? '') + '\n' + (b.text ?? '') + '\n```'
         case 'q':
@@ -99,10 +104,28 @@ export function markdownToBlocks(md: string): Block[] {
       continue
     }
 
+    // `- [ ] text` — checked before the bullet rule below, which would
+    // otherwise eat the checkbox as list text.
+    const task = line.match(/^\s*[-*]\s+\[([ xX])\]\s?(.*)$/)
+    if (task) {
+      flush()
+      blocks.push({ id: blockId(), t: 'todo', text: task[2].trim(), done: task[1].toLowerCase() === 'x' })
+      i++
+      continue
+    }
+
+    // A thematic break on its own line is a divider block.
+    if (/^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/.test(line)) {
+      flush()
+      blocks.push({ id: blockId(), t: 'div' })
+      i++
+      continue
+    }
+
     if (/^\s*[-*]\s+/.test(line)) {
       flush()
       const items: string[] = []
-      while (i < lines.length && /^\s*[-*]\s+/.test(lines[i])) {
+      while (i < lines.length && /^\s*[-*]\s+/.test(lines[i]) && !/^\s*[-*]\s+\[[ xX]\]/.test(lines[i])) {
         items.push(lines[i].replace(/^\s*[-*]\s+/, ''))
         i++
       }

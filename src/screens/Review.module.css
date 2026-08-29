@@ -169,3 +169,18 @@
   letter-spacing: 0.06em;
   opacity: 0.72;
 }
+
+/*
+ * Keyframes live HERE, not in motion.css, for the same reason Sidebar.module.css
+ * keeps its own: CSS Modules rewrites BOTH `@keyframes` names and the
+ * `animation:` values that reference them. A module pointing at a global
+ * keyframe compiles to a name that doesn't exist, and the animation silently
+ * never runs. (`:global(...)` inside an animation value is a parse error.)
+ * These are verbatim copies of the canonical definitions in styles/motion.css.
+ */
+
+@keyframes t-page-in {
+  from { opacity: 0; transform: translateY(22px) scale(0.995); filter: blur(10px); }
+  55%  { filter: blur(0); }
+  to   { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+}

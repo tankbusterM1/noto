@@ -52,17 +52,22 @@ describe('ink — the divider', () => {
   })
 
   /*
-   * Regression: a `---` written straight under prose is folded into that
-   * paragraph by markdown, so it renders as literal dashes instead of a rule.
-   * The insert has to fence it with a blank line — this pins down why.
+   * A `---` line is now its own `div` block (the block editor added the type),
+   * so it no longer folds into the paragraph above it — the case this test was
+   * originally written to pin down. RULE_RE stays: notes written before the
+   * block model still hold their rules as paragraphs of dashes, and the read
+   * view keeps drawing those as a line.
    */
-  it('only stands alone when a blank line fences it', () => {
-    const folded = markdownToBlocks('some prose\n---\n')
-    expect(folded).toHaveLength(1)
-    expect(folded[0].text).toBe('some prose\n---') // swallowed, not a rule
+  it('is its own block, and no longer folds into the prose above it', () => {
+    const tight = markdownToBlocks('some prose\n---\n')
+    expect(tight.map((b) => b.t)).toEqual(['p', 'div'])
+    expect(tight[0].text).toBe('some prose')
 
     const fenced = markdownToBlocks('some prose\n\n---\n\nmore prose')
-    expect(fenced.map((b) => b.text)).toEqual(['some prose', '---', 'more prose'])
-    expect(RULE_RE.test(fenced[1].text ?? '')).toBe(true)
+    expect(fenced.map((b) => b.t)).toEqual(['p', 'div', 'p'])
+  })
+
+  it('still reads a legacy paragraph of dashes as a rule', () => {
+    expect(RULE_RE.test('---')).toBe(true)
   })
 })

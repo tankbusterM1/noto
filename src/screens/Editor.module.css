@@ -1,0 +1,165 @@
+/*
+ * The editor shell: writing column + memory rail as flex siblings.
+ */
+
+.row {
+  display: flex;
+  min-height: 100%;
+  animation: t-page-in var(--t-slow) var(--t-ease) both;
+}
+
+.column {
+  flex: 1;
+  min-width: 0;
+  /* 96px left: the block gutter hangs at -56px and must stay inside the
+     scroll clip. Do not reduce it. */
+  padding: 0 96px 140px;
+}
+.measure {
+  max-width: 680px;
+  margin: 0 auto;
+  position: relative;
+}
+
+/* ── breadcrumb ───────────────────────────────────────────────────── */
+.crumbs {
+  position: sticky;
+  top: 0;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 30px 0 18px;
+  background: var(--bg);
+}
+.crumb,
+.edited {
+  border: none;
+  background: transparent;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink3);
+  cursor: pointer;
+  padding: 0;
+  transition: color var(--t-fast) var(--t-ease);
+}
+.crumb:hover,
+.edited:hover {
+  color: var(--ink);
+}
+.edited {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.spacer {
+  flex: 1;
+}
+
+.modes {
+  display: flex;
+  gap: 2px;
+  background: var(--sf2);
+  border-radius: 8px;
+  padding: 2px;
+}
+.mode {
+  border: none;
+  background: transparent;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink3);
+  padding: 4px 9px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background var(--t-fast) var(--t-ease),
+    color var(--t-fast) var(--t-ease);
+}
+.modeOn {
+  background: var(--sf);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* The notebook margin — a thread drawn down the column. */
+.marginRule {
+  position: absolute;
+  left: -26px;
+  top: 76px;
+  bottom: 0;
+  width: 1px;
+  background: var(--ln);
+  transform-origin: top;
+  animation: t-thread var(--t-air) var(--t-ease) both;
+  pointer-events: none;
+}
+
+/* ── title ────────────────────────────────────────────────────────── */
+.title {
+  font-family: 'Newsreader', Georgia, serif;
+  font-size: 34px;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  line-height: 1.14;
+  margin: 12px 0 0;
+  outline: none;
+  text-wrap: pretty;
+}
+
+/* ── templates ────────────────────────────────────────────────────── */
+.templates {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 22px;
+}
+.tplLabel {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink3);
+  margin-right: 4px;
+}
+.tpl {
+  border: 1px solid var(--ln);
+  background: transparent;
+  border-radius: 99px;
+  padding: 5px 12px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10px;
+  color: var(--ink2);
+  cursor: pointer;
+  transition: background var(--t-fast) var(--t-ease);
+}
+.tpl:hover {
+  background: var(--sf2);
+}
+
+.body {
+  margin-top: 30px;
+}
+
+/*
+ * Keyframes live HERE, not in motion.css, for the same reason Sidebar.module.css
+ * keeps its own: CSS Modules rewrites BOTH `@keyframes` names and the
+ * `animation:` values that reference them. A module pointing at a global
+ * keyframe compiles to a name that doesn't exist, and the animation silently
+ * never runs. (`:global(...)` inside an animation value is a parse error.)
+ * These are verbatim copies of the canonical definitions in styles/motion.css.
+ */
+
+@keyframes t-page-in {
+  from { opacity: 0; transform: translateY(22px) scale(0.995); filter: blur(10px); }
+  55%  { filter: blur(0); }
+  to   { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+}
+@keyframes t-thread { from { transform: scaleY(0); } to { transform: scaleY(1); } }

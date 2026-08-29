@@ -15,11 +15,13 @@ export type BlockType =
   | 'p'
   | 'h2'
   | 'ul'
+  | 'todo'
   | 'code'
   | 'q'
   | 'img'
   | 'link'
   | 'call'
+  | 'div'
 
 export interface Block {
   /** Stable id so the editor can keep uncontrolled DOM across inserts/merges. */
@@ -35,6 +37,8 @@ export interface Block {
   url?: string
   /** Image blocks: an uploaded data-URL (local-first). */
   src?: string
+  /** To-do blocks: ticked or not. Serialises as a `- [x]` task list item. */
+  done?: boolean
 }
 
 /** Fresh block id. */

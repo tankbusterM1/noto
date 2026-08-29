@@ -1,0 +1,326 @@
+/*
+ * The memory rail — a recessed bed (--sf2) holding one raised panel (--sf).
+ * Two surfaces on the screen, no more.
+ */
+
+.rail {
+  position: relative;
+  width: 306px;
+  flex-shrink: 0;
+  background: var(--sf2);
+  border-left: 1px solid var(--ln);
+  padding: 30px 22px 120px;
+  transition: width var(--t-slow) var(--t-ease);
+}
+.railShut {
+  width: 52px;
+  padding-left: 0;
+  padding-right: 0;
+  overflow: hidden;
+}
+
+.collapse {
+  position: absolute;
+  top: 22px;
+  right: 16px;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  border-radius: 7px;
+  color: var(--ink3);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--t-fast) var(--t-ease);
+}
+.railShut .collapse {
+  right: 14px;
+}
+.collapse:hover {
+  background: var(--bg);
+  color: var(--ink2);
+}
+
+.inner {
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  margin-top: 26px;
+}
+
+.label {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink3);
+}
+
+/* ── panel ────────────────────────────────────────────────────────── */
+.panel {
+  background: var(--sf);
+  border-radius: 14px;
+  padding: 18px;
+  box-shadow: 0 2px 0 -0.5px rgba(24, 19, 10, 0.05);
+}
+.panelHead {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 18px;
+}
+.diamondSm {
+  width: 7px;
+  height: 7px;
+  background: var(--ink3);
+  transform: rotate(45deg);
+}
+
+/* ── the thread + its knots ───────────────────────────────────────── */
+.thread {
+  position: relative;
+  padding-left: 20px;
+}
+/* One hairline running the length of the knots. */
+.thread::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  bottom: 4px;
+  width: 1px;
+  background: var(--ln);
+  transform-origin: top;
+  animation: t-thread var(--t-air) var(--t-ease) both;
+}
+.knot {
+  position: relative;
+  display: flex;
+  gap: 10px;
+  padding-bottom: 16px;
+}
+.knotBody {
+  min-width: 0;
+}
+.knotRow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  font-size: 12px;
+}
+.knotDate {
+  margin-left: auto;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 9px;
+  color: var(--ink3);
+  white-space: nowrap;
+}
+
+.diamond,
+.diamondDashed {
+  position: absolute;
+  left: -20px;
+  top: 3px;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid var(--ink2);
+  background: var(--sf);
+  /* The 45° lives in the keyframe (t-pop-d) as well — a static transform here
+     would be overwritten by the animation and the diamond would land square. */
+  animation: t-pop-d var(--t-base) var(--t-spring) 620ms both;
+}
+.diamondDue {
+  background: var(--am);
+  border-color: var(--am);
+}
+.diamondDashed {
+  position: static;
+  border-style: dashed;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.dot,
+.dotHollow {
+  position: absolute;
+  left: -18px;
+  top: 6px;
+  width: 5px;
+  height: 5px;
+  border-radius: 99px;
+  background: var(--ink3);
+}
+.dotHollow {
+  background: var(--sf);
+  border: 1px solid var(--ink3);
+}
+
+.nextLabel {
+  font-family: 'Newsreader', Georgia, serif;
+  font-size: 23px;
+  font-weight: 500;
+  line-height: 1.1;
+}
+.meta {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--ink3);
+  margin-top: 5px;
+}
+.metaInline {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 9px;
+  color: var(--ink3);
+}
+
+.reviewNow {
+  margin-top: 11px;
+  border: 1px solid var(--ln);
+  background: var(--bg);
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background var(--t-fast) var(--t-ease);
+}
+.reviewNow:hover {
+  background: var(--sf2);
+}
+
+.notYet {
+  display: flex;
+  gap: 11px;
+}
+.notYetLine {
+  font-size: 13px;
+  color: var(--ink2);
+}
+
+/* ── sections ─────────────────────────────────────────────────────── */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.stitchThread {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 14px;
+  border-left: 1px dashed var(--ln);
+}
+.stitch {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 7px 8px;
+  border-radius: 8px;
+  transition: background var(--t-fast) var(--t-ease);
+}
+.stitch:hover {
+  background: var(--bg);
+}
+.stitchTitle {
+  font-family: 'Newsreader', Georgia, serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink);
+  line-height: 1.3;
+}
+.stitch .meta {
+  margin-top: 0;
+}
+
+.detailRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.detailRow .meta {
+  margin-top: 0;
+}
+.detailVal {
+  font-size: 12px;
+  color: var(--ink2);
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tagRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.tag {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 11px;
+  color: var(--ink3);
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  transition: color var(--t-fast) var(--t-ease);
+}
+.tag:hover {
+  color: var(--ac);
+}
+
+.del {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  border: 1px solid var(--ln);
+  background: transparent;
+  color: var(--ink2);
+  border-radius: 9px;
+  padding: 9px 0;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    border-color var(--t-fast) var(--t-ease),
+    color var(--t-fast) var(--t-ease);
+}
+.del:hover {
+  color: var(--ink);
+}
+.delArmed {
+  border-color: var(--g1);
+  color: var(--g1);
+}
+
+/*
+ * Keyframes live HERE, not in motion.css, for the same reason Sidebar.module.css
+ * keeps its own: CSS Modules rewrites BOTH `@keyframes` names and the
+ * `animation:` values that reference them. A module pointing at a global
+ * keyframe compiles to a name that doesn't exist, and the animation silently
+ * never runs. (`:global(...)` inside an animation value is a parse error.)
+ * These are verbatim copies of the canonical definitions in styles/motion.css.
+ */
+
+@keyframes t-thread { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes t-pop-d {
+  from { opacity: 0; transform: rotate(45deg) scale(0.2); }
+  to   { opacity: 1; transform: rotate(45deg) scale(1); }
+}

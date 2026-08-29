@@ -331,3 +331,39 @@
   white-space: nowrap;
   flex-shrink: 0;
 }
+
+/*
+ * Keyframes live HERE, not in motion.css, for the same reason Sidebar.module.css
+ * keeps its own: CSS Modules rewrites BOTH `@keyframes` names and the
+ * `animation:` values that reference them. A module pointing at a global
+ * keyframe compiles to a name that doesn't exist, and the animation silently
+ * never runs. (`:global(...)` inside an animation value is a parse error.)
+ * These are verbatim copies of the canonical definitions in styles/motion.css.
+ */
+
+@keyframes t-page-in {
+  from { opacity: 0; transform: translateY(22px) scale(0.995); filter: blur(10px); }
+  55%  { filter: blur(0); }
+  to   { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+}
+@keyframes t-word-in {
+  from { opacity: 0; transform: translateY(16px); filter: blur(9px); }
+  60%  { filter: blur(0); }
+  to   { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+@keyframes t-rule   { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes t-num-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes t-cell-in {
+  from { opacity: 0; transform: scale(0.35); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes t-check-in {
+  0%   { opacity: 0; transform: rotate(45deg) scale(0.6); }
+  62%  { opacity: 1; transform: rotate(45deg) scale(1.05); }
+  80%  { transform: rotate(45deg) scale(0.99); }
+  100% { opacity: 1; transform: rotate(45deg) scale(1); }
+}
+@keyframes t-draw   { from { stroke-dashoffset: 26; }  to { stroke-dashoffset: 0; } }

@@ -1,0 +1,55 @@
+.bar {
+  position: fixed;
+  z-index: 320;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 9px;
+  background: var(--ink);
+  box-shadow: 0 20px 46px rgba(24, 19, 10, 0.14);
+  /* The centring offset lives in the keyframe too — see the note in the
+     component. Both frames of t-seltb carry translate(-50%,-100%). */
+  transform: translate(-50%, -100%);
+  animation: t-seltb var(--t-fast) var(--t-spring) both;
+}
+
+.btn {
+  border: none;
+  background: transparent;
+  color: var(--bg);
+  font-family: inherit;
+  font-size: 12.5px;
+  min-width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--t-fast) var(--t-ease);
+}
+.btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.sep {
+  width: 1px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.2);
+  margin: 0 3px;
+}
+
+/*
+ * Keyframes live HERE, not in motion.css, for the same reason Sidebar.module.css
+ * keeps its own: CSS Modules rewrites BOTH `@keyframes` names and the
+ * `animation:` values that reference them. A module pointing at a global
+ * keyframe compiles to a name that doesn't exist, and the animation silently
+ * never runs. (`:global(...)` inside an animation value is a parse error.)
+ * These are verbatim copies of the canonical definitions in styles/motion.css.
+ */
+
+@keyframes t-seltb {
+  from { opacity: 0; transform: translate(-50%, -100%) translateY(5px) scale(0.97); }
+  to   { opacity: 1; transform: translate(-50%, -100%) translateY(0) scale(1); }
+}
