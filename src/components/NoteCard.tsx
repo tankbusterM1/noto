@@ -5,7 +5,6 @@ import { folderName } from '../lib/tree'
 import { snippet } from '../lib/format'
 import { ago } from '../lib/dates'
 import { MONO, SERIF, chip, clamp, rise } from '../lib/ui'
-import { TagLink } from './TagLink'
 import type { Note } from '../lib/types'
 
 /** Recently-edited (Today) and library-grid note cards. Ink-faded by SRS. */
@@ -93,8 +92,8 @@ export function NoteCard({
         position: 'relative',
         background: 'var(--sf)',
         border: '1px solid var(--ln)',
-        borderRadius: 14,
-        padding: '17px 19px',
+        borderRadius: 13,
+        padding: '19px 20px',
         cursor: 'pointer',
         display: 'flex',
         flexDirection: 'column',
@@ -104,31 +103,29 @@ export function NoteCard({
     >
       {resumed && <span className="ribbon-card" aria-hidden />}
       <div className="ink-body" style={{ opacity: ink }}>
-        <div style={{ fontFamily: SERIF, fontSize: 18.5, fontWeight: 500, lineHeight: 1.25 }}>
+        <div style={{ fontFamily: SERIF, fontSize: 17, fontWeight: 500, lineHeight: 1.25 }}>
           {note.title}
         </div>
-        <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.55, marginTop: 6, ...clamp(2) }}>
+        <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.6, marginTop: 7, ...clamp(2) }}>
           {snippet(note)}
         </div>
       </div>
-      <div style={{ flex: 1 }} />
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-        <span style={chip}>{folder}</span>
-        {note.tags.map((t) => (
-          <TagLink key={t} tag={t} variant="muted" size={10} />
-        ))}
-      </div>
+      {/* One mono line: where it lives, when you touched it, when it comes back. */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between',
-          borderTop: '1px solid var(--ln)',
-          paddingTop: 10,
+          gap: 7,
+          marginTop: 13,
+          fontFamily: MONO,
+          fontSize: 9.5,
+          color: 'var(--ink3)',
         }}
       >
-        <span style={{ fontFamily: MONO, fontSize: 10, color: 'var(--ink3)' }}>{ago(note.updated)}</span>
-        <span style={pillStyle}>{pill.label}</span>
+        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{folder}</span>
+        <span>·</span>
+        <span style={{ whiteSpace: 'nowrap' }}>{ago(note.updated)}</span>
+        <span style={{ ...pillStyle, marginLeft: 'auto', whiteSpace: 'nowrap', flexShrink: 0 }}>{pill.label}</span>
       </div>
     </div>
   )

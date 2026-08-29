@@ -5,7 +5,7 @@ import { LANGS } from '../lib/constants'
 import { MONO } from '../lib/ui'
 import { safeHref } from '../lib/url'
 import { HL_SRC, TC_SRC, HL_SCAN, TC_SCAN, PEN_KEY, RULE_RE, type Pen } from '../lib/ink'
-import { ImageIcon, ExternalArrow, LightbulbIcon } from './icons'
+import { ImageIcon, ExternalArrow } from './icons'
 import { BlockMenu } from './BlockMenu'
 import { SelectionToolbar } from './SelectionToolbar'
 import { blockId, type Block, type BlockType, type Note } from '../lib/types'
@@ -542,9 +542,7 @@ export function NoteBlocks({ note, readOnly = false, full = false }: { note: Not
               if (readOnly && !full) return null
               return (
                 <div className={s.callout}>
-                  <span className={s.calloutIcon}>
-                    <LightbulbIcon style={{ color: 'var(--am)' }} />
-                  </span>
+                  <span className={s.calloutIcon}>✎</span>
                   <div className={s.calloutText} {...editable} onBlur={onBlurText(i)}>
                     {txt(b.text)}
                   </div>
@@ -561,6 +559,7 @@ export function NoteBlocks({ note, readOnly = false, full = false }: { note: Not
         return (
           <div
             key={key}
+            style={{ animationDelay: `${i * 45}ms` }}
             className={`${s.row} ${drag === i ? s.rowDragging : ''} ${
               over?.i === i ? (over.after ? s.rowOverAfter : s.rowOverBefore) : ''
             }`}

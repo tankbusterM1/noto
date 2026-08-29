@@ -150,10 +150,12 @@
   padding: 8px 11px;
   border-radius: 9px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 500;
   color: var(--ink2);
-  transition: background 0.15s ease;
+  transition:
+    background var(--t-fast) var(--t-ease),
+    transform var(--t-base) var(--t-spring);
   position: relative;
   border: none;
   background: transparent;
@@ -163,6 +165,8 @@
 }
 .navItem:hover {
   background: var(--sf2);
+  /* The row steps toward you — the prototype's hover, not just a fill. */
+  transform: translateX(4px);
 }
 .navItem:active {
   transform: scale(0.98);
@@ -277,7 +281,9 @@
   font-size: 12.5px;
   font-weight: 500;
   color: var(--ink2);
-  transition: background 0.15s ease;
+  transition:
+    background var(--t-fast) var(--t-ease),
+    transform var(--t-base) var(--t-spring);
   background: transparent;
   font-family: inherit;
   width: 100%;
@@ -285,6 +291,7 @@
 }
 .footBtn:hover {
   background: var(--sf2);
+  transform: translateX(4px);
 }
 .footBtn:active {
   transform: scale(0.98);

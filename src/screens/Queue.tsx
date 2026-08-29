@@ -34,9 +34,15 @@ function Statement({ text }: { text: string }) {
   )
 }
 
-/** A hairline that draws itself in, left to right. */
-function Rule({ delay = 0 }: { delay?: number }) {
-  return <div className={s.rule} style={{ animationDelay: `${delay}ms` }} />
+/** A section label with its rule drawn underneath it, left to right. */
+function Head({ label, meta, delay = 0 }: { label: string; meta?: string; delay?: number }) {
+  return (
+    <div className={s.sectionHead}>
+      <div className={s.headRule} style={{ animationDelay: `${delay}ms` }} />
+      <span>{label}</span>
+      {meta !== undefined && <span className={s.headMeta}>{meta}</span>}
+    </div>
+  )
 }
 
 export function Queue() {
@@ -52,6 +58,14 @@ export function Queue() {
   const forecast = forecastDays(notes, srs, 14)
   const maxF = Math.max(1, ...forecast)
   const cells = yearGrid(ledgerByDay, 26)
+  const inkTotal = cells.reduce((a, c) => a + c.count, 0)
+  // Consecutive days with at least one review, counting back from today.
+  let streak = 0
+  for (let k = 0; ; k++) {
+    const day = Math.max(...cells.map((c) => c.day)) - k
+    if ((ledgerByDay[day] ?? 0) === 0) break
+    streak++
+  }
   const nextWeek = forecast.slice(0, 7).reduce((a, b) => a + b, 0)
 
   const statement = due.length
@@ -82,14 +96,12 @@ export function Queue() {
       <Statement text={statement} />
       <div className={s.waiting}>{due.length ? `${due.length} waiting below` : 'nothing waiting'}</div>
 
-      <Rule delay={140} />
-
       <div className={s.cols}>
         <section>
-          <div className={s.sectionLabel}>How the ink sits</div>
+          <Head label="How the ink sits" delay={260} />
           <div className={s.shares}>
             {shares.map((row, i) => (
-              <div key={row.key} className={s.shareRow}>
+              <div key={row.key} className={s.shareRow} style={{ animationDelay: `${260 + i * 90}ms` }}>
                 <span className={s.shareLabel}>{row.label}</span>
                 <span className={s.track}>
                   <span
@@ -108,7 +120,7 @@ export function Queue() {
         </section>
 
         <section>
-          <div className={s.sectionLabel}>Next fourteen days</div>
+          <Head label="Next fourteen days" delay={400} />
           <div className={s.bars}>
             {forecast.map((c, i) => (
               <span key={i} className={s.barCol} title={`${c} note${c === 1 ? '' : 's'}`}>
@@ -120,7 +132,7 @@ export function Queue() {
                     animationDelay: `${300 + i * 55}ms`,
                   }}
                 />
-                <span className={s.barDay}>{i === 0 ? '·' : dayLetters[addDays(i).getDay()]}</span>
+                <span className={`${s.barDay} ${i === 0 ? s.barToday : ''}`}>{i === 0 ? '·' : dayLetters[addDays(i).getDay()]}</span>
               </span>
             ))}
           </div>
@@ -130,10 +142,8 @@ export function Queue() {
         </section>
       </div>
 
-      <Rule delay={280} />
-
       <section className={s.year}>
-        <div className={s.sectionLabel}>Year in ink</div>
+        <Head label="Year in ink" delay={540} meta={`${inkTotal} reviews · ${streak} streak`} />
         <div className={s.grid}>
           {cells.map((c) => (
             <span
@@ -164,10 +174,8 @@ export function Queue() {
         </div>
       </section>
 
-      <Rule delay={420} />
-
-      <section>
-        <div className={s.sectionLabel}>Due now</div>
+      <section className={s.dueSection}>
+        <Head label="Due now" delay={680} meta={String(due.length)} />
         {due.length === 0 ? (
           <div className={s.empty}>
             <span className={s.stamp}>
@@ -182,7 +190,7 @@ export function Queue() {
             {due.map((n, i) => {
               const st = srs[n.id]
               return (
-                <button type="button" key={n.id} className={s.dueRow} onClick={() => startReview(n.id)}>
+                <button type="button" key={n.id} className={s.dueRow} onClick={() => startReview(n.id)} style={{ animationDelay: `${i * 70}ms` }}>
                   <span className={s.num}>{String(i + 1).padStart(2, '0')}</span>
                   <span className={s.dueMain}>
                     <span className={s.dueTitle}>{n.title}</span>
@@ -199,15 +207,14 @@ export function Queue() {
         )}
       </section>
 
-      {(soon.length > 0 || later.length > 0) && <Rule delay={520} />}
-
       <div className={s.tails}>
         {soon.length > 0 && (
           <section>
-            <div className={s.sectionLabel}>Next 7 days</div>
+            <Head label="Next 7 days" delay={820} meta={String(soon.length)} />
             <div className={s.tailList}>
               {soon.map(({ n, st }) => (
                 <button type="button" key={n.id} className={s.tailRow} onClick={() => startReview(n.id)}>
+                  <span className={s.tailMark} />
                   <span className={s.tailTitle}>{n.title}</span>
                   <span className={s.tailWhen}>{dueLabel(st.due)}</span>
                 </button>
@@ -217,10 +224,11 @@ export function Queue() {
         )}
         {later.length > 0 && (
           <section>
-            <div className={s.sectionLabel}>Later</div>
+            <Head label="Later" delay={820} meta={String(later.length)} />
             <div className={s.tailList}>
               {later.map(({ n, st }) => (
                 <button type="button" key={n.id} className={s.tailRow} onClick={() => startReview(n.id)}>
+                  <span className={s.tailMark} />
                   <span className={s.tailTitle}>{n.title}</span>
                   <span className={s.tailWhen}>{dueLabel(st.due)}</span>
                 </button>

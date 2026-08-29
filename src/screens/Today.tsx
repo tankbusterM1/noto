@@ -1,12 +1,12 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { useData } from '../store/data'
 import { useUI } from '../store/ui'
-import { dueNotes } from '../lib/srs'
+import { dueNotes, srsPill, inkOpacity } from '../lib/srs'
 import { forecastDays } from '../lib/horizon'
 import { PROMPTS } from '../lib/constants'
 import { addDays, todayEpochDay } from '../lib/dates'
 import { fmtMins, journalStreak, snippet } from '../lib/format'
-import { PlayTriangle } from '../components/icons'
+import { folderName } from '../lib/tree'
 import s from './Today.module.css'
 
 /*
@@ -27,8 +27,7 @@ function useCountUp(value: number, ms = 1500): number {
     const start = performance.now()
     const tick = (t: number) => {
       const p = Math.min(1, (t - start) / ms)
-      const eased = 1 - Math.pow(1 - p, 3)
-      setN(Math.round(value * eased))
+      setN(Math.round(value * (1 - Math.pow(1 - p, 3))))
       if (p < 1) raf.current = requestAnimationFrame(tick)
     }
     raf.current = requestAnimationFrame(tick)
@@ -40,21 +39,21 @@ function useCountUp(value: number, ms = 1500): number {
 function Stat({ value, label }: { value: number; label: string }) {
   const n = useCountUp(value)
   return (
-    <div className={s.stat}>
-      <div className={s.statValue}>{n}</div>
+    <div>
       <div className={s.statLabel}>{label}</div>
+      <div className={s.statValue}>{n}</div>
     </div>
   )
 }
 
-function Words({ text, from = 140, gap = 130 }: { text: string; from?: number; gap?: number }) {
+/** Text assembled word by word. The space sits OUTSIDE the inline-block, or
+ *  it collapses at the edge of the box and the words run together. */
+function Words({ text, cls = s.word, from = 140, gap = 130 }: { text: string; cls?: string; from?: number; gap?: number }) {
   return (
     <>
-      {/* The space must sit OUTSIDE the inline-block: a trailing space inside
-          one collapses at the edge of the box and the words run together. */}
       {text.split(' ').map((w, i) => (
         <Fragment key={i}>
-          <span className={s.word} style={{ animationDelay: `${from + i * gap}ms` }}>
+          <span className={cls} style={{ animationDelay: `${from + i * gap}ms` }}>
             {w}
           </span>{' '}
         </Fragment>
@@ -63,8 +62,15 @@ function Words({ text, from = 140, gap = 130 }: { text: string; from?: number; g
   )
 }
 
-function Rule({ delay = 0 }: { delay?: number }) {
-  return <div className={s.rule} style={{ animationDelay: `${delay}ms` }} />
+/** A section label with its rule drawn underneath it. */
+function Head({ label, meta, delay = 0, onClick }: { label: string; meta?: string; delay?: number; onClick?: () => void }) {
+  return (
+    <div className={s.sectionHead} onClick={onClick} style={onClick ? { cursor: 'pointer' } : undefined}>
+      <div className={s.headRule} style={{ animationDelay: `${delay}ms` }} />
+      <span>{label}</span>
+      {meta && <span className={s.headMeta}>{meta}</span>}
+    </div>
+  )
 }
 
 /**
@@ -84,24 +90,33 @@ function Horizon({ counts }: { counts: number[] }) {
   const area = `${pts[0].x},${H - 14} ${line} ${pts[pts.length - 1].x},${H - 14}`
 
   return (
-    <div className={s.horizon}>
-      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} aria-hidden>
-        <polygon points={area} fill="var(--am)" opacity={0.17} />
-        <polyline points={line} fill="none" stroke="var(--am)" strokeWidth={2.1} strokeLinejoin="round" strokeLinecap="round" className={s.curve} />
-        {pts.map((p, i) =>
-          i === 0 ? (
-            <circle key={i} cx={p.x} cy={p.y} r={3.4} fill="var(--am)" opacity={p.c === 0 ? 0.3 : 1} />
-          ) : (
-            <circle key={i} cx={p.x} cy={p.y} r={2.2} fill="var(--sf)" stroke="var(--am)" strokeWidth={1.4} opacity={p.c === 0 ? 0.3 : 1} />
-          ),
-        )}
+    <div>
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: 'block' }} aria-hidden>
+        <polygon className={s.hzArea} points={area} fill="var(--am)" opacity={0.17} />
+        <polyline className={s.curve} points={line} fill="none" stroke="var(--am)" strokeWidth={2.1} strokeLinejoin="round" strokeLinecap="round" />
+        {pts.map((p, i) => (
+          <circle
+            key={i}
+            className={s.hzDot}
+            cx={p.x}
+            cy={p.y}
+            r={i === 0 ? 3.4 : 2.2}
+            fill={i === 0 ? 'var(--am)' : 'var(--sf)'}
+            stroke={i === 0 ? 'none' : 'var(--am)'}
+            strokeWidth={1.4}
+            opacity={p.c === 0 ? 0.3 : 1}
+            style={{ animationDelay: `${900 + i * 90}ms` }}
+          />
+        ))}
       </svg>
-      <div className={s.horizonDays} style={{ width: W }}>
+      <div className={s.horizonDays}>
         {counts.map((_, i) => (
-          <span key={i}>{i === 0 ? '·' : dayLetters[addDays(i).getDay()]}</span>
+          <span key={i} className={i === 0 ? s.horizonToday : undefined} style={{ animationDelay: `${1000 + i * 70}ms` }}>
+            {i === 0 ? 'now' : dayLetters[addDays(i).getDay()]}
+          </span>
         ))}
       </div>
-      <div className={s.horizonLabel}>Seven days of fading</div>
+      <div className={s.horizonLabel}>seven days of fading</div>
     </div>
   )
 }
@@ -112,10 +127,13 @@ export function Today() {
   const todos = useData((d) => d.todos)
   const watch = useData((d) => d.watch)
   const journal = useData((d) => d.journal)
+  const folders = useData((d) => d.folders)
   const ledgerByDay = useData((d) => d.ledgerByDay)
+  const toggleTodo = useData((d) => d.toggleTodo)
   const setScreen = useUI((u) => u.setScreen)
   const openWatchItem = useUI((u) => u.openWatchItem)
   const openNote = useUI((u) => u.openNote)
+  const inkFade = useUI((u) => u.inkFade)
 
   // The clock ticks so the day arc stays honest without a reload.
   const [now, setNow] = useState(() => new Date())
@@ -142,14 +160,11 @@ export function Today() {
   const toWatch = watch.filter((w) => !w.done).length
 
   const recent = notes.slice().sort((a, b) => b.updated - a.updated).slice(0, 3)
-  const openTodos = todos.filter((t) => !t.done)
+  const topTodos = todos.slice(0, 4)
   const doneN = todos.filter((t) => t.done).length
   const streak = journalStreak(journal)
   const jPrompt = PROMPTS[now.getDate() % PROMPTS.length]
-  const jWeekDots = [6, 5, 4, 3, 2, 1, 0].map((k) => ({
-    filled: journal.some((e) => e.off === -k),
-    letter: dayLetters[addDays(-k).getDay()],
-  }))
+  const jWeekDots = [6, 5, 4, 3, 2, 1, 0].map((k) => journal.some((e) => e.off === -k))
   const nextWatch = watch.filter((w) => !w.done).slice(0, 2)
 
   return (
@@ -178,8 +193,6 @@ export function Today() {
         <Stat value={toWatch} label="to watch" />
       </div>
 
-      <Rule delay={140} />
-
       {/* ── review ──────────────────────────────────────────────── */}
       <section className={s.reviewCard}>
         <span className={s.shine} />
@@ -192,97 +205,106 @@ export function Today() {
               ? 'Their ink is thinning — read one and it darkens again.'
               : 'Nothing is due. Come back tomorrow, or put another note on the thread.'}
           </p>
-          <button type="button" className={s.inkBtn} onClick={() => setScreen('queue')}>
-            Go to review →
-          </button>
+          {due.length > 0 && (
+            <button type="button" className={s.inkBtn} onClick={() => setScreen('queue')}>
+              Go to review
+              <span className={s.btnCount}>{due.length}</span>
+            </button>
+          )}
         </div>
         <Horizon counts={counts} />
       </section>
 
-      <Rule delay={280} />
-
       {/* ── two columns ─────────────────────────────────────────── */}
       <div className={s.cols}>
-        <div className={s.col}>
-          <section>
-            <div className={s.sectionHead}>
-              <span className={s.sectionLabel}>Recently edited</span>
-              <button type="button" className={s.more} onClick={() => setScreen('notes')}>
-                all notes →
+        <div>
+          <Head label="Recently edited" delay={300} />
+          {recent.map((n, i) => {
+            const st = srs[n.id]
+            const pill = srsPill(st)
+            return (
+              <button
+                type="button"
+                key={n.id}
+                className={s.noteRow}
+                onClick={() => openNote(n.id)}
+                style={{ opacity: Math.max(0.62, inkOpacity(st, inkFade)), animationDelay: `${180 + i * 90}ms` }}
+              >
+                <div className={s.noteTitle}>{n.title}</div>
+                <div className={s.noteSnippet}>{snippet(n)}</div>
+                <div className={s.noteMeta}>
+                  <span>{folderName(folders, n.folderId)}</span>
+                  <span>·</span>
+                  <span>{n.updated === today ? 'today' : 'edited'}</span>
+                  <span className={s.notePill} style={{ color: pill.color, fontWeight: pill.bold ? 600 : undefined }}>
+                    {pill.label}
+                  </span>
+                </div>
               </button>
-            </div>
-            <div className={s.rows}>
-              {recent.map((n) => (
-                <button type="button" key={n.id} className={s.row} onClick={() => openNote(n.id)}>
-                  <span className={s.rowTitle}>{n.title}</span>
-                  <span className={s.rowMeta}>{snippet(n)}</span>
-                </button>
-              ))}
-            </div>
-          </section>
-
-          <section>
-            <div className={s.sectionHead}>
-              <span className={s.sectionLabel}>Journal</span>
-              <span className={s.streak}>◆ {streak}-day streak</span>
-            </div>
-            <div className={s.weekDots}>
-              {jWeekDots.map((d, i) => (
-                <span key={i} className={s.weekDay}>
-                  <span className={`${s.dot} ${d.filled ? s.dotOn : ''}`} />
-                  <span className={s.weekLetter}>{d.letter}</span>
-                </span>
-              ))}
-            </div>
-            <p className={s.prompt}>“{jPrompt}”</p>
-            <button type="button" className={s.more} onClick={() => setScreen('journal')}>
-              write today's entry →
-            </button>
-          </section>
+            )
+          })}
         </div>
 
-        <div className={s.col}>
-          <section>
-            <div className={s.sectionHead}>
-              <span className={s.sectionLabel}>Today's list</span>
-              <span className={s.rowMeta}>
-                {doneN} of {todos.length} done
-              </span>
-            </div>
-            <div className={s.rows}>
-              {openTodos.slice(0, 5).map((t) => (
-                <button type="button" key={t.id} className={s.row} onClick={() => setScreen('todos')}>
-                  <span className={s.rowTitle}>{t.text}</span>
+        <div className={s.colRight}>
+          <div>
+            <Head
+              label="Today's list"
+              meta={`${doneN} of ${todos.length} done`}
+              delay={440}
+              onClick={() => setScreen('todos')}
+            />
+            {topTodos.map((t) => (
+              <div key={t.id} className={s.todoRow}>
+                <button
+                  type="button"
+                  className={`${s.tick} ${t.done ? s.tickOn : ''}`}
+                  onClick={() => toggleTodo(t.id)}
+                  aria-label={t.done ? 'Mark as not done' : 'Mark as done'}
+                >
+                  <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="var(--bg)" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="1.5,5.4 4,7.8 8.5,2.4" className={s.tickPath} strokeDashoffset={t.done ? 0 : 12} />
+                  </svg>
                 </button>
-              ))}
-              {openTodos.length === 0 && <div className={s.rowMeta}>nothing open</div>}
-            </div>
-            <button type="button" className={s.more} onClick={() => setScreen('todos')}>
-              open todos →
-            </button>
-          </section>
+                <span className={`${s.todoText} ${t.done ? s.todoDone : ''}`}>{t.text}</span>
+              </div>
+            ))}
+            {topTodos.length === 0 && <div className={s.empty}>nothing open</div>}
+          </div>
 
-          <section>
+          <div onClick={() => setScreen('journal')} style={{ cursor: 'pointer' }}>
             <div className={s.sectionHead}>
-              <span className={s.sectionLabel}>Next to watch</span>
-              <button type="button" className={s.more} onClick={() => setScreen('watch')}>
-                all →
-              </button>
+              <div className={s.headRule} style={{ animationDelay: '580ms' }} />
+              <span>Journal</span>
+              <div className={s.weekDots}>
+                {jWeekDots.map((filled, i) => (
+                  <span key={i} className={`${s.dot} ${filled ? s.dotOn : ''}`} />
+                ))}
+              </div>
             </div>
-            <div className={s.rows}>
-              {nextWatch.map((w) => (
-                <button type="button" key={w.id} className={s.row} onClick={() => openWatchItem(w.id)}>
-                  <span className={s.rowTitle}>
-                    <PlayTriangle size={9} /> {w.title}
-                  </span>
-                  <span className={s.rowMeta}>
+            <p className={s.prompt}>
+              <Words text={jPrompt} cls={s.promptWord} from={400} gap={70} />
+            </p>
+          </div>
+
+          <div>
+            <Head label="Up next · watch later" delay={720} onClick={() => setScreen('watch')} />
+            {nextWatch.map((w) => (
+              <button type="button" key={w.id} className={s.watchRow} onClick={() => openWatchItem(w.id)}>
+                <span className={s.watchTile}>
+                  <svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor">
+                    <polygon points="3,1.6 10.4,6 3,10.4" />
+                  </svg>
+                </span>
+                <span className={s.watchBody}>
+                  <span className={s.watchTitle}>{w.title}</span>
+                  <span className={s.watchMeta}>
                     {w.source} · {fmtMins(w.mins)}
                   </span>
-                </button>
-              ))}
-              {nextWatch.length === 0 && <div className={s.rowMeta}>the shelf is clear</div>}
-            </div>
-          </section>
+                </span>
+              </button>
+            ))}
+            {nextWatch.length === 0 && <div className={s.empty}>the shelf is clear</div>}
+          </div>
         </div>
       </div>
     </div>
