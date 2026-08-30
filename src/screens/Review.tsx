@@ -45,12 +45,14 @@ export function Review() {
         <button type="button" className={s.back} onClick={endReview}>
           ← Review
         </button>
+        <span className={s.headSpacer} />
         <span className={s.headMeta}>
           {due} · interval {st.ivl}d
         </span>
       </div>
 
       <div className={s.scroll}>
+        <div className={s.measure}>
         <article className={s.card}>
           <div className={s.cardTop}>
             <span className={s.cardMeta}>
@@ -77,6 +79,7 @@ export function Review() {
           {/* The whole note, exactly as written — every block, read-only. */}
           <NoteBlocks note={note} readOnly full />
         </article>
+        </div>
       </div>
 
       <div className={s.footer}>

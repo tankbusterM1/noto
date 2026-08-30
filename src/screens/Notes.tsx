@@ -2,10 +2,10 @@ import { useRef, useState, type MouseEvent } from 'react'
 import { useData } from '../store/data'
 import { useUI } from '../store/ui'
 import { kidsOf, notesIn, countRec, pathOf } from '../lib/tree'
-import { noteFullText } from '../lib/format'
+import { noteFullText, snippet } from '../lib/format'
 import { ago } from '../lib/dates'
 import { srsPill } from '../lib/srs'
-import { MONO, SERIF, kicker, rise } from '../lib/ui'
+import { MONO, SERIF, kicker, clamp, rise } from '../lib/ui'
 import { NoteCard } from '../components/NoteCard'
 import { EmptyState } from '../components/EmptyState'
 import { ContextMenu, type MenuState } from '../components/ContextMenu'
@@ -165,7 +165,7 @@ export function Notes() {
   const folderEmpty = !isSearching && gridSrc.length === 0 && subFolders.length === 0
 
   return (
-    <div style={{ maxWidth: 1120, margin: '0 auto', padding: '44px 48px 120px', animation: 'fadein 0.3s ease both' }}>
+    <div style={{ maxWidth: 1120, margin: '0 auto', padding: '64px 56px 120px', animation: 't-page-in 860ms var(--t-ease) both' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
@@ -221,7 +221,7 @@ export function Notes() {
         <div
           onContextMenu={railOpen ? bgMenu : undefined}
           style={{
-            width: railOpen ? 216 : 36,
+            width: railOpen ? 212 : 36,
             flexShrink: 0,
             overflow: 'hidden',
             transition: 'width 0.26s cubic-bezier(0.3,0.7,0.3,1)',
@@ -407,9 +407,10 @@ export function Notes() {
               <span className="ribbon-band" aria-hidden />
               <div style={{ minWidth: 0 }}>
                 <div style={{ ...kicker, marginBottom: 7 }}>Where you left off</div>
-                <div style={{ fontFamily: SERIF, fontSize: 21, fontWeight: 500, lineHeight: 1.2 }}>{resumeNote.title}</div>
+                <div style={{ fontFamily: SERIF, fontSize: 21, fontWeight: 500, lineHeight: 1.25, marginTop: 8 }}>{resumeNote.title}</div>
+                <div style={{ fontSize: 13, color: 'var(--ink2)', lineHeight: 1.6, marginTop: 5, ...clamp(1) }}>{snippet(resumeNote)}</div>
               </div>
-              <div style={{ textAlign: 'right', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 5 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'flex-end', gap: 7, flexShrink: 0, minWidth: 104, textAlign: 'right', whiteSpace: 'nowrap' }}>
                 <span style={{ fontFamily: MONO, fontSize: 9.5, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink3)' }}>
                   {pathOf(folders, resumeNote.folderId).map((f) => f.name).join(' / ')}
                 </span>

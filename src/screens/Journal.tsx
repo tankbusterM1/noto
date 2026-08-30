@@ -4,7 +4,7 @@ import { useUI } from '../store/ui'
 import { PROMPTS } from '../lib/constants'
 import { addDays, fmtShort } from '../lib/dates'
 import { journalStreak } from '../lib/format'
-import { MONO, SERIF, kicker, clamp } from '../lib/ui'
+import { MONO, SERIF, clamp } from '../lib/ui'
 import { LockIcon, QuillIcon } from '../components/icons'
 
 const microLabel: CSSProperties = {
@@ -72,7 +72,6 @@ export function Journal() {
   const todayEntry = journal.find((e) => e.off === 0)
   const hasToday = !!todayEntry
   const streak = journalStreak(journal)
-  const jStreak = '◆ ' + streak + '-day streak'
   const jPrompt = PROMPTS[now.getDate() % PROMPTS.length]
   const jWeekDots = [6, 5, 4, 3, 2, 1, 0].map((k) => ({
     filled: journal.some((e) => e.off === -k),
@@ -128,15 +127,17 @@ export function Journal() {
   }
 
   const seg = (active: boolean): CSSProperties => ({
-    fontFamily: MONO,
-    fontSize: 9.5,
-    padding: '4px 10px',
-    borderRadius: 6,
+    position: 'relative',
+    zIndex: 1,
+    width: 78,
+    textAlign: 'center',
+    fontSize: 11.5,
+    padding: '4px 0',
+    borderRadius: 99,
     cursor: 'pointer',
     color: active ? 'var(--ink)' : 'var(--ink2)',
-    background: active ? 'var(--sf)' : 'transparent',
     fontWeight: active ? 600 : undefined,
-    transition: 'all 0.15s ease',
+    transition: 'color var(--t-fast) var(--t-ease)',
   })
 
   return (
@@ -144,8 +145,10 @@ export function Journal() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 28 }}>
         <div>
-          <div style={kicker}>Daily journal{hasPassphrase ? ' · encrypted' : ''}</div>
-          <h1 style={{ fontFamily: SERIF, fontSize: 36, fontWeight: 500, letterSpacing: '-0.015em', margin: '6px 0 0' }}>Journal</h1>
+          <h1 style={{ fontFamily: SERIF, fontSize: 30, fontWeight: 500, letterSpacing: '-0.01em', margin: 0 }}>Journal</h1>
+          <div style={{ fontFamily: MONO, fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink3)', marginTop: 6 }}>
+            {streak}-day streak · {hasPassphrase ? 'encrypted' : 'private'}
+          </div>
         </div>
         <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
@@ -158,11 +161,21 @@ export function Journal() {
               <LockIcon locked={locked} />
               {locked ? 'locked' : 'lock'}
             </div>
-            <div style={{ fontFamily: MONO, fontSize: 10.5, color: 'var(--am)', fontWeight: 600 }}>{jStreak}</div>
+
           </div>
-          <div style={{ display: 'flex', gap: 4, marginTop: 7 }}>
+          <div style={{ display: 'flex', gap: 4, marginTop: 9 }}>
             {jWeekDots.map((d, i) => (
-              <div key={i} style={{ width: 20, height: 5, borderRadius: 99, background: d.filled ? 'var(--am)' : d.today ? 'transparent' : 'var(--sf2)', border: !d.filled && d.today ? '1px dashed var(--ink3)' : undefined, transition: 'background 0.4s ease', animation: 'fadein 0.4s ease both', animationDelay: `${i * 0.05}s` }} />
+              <span
+                key={i}
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: 99,
+                  background: d.filled ? 'var(--ink2)' : 'var(--sf2)',
+                  border: !d.filled && d.today ? '1px dashed var(--ink3)' : undefined,
+                  transition: 'background var(--t-base) var(--t-ease)',
+                }}
+              />
             ))}
           </div>
         </div>
@@ -177,9 +190,24 @@ export function Journal() {
               <div style={{ background: 'var(--sf)', border: '1px solid var(--ln)', borderRadius: 18, padding: '28px 30px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
                   <div style={microLabel}>Today · {fmtShort(now)}</div>
-                  <div style={{ display: 'flex', gap: 3, background: 'var(--sf2)', borderRadius: 8, padding: 3 }}>
-                    <div onClick={() => setJMode('prompt')} style={seg(jMode === 'prompt')}>prompted</div>
-                    <div onClick={() => setJMode('blank')} style={seg(jMode === 'blank')}>blank page</div>
+                  {/* A single thumb slides between the two — the pill, not two chips. */}
+                  <div style={{ position: 'relative', display: 'inline-flex', background: 'var(--sf2)', borderRadius: 99, padding: 2.5 }}>
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: 2.5,
+                        bottom: 2.5,
+                        left: 2.5,
+                        width: 78,
+                        transform: `translateX(${jMode === 'prompt' ? 0 : 78}px)`,
+                        background: 'var(--sf)',
+                        borderRadius: 99,
+                        boxShadow: '0 1px 3px rgba(24,19,10,0.09)',
+                        transition: 'transform var(--t-base) var(--t-ease)',
+                      }}
+                    />
+                    <span onClick={() => setJMode('prompt')} style={seg(jMode === 'prompt')}>prompted</span>
+                    <span onClick={() => setJMode('blank')} style={seg(jMode === 'blank')}>blank page</span>
                   </div>
                 </div>
                 {jMode === 'prompt' ? (

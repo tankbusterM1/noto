@@ -93,7 +93,7 @@ export function Inline({ text }: { text?: string }): ReactNode {
         m = p.match(/^`([^`]+)`$/)
         if (m)
           return (
-            <code key={i} style={{ fontFamily: MONO, color: 'var(--am)', fontSize: '0.88em' }}>
+            <code key={i} style={{ fontFamily: MONO, color: 'var(--ink2)', fontSize: '0.88em' }}>
               {m[1]}
             </code>
           )
@@ -220,7 +220,7 @@ export function NoteBlocks({ note, readOnly = false, full = false }: { note: Not
   const draft = useRef(new Map<string, string>())
   const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const rootRef = useRef<HTMLDivElement>(null)
-  const [menu, setMenu] = useState<{ i: number; mode: 'insert' | 'turn'; x: number; y: number } | null>(null)
+  const [menu, setMenu] = useState<{ i: number; mode: 'insert' | 'turn' } | null>(null)
   const [hover, setHover] = useState<number | null>(null)
   const [drag, setDrag] = useState<number | null>(null)
   // Mirrored in a ref: the first dragover can fire before the dragstart's state
@@ -324,10 +324,7 @@ export function NoteBlocks({ note, readOnly = false, full = false }: { note: Not
     commit(next)
   }
 
-  const openMenu = (i: number, mode: 'insert' | 'turn', el: HTMLElement) => {
-    const r = el.getBoundingClientRect()
-    setMenu({ i, mode, x: r.left, y: r.bottom + 6 })
-  }
+  const openMenu = (i: number, mode: 'insert' | 'turn') => setMenu({ i, mode })
 
   const saveItem = (index: number, j: number, text: string) => {
     const items = (blocks[index].items ?? []).map((it, k) => (k === j ? text : it))
@@ -351,7 +348,7 @@ export function NoteBlocks({ note, readOnly = false, full = false }: { note: Not
     const el = e.currentTarget
     if (e.key === '/' && el.innerText.trim() === '') {
       e.preventDefault()
-      openMenu(i, 'insert', el)
+      openMenu(i, 'insert')
       return
     }
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -590,7 +587,7 @@ export function NoteBlocks({ note, readOnly = false, full = false }: { note: Not
                 type="button"
                 className={s.gutterBtn}
                 title="Add a block below"
-                onClick={(e) => openMenu(i, 'insert', e.currentTarget)}
+                onClick={() => openMenu(i, 'insert')}
               >
                 +
               </button>
@@ -608,7 +605,7 @@ export function NoteBlocks({ note, readOnly = false, full = false }: { note: Not
                   setDrag(null)
                   setOver(null)
                 }}
-                onClick={(e) => openMenu(i, 'turn', e.currentTarget)}
+                onClick={() => openMenu(i, 'turn')}
               >
                 <span className={s.grip}>
                   {Array.from({ length: 6 }, (_, d) => (
@@ -618,6 +615,19 @@ export function NoteBlocks({ note, readOnly = false, full = false }: { note: Not
               </button>
             </div>
             {body}
+            {menu?.i === i && (
+              <BlockMenu
+                top={b.t === 'h2' ? 54 : 38}
+                mode={menu.mode}
+                onClose={() => setMenu(null)}
+                onPick={(t) => {
+                  const { i: at, mode } = menu
+                  setMenu(null)
+                  if (mode === 'insert') insertAt(at, t)
+                  else turnInto(at, t)
+                }}
+              />
+            )}
           </div>
         )
       })}
@@ -631,20 +641,6 @@ export function NoteBlocks({ note, readOnly = false, full = false }: { note: Not
       <div className={s.blocks} ref={rootRef}>
         {rows}
       </div>
-      {menu && (
-        <BlockMenu
-          x={menu.x}
-          y={menu.y}
-          mode={menu.mode}
-          onClose={() => setMenu(null)}
-          onPick={(t) => {
-            const { i, mode } = menu
-            setMenu(null)
-            if (mode === 'insert') insertAt(i, t)
-            else turnInto(i, t)
-          }}
-        />
-      )}
       <SelectionToolbar
         canvasRef={rootRef}
         onTurn={(t) => {

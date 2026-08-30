@@ -27,7 +27,7 @@ export function Toast() {
         gap: 8,
       }}
     >
-      <span style={{ width: 6, height: 6, borderRadius: 99, background: 'var(--am)', flexShrink: 0 }} />
+      <span style={{ width: 6, height: 6, borderRadius: 99, background: 'var(--bg)', opacity: 0.5, flexShrink: 0 }} />
       {toast}
     </div>
   )

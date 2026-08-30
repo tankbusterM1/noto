@@ -60,8 +60,9 @@ export function Watch() {
     fontFamily: MONO,
     fontSize: 11,
     color: active ? 'var(--bg)' : 'var(--ink2)',
-    border: '1px ' + (active ? 'solid var(--am)' : 'dashed var(--ln)'),
-    background: active ? 'var(--am)' : undefined,
+    // Amber means "due now" and nothing else — a selected tag is ink.
+    border: '1px ' + (active ? 'solid var(--ink)' : 'dashed var(--ln)'),
+    background: active ? 'var(--ink)' : undefined,
     borderRadius: 999,
     padding: '5px 12px',
     cursor: 'pointer',
@@ -124,7 +125,7 @@ export function Watch() {
       <div style={{ fontFamily: MONO, fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ink3)', marginBottom: 16 }}>
         On the shelf
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '20px 16px' }}>
         {filtered.map((w, i) => (
           <div key={w.id} className="slip-case" style={rise(i)}>
             {w.loading ? <DotLoader /> : <WatchCard item={w} />}
@@ -179,24 +180,39 @@ function WatchCard({ item: w }: { item: WatchItem }) {
     <div
       className="lift-2"
       onClick={() => openWatchItem(w.id)}
-      style={{ background: 'var(--sf)', border: '1px solid var(--ln)', borderRadius: 16, overflow: 'hidden', cursor: 'pointer', opacity: w.done ? 0.55 : 1 }}
+      style={{ background: 'var(--sf)', border: '1px solid var(--ln)', borderRadius: 13, overflow: 'hidden', cursor: 'pointer', opacity: w.done ? 0.55 : 1 }}
     >
-      <div style={{ height: 110, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(250,248,240,0.95)', background: `linear-gradient(135deg, hsl(${w.hue},30%,62%), hsl(${w.hue + 34},32%,42%))` }}>
+      {/*
+        The case face: ruled paper stock, with the spine stripe down its left
+        edge. A real scraped thumbnail covers it when there is one; the colour
+        rules rule out the old hue gradient either way.
+      */}
+      <div
+        style={{
+          height: 112,
+          position: 'relative',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: 'var(--ink3)',
+          borderBottom: '1px solid var(--ln)',
+          background:
+            'repeating-linear-gradient(115deg, var(--sf2), var(--sf2) 7px, var(--sf) 7px, var(--sf) 14px)',
+        }}
+      >
         {w.thumb && (
           <img src={w.thumb} alt="" onError={(e) => (e.currentTarget.style.display = 'none')} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
         )}
-        {w.kind === 'video' && (
-          <div style={{ width: 38, height: 38, borderRadius: 99, background: 'rgba(20,16,8,0.4)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1 }}>
-            <PlayTriangle size={13} style={{ marginLeft: 2 }} />
-          </div>
-        )}
-        {w.kind === 'article' && !w.thumb && <ArticleIcon size={22} />}
-        {w.kind === 'paper' && !w.thumb && <PaperIcon size={22} />}
-        <span style={{ position: 'absolute', left: 10, bottom: 9, fontFamily: MONO, fontSize: 9, background: 'rgba(20,16,8,0.4)', backdropFilter: 'blur(4px)', borderRadius: 6, padding: '3px 7px' }}>{domainOf(w.url)}</span>
-        <span style={{ position: 'absolute', right: 10, bottom: 9, fontFamily: MONO, fontSize: 9, background: 'rgba(20,16,8,0.4)', backdropFilter: 'blur(4px)', borderRadius: 6, padding: '3px 7px' }}>{w.mins ? fmtMins(w.mins) : '—'}</span>
+        <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 8, background: 'var(--ink2)', opacity: 0.16 }} />
+        <span style={{ position: 'absolute', left: 8, top: 0, bottom: 0, width: 1, background: 'var(--ln)' }} />
+        {!w.thumb && w.kind === 'video' && <PlayTriangle size={18} />}
+        {!w.thumb && w.kind === 'article' && <ArticleIcon size={20} />}
+        {!w.thumb && w.kind === 'paper' && <PaperIcon size={20} />}
+        <span style={{ position: 'absolute', left: 14, bottom: 9, fontFamily: MONO, fontSize: 9, color: 'var(--ink3)' }}>{domainOf(w.url)}</span>
+        <span style={{ position: 'absolute', right: 10, bottom: 9, fontFamily: MONO, fontSize: 9, color: 'var(--ink3)' }}>{w.mins ? fmtMins(w.mins) : '—'}</span>
       </div>
       <div style={{ padding: '13px 16px 14px' }}>
-        <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.35, transition: 'color 0.35s ease', color: w.done ? 'var(--ink2)' : undefined, ...clamp(2) }}>{w.title}</div>
+        <div style={{ fontSize: 13.5, fontWeight: 500, lineHeight: 1.4, transition: 'color 0.35s ease', color: w.done ? 'var(--ink2)' : undefined, ...clamp(2) }}>{w.title}</div>
         <div style={{ fontFamily: MONO, fontSize: 9.5, color: 'var(--ink3)', marginTop: 5 }}>{w.source} · added {w.added}</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 10, minHeight: 20 }}>
           {w.tags.map((t) => (

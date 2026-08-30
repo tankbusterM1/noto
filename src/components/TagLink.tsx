@@ -29,7 +29,7 @@ export function TagLink({
       style={{
         fontFamily: MONO,
         fontSize: size,
-        color: variant === 'muted' ? 'var(--ink3)' : 'var(--am)',
+        color: variant === 'muted' ? 'var(--ink3)' : 'var(--ink3)',
         display: 'inline-flex',
         alignItems: 'center',
         gap: 3,

@@ -32,14 +32,13 @@ export const KINDS: Kind[] = [
 ]
 
 export function BlockMenu({
-  x,
-  y,
+  top,
   mode,
   onPick,
   onClose,
 }: {
-  x: number
-  y: number
+  /** Offset from the top of the block row it belongs to. */
+  top: number
   mode: 'insert' | 'turn'
   onPick: (t: BlockType) => void
   onClose: () => void
@@ -83,13 +82,10 @@ export function BlockMenu({
     if (pick) onPick(pick.t)
   }
 
-  const left = Math.max(8, Math.min(x, window.innerWidth - 274 - 8))
-  const top = Math.max(8, Math.min(y, window.innerHeight - 340))
-
   return (
     <div
       className={s.menu}
-      style={{ left, top }}
+      style={{ top }}
       onMouseDown={(e) => e.stopPropagation()}
       onContextMenu={(e) => e.preventDefault()}
     >

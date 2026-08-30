@@ -176,12 +176,24 @@ export function Todos() {
       {tSeg === 'today' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.5fr) minmax(0, 1fr)', gap: 22, alignItems: 'start' }}>
           <div style={card}>
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6 }}>
-              <div style={cardTitle}>Today</div>
-              <div style={meta}>{doneN} of {todos.length} done</div>
-            </div>
-            <div style={{ height: 3, background: 'var(--sf2)', borderRadius: 99, marginBottom: 8, overflow: 'hidden' }}>
-              <div style={{ height: '100%', background: 'var(--am)', borderRadius: 99, transition: 'width 0.45s cubic-bezier(0.65,0,0.35,1)', width: `${tPct}%` }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingBottom: 12, marginBottom: 4, position: 'relative' }}>
+              <div
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  height: 1,
+                  background: 'var(--ln)',
+                  transformOrigin: 'left',
+                  animation: 'ledger-rule 900ms var(--t-ease) 1280ms backwards',
+                }}
+              />
+              <span style={{ ...cardTitle, flex: 1 }}>Checklist</span>
+              <span style={meta}>{doneN} of {todos.length} done</span>
+              <div style={{ width: 70, height: 3, borderRadius: 99, background: 'var(--sf2)', overflow: 'hidden' }}>
+                <div style={{ height: '100%', background: 'var(--ink2)', transition: 'width 0.4s cubic-bezier(0.65,0,0.35,1)', width: `${tPct}%` }} />
+              </div>
             </div>
             {todos.map((t) => (
               <TodoLine key={t.id} todo={t} onDelete={() => deleteTodo(t.id)} />

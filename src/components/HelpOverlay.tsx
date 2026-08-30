@@ -25,7 +25,7 @@ const groupLabel: CSSProperties = {
   fontSize: 9.5,
   letterSpacing: '0.15em',
   textTransform: 'uppercase',
-  color: 'var(--am)',
+  color: 'var(--ink3)',
   marginBottom: 10,
 }
 
