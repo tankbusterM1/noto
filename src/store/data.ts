@@ -192,6 +192,9 @@ export interface SyncOutcome {
   conflict?: boolean
 }
 
+/** meta keys that must never leave the device in an export. */
+export const EXPORT_SECRETS = new Set(['githubToken'])
+
 const TABLE_NAMES = [
   'folders',
   'notes',
@@ -1172,7 +1175,17 @@ export const useData = create<DataState>()((set, get) => ({
       _schema: 1,
       _exportedAt: new Date().toISOString(),
     }
-    for (const name of TABLE_NAMES) dump[name] = await db.table(name).toArray()
+    for (const name of TABLE_NAMES) {
+      const rows = await db.table(name).toArray()
+      /*
+       * An export is a file people mail themselves, drop in a shared folder, or
+       * hand to someone to merge. `meta` holds the GitHub token, which grants
+       * read AND write on the private vault repo — it must never ride along.
+       * (Import already ignores these keys, so dropping them costs nothing.)
+       */
+      dump[name] =
+        name === 'meta' ? (rows as { key: string }[]).filter((r) => !EXPORT_SECRETS.has(r.key)) : rows
+    }
     return JSON.stringify(dump, null, 2)
   },
   importData: async (json) => {

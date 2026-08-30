@@ -47,7 +47,6 @@ export function Trash() {
       agoDays,
       left,
       lifePct: Math.round((100 * left) / TRASH_TTL_DAYS),
-      reviews: t.srs ? Math.max(0, Math.round(t.srs.ivl > 0 ? 1 : 0)) : 0,
     }
   })
 

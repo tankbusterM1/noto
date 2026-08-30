@@ -49,15 +49,17 @@ export function Editor() {
   const armTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const [mode, setMode] = useState<Mode>('blocks')
 
+  // notes[0] is undefined on an empty vault (import/reset can empty it while
+  // this screen is mounted), and every line below dereferences `note`.
   const note = notes.find((n) => n.id === noteId) ?? notes[0]
-  const sr = srs[note.id]
+  const sr = note ? srs[note.id] : undefined
 
   // Reading mode is remembered per note (⌘E), as before.
   const reading = noteMode[note.id] ?? false
   const view: Mode = reading ? 'read' : mode
 
-  const noteIdRef = useRef(note.id)
-  noteIdRef.current = note.id
+  const noteIdRef = useRef(note?.id ?? '')
+  noteIdRef.current = note?.id ?? ''
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && (e.key === 'e' || e.key === 'E')) {
@@ -75,13 +77,13 @@ export function Editor() {
   // you're typing (or throw the caret to the start).
   const titleRef = useRef<HTMLHeadingElement>(null)
   useLayoutEffect(() => {
-    if (titleRef.current) titleRef.current.innerText = note.title
+    if (titleRef.current && note) titleRef.current.innerText = note.title
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [note.id, editorEpoch])
 
   // Delete disarms on note switch — an arm on the previous note must not make
   // the first click on this one destructive.
-  useEffect(() => setArmed(false), [note.id])
+  useEffect(() => setArmed(false), [note?.id])
 
   const armDelete = () => {
     if (armed) {
@@ -94,7 +96,10 @@ export function Editor() {
   }
 
   const edApi = useRef<EditorWeaveApi | null>(null)
-  const unwoven = view === 'read' ? [] : unwovenMentions(note, notes).slice(0, 3)
+  const unwoven = !note || view === 'read' ? [] : unwovenMentions(note, notes).slice(0, 3)
+
+  // Nothing to edit — the library is the right place to be.
+  if (!note) return null
 
   // Study templates, offered while the note is still blank.
   const isEmpty = note.blocks.length === 1 && note.blocks[0].t === 'p' && !(note.blocks[0].text ?? '').trim()
