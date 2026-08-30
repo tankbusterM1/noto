@@ -1,0 +1,254 @@
+/*
+ * Recently deleted — loose leaves on dashed sheets.
+ * The life bar depletes toward the purge; the text never fades.
+ */
+
+.page {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 66px 56px 130px;
+  animation: t-page-in 860ms var(--t-ease) both;
+}
+
+.head {
+  display: flex;
+  align-items: flex-end;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.headMain {
+  flex: 1;
+  min-width: 250px;
+}
+.eyebrow {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink3);
+}
+.title {
+  font-family: 'Newsreader', Georgia, serif;
+  font-size: 32px;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  margin: 8px 0 0;
+}
+.lede {
+  font-size: 13px;
+  color: var(--ink2);
+  line-height: 1.65;
+  margin: 10px 0 0;
+  max-width: 56ch;
+  text-wrap: pretty;
+}
+
+/* Two-step: the first tap arms, and it disarms itself after 3.5s. */
+.empty {
+  border: 1px solid var(--ln);
+  border-radius: 9px;
+  padding: 9px 15px;
+  font-family: inherit;
+  font-size: 12.5px;
+  background: transparent;
+  color: var(--ink2);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    border-color var(--t-fast) var(--t-ease),
+    color var(--t-fast) var(--t-ease),
+    background var(--t-fast) var(--t-ease);
+}
+.empty:hover {
+  border-color: var(--g1);
+  color: var(--g1);
+}
+.emptyArmed {
+  border-color: var(--g1);
+  color: var(--g1);
+  background: rgba(166, 82, 56, 0.07);
+}
+
+/* ── sheets ───────────────────────────────────────────────────────── */
+.sheets {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 38px;
+}
+.sheet {
+  border: 1px dashed var(--ln);
+  border-radius: 15px;
+  padding: 18px 20px;
+  background: var(--sf);
+  animation: t-row-in 680ms var(--t-ease) backwards;
+  transition:
+    border-color 420ms var(--t-ease),
+    transform 520ms var(--t-ease);
+}
+.sheet:hover {
+  border-color: var(--ink3);
+  transform: translateY(-2px);
+}
+.sheetTop {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.sheetMain {
+  flex: 1;
+  min-width: 200px;
+}
+.sheetTitle {
+  font-family: 'Newsreader', Georgia, serif;
+  font-size: 19px;
+  font-weight: 500;
+  line-height: 1.25;
+}
+.snippet {
+  font-size: 13px;
+  color: var(--ink2);
+  line-height: 1.6;
+  margin-top: 5px;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.restore,
+.purge {
+  border-radius: 8px;
+  padding: 7px 13px;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  background: transparent;
+  transition:
+    background var(--t-fast) var(--t-ease),
+    color var(--t-fast) var(--t-ease),
+    border-color var(--t-fast) var(--t-ease);
+}
+.restore {
+  border: 1px solid var(--ink);
+  color: var(--ink);
+  font-weight: 600;
+}
+.restore:hover {
+  background: var(--ink);
+  color: var(--bg);
+}
+.purge {
+  border: 1px solid var(--ln);
+  color: var(--ink3);
+  padding: 7px 11px;
+}
+.purge:hover {
+  border-color: var(--g1);
+  color: var(--g1);
+}
+.restore:active,
+.purge:active {
+  transform: scale(0.97);
+}
+
+/* One line, always — no wrap. */
+.metaRow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 15px;
+}
+.meta {
+  min-width: 0;
+  flex-shrink: 1;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  color: var(--ink3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.track {
+  flex: 1;
+  min-width: 44px;
+  height: 2px;
+  border-radius: 99px;
+  background: var(--sf2);
+  overflow: hidden;
+}
+.life {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: var(--ink3);
+}
+.left {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  color: var(--ink3);
+  white-space: nowrap;
+}
+.leftSoon {
+  color: var(--g1);
+}
+
+/* ── empty ────────────────────────────────────────────────────────── */
+.none {
+  text-align: center;
+  padding: 76px 0 20px;
+}
+.noneMark {
+  width: 46px;
+  height: 46px;
+  margin: 0 auto;
+  border: 1px dashed var(--ink3);
+  border-radius: 9px;
+  animation: t-pop 700ms var(--t-spring) 260ms backwards;
+}
+.noneLine {
+  font-family: 'Newsreader', Georgia, serif;
+  font-style: italic;
+  font-size: 19px;
+  color: var(--ink2);
+  margin-top: 22px;
+}
+.noneMeta {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink3);
+  margin-top: 10px;
+}
+
+/*
+ * Keyframes live HERE, not in motion.css: CSS Modules rewrites both @keyframes
+ * names and the animation: values that reference them, so a module pointing at
+ * a global keyframe compiles to a name that doesn't exist. Verbatim copies of
+ * the canonical definitions in styles/motion.css.
+ */
+
+@keyframes t-page-in {
+  from { opacity: 0; transform: translateY(22px) scale(0.995); filter: blur(10px); }
+  55%  { filter: blur(0); }
+  to   { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+}
+@keyframes t-row-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes t-pop {
+  from { opacity: 0; transform: scale(0.2); }
+  to   { opacity: 1; transform: scale(1); }
+}

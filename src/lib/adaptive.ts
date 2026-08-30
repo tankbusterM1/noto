@@ -180,7 +180,9 @@ export function memoryOf(sr: SrsState): Memory | null {
  * adaptive scheduler would actually do, not the classic formula.
  */
 export function previewNext(sr: SrsState, g: Grade, factor: number): string {
-  if (g === 1) return '10 min'
+  // This model has no sub-day scheduling: Again keeps the note due today, so
+  // "10 min" described behaviour that does not exist.
+  if (g === 1) return 'again today'
   const mem = memoryOf(sr)
   const last = sr.hist[sr.hist.length - 1]
   const elapsed = last ? Math.max(0, -last.d) : 0

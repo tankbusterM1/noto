@@ -202,7 +202,7 @@ export function Today() {
           </h2>
           <p className={s.reviewSub}>
             {due.length
-              ? 'Their ink is thinning — read one and it darkens again.'
+              ? 'Read one, rate how it came back, and the ink goes dark again.'
               : 'Nothing is due. Come back tomorrow, or put another note on the thread.'}
           </p>
           {due.length > 0 && (
@@ -228,7 +228,7 @@ export function Today() {
                 key={n.id}
                 className={s.noteRow}
                 onClick={() => openNote(n.id)}
-                style={{ opacity: Math.max(0.62, inkOpacity(st, inkFade)), animationDelay: `${180 + i * 90}ms` }}
+                style={{ opacity: Math.max(0.76, inkOpacity(st, inkFade)), animationDelay: `${180 + i * 90}ms` }}
               >
                 <div className={s.noteTitle}>{n.title}</div>
                 <div className={s.noteSnippet}>{snippet(n)}</div>

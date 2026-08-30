@@ -53,7 +53,7 @@ export function HistoryIcon({ size = 16, ...props }: IconProps) {
 }
 
 /** The Loom — a constellation: three knots woven by threads. */
-export function LoomIcon({ size = 16, ...props }: IconProps) {
+export function BinderyIcon({ size = 16, ...props }: IconProps) {
   return (
     <svg
       width={size}

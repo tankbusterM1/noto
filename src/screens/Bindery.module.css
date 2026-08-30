@@ -1,0 +1,393 @@
+/*
+ * The Bindery — the quietest screen in the app.
+ * One circle vocabulary, one hairline ink, no hue, nothing looping.
+ * The rail is page-coloured with a hairline border — no recessed bed.
+ */
+
+.screen {
+  display: flex;
+  height: 100%;
+  animation: t-page-in 860ms var(--t-ease) both;
+}
+.left {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── header ───────────────────────────────────────────────────────── */
+.header {
+  flex-shrink: 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 22px 30px 18px;
+  /* Both of these, or the row prints over the rail beside it. */
+  overflow: hidden;
+}
+.title {
+  flex-shrink: 0;
+  font-family: 'Newsreader', Georgia, serif;
+  font-size: 24px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  margin: 0;
+}
+.stats {
+  min-width: 0;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gap {
+  flex: 1;
+  min-width: 8px;
+}
+/* Underline only — a boxed input would be one more container than this screen wants. */
+.find {
+  flex-shrink: 1;
+  min-width: 64px;
+  width: 126px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--ln);
+  padding: 5px 2px;
+  font-size: 12.5px;
+  color: var(--ink);
+  outline: none;
+  font-family: inherit;
+  transition:
+    width var(--t-base) var(--t-ease),
+    border-color var(--t-fast) var(--t-ease);
+}
+.find:focus {
+  width: 196px;
+  border-color: var(--ink3);
+}
+.find::placeholder {
+  color: var(--ink3);
+}
+
+.disclosure {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink3);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color var(--t-fast) var(--t-ease);
+}
+.disclosure:hover {
+  color: var(--ink);
+}
+
+.chips {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 30px 16px;
+  overflow-x: auto;
+}
+.chip {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  border-bottom: 1px solid transparent;
+  padding: 3px 1px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10px;
+  color: var(--ink3);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    color var(--t-fast) var(--t-ease),
+    border-color var(--t-fast) var(--t-ease);
+}
+.chip:hover {
+  color: var(--ink2);
+}
+.chipOn {
+  color: var(--ink);
+  border-bottom-color: var(--ink);
+}
+
+/* ── canvas ───────────────────────────────────────────────────────── */
+.canvas {
+  flex: 1;
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+}
+.svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.field {
+  transition: opacity 620ms var(--t-ease);
+}
+.edge {
+  transition:
+    opacity 520ms var(--t-ease),
+    stroke-width 520ms var(--t-ease);
+}
+.node {
+  cursor: pointer;
+  transition: opacity 520ms var(--t-ease);
+}
+
+/* Labels ride the same transform as the map, from the same origin. */
+.labels {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  transform-origin: 0 0;
+}
+.tagLabel,
+.leafLabel {
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  line-height: 1;
+  border-radius: 3px;
+  transition: opacity 520ms var(--t-ease);
+}
+/* Gathering names sit unplated underneath; leaf titles get a plate so they
+   never print through one. */
+.tagLabel {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  z-index: 1;
+}
+.leafLabel {
+  font-family: 'Newsreader', Georgia, serif;
+  font-size: 12.5px;
+  padding: 2px 6px;
+  background: var(--bg);
+  z-index: 2;
+}
+
+.footLinks {
+  position: absolute;
+  left: 30px;
+  bottom: 18px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.key {
+  position: absolute;
+  left: 30px;
+  bottom: 44px;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.keyRow {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.keyMarkWrap {
+  width: 11px;
+  display: flex;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.keyMark {
+  width: 9px;
+  height: 9px;
+  border-radius: 99px;
+  display: block;
+}
+.keyLabel {
+  font-size: 11px;
+  color: var(--ink2);
+  white-space: nowrap;
+}
+
+/* ── rail ─────────────────────────────────────────────────────────── */
+.rail {
+  width: 262px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--ln);
+  overflow-y: auto;
+  padding: 24px 24px 50px;
+}
+.railTop {
+  animation: t-row-in 620ms var(--t-ease) both;
+}
+.railKind {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink3);
+}
+.railTitle {
+  font-family: 'Newsreader', Georgia, serif;
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1.25;
+  margin-top: 9px;
+}
+.railMeta {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10px;
+  color: var(--ink3);
+  margin-top: 7px;
+  line-height: 1.5;
+}
+.railLinks {
+  display: flex;
+  gap: 16px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+.railLink,
+.railLinkDue {
+  border: none;
+  background: transparent;
+  padding: 0 0 3px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color var(--t-fast) var(--t-ease);
+}
+.railLink {
+  color: var(--ink);
+  border-bottom: 1px solid var(--ln);
+}
+.railLink:hover {
+  border-bottom-color: var(--ink);
+}
+/* The one amber on this screen, and it means due now. */
+.railLinkDue {
+  color: var(--am);
+  border-bottom: 1px solid var(--am);
+}
+
+.railLabel {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink3);
+  padding: 28px 0 6px;
+}
+
+.nbRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  padding: 9px 0;
+  cursor: pointer;
+  animation: t-row-in 600ms var(--t-ease) backwards;
+  transition: padding-left 420ms var(--t-ease);
+}
+.nbRow:hover {
+  padding-left: 6px;
+}
+.nbDot {
+  width: 5px;
+  height: 5px;
+  border-radius: 99px;
+  flex-shrink: 0;
+}
+.nbTitle {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--ink2);
+}
+
+.hint {
+  font-family: 'Newsreader', Georgia, serif;
+  font-style: italic;
+  font-size: 15px;
+  color: var(--ink2);
+  line-height: 1.6;
+  margin: 0;
+  text-wrap: pretty;
+}
+.looseRow {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--ln);
+  cursor: pointer;
+  animation: t-row-in 620ms var(--t-ease) backwards;
+  transition: padding-left 420ms var(--t-ease);
+}
+.looseRow:hover {
+  padding-left: 6px;
+}
+.looseTitle {
+  display: block;
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+.looseWhy {
+  display: block;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 9.5px;
+  color: var(--ink3);
+  margin-top: 4px;
+  line-height: 1.4;
+}
+.allHeld {
+  font-size: 12.5px;
+  color: var(--ink2);
+  line-height: 1.6;
+  padding: 10px 0;
+}
+
+/*
+ * Keyframes live HERE, not in motion.css: CSS Modules rewrites both @keyframes
+ * names and the animation: values that reference them, so a module pointing at
+ * a global keyframe compiles to a name that doesn't exist. Verbatim copies of
+ * the canonical definitions in styles/motion.css.
+ */
+
+@keyframes t-page-in {
+  from { opacity: 0; transform: translateY(22px) scale(0.995); filter: blur(10px); }
+  55%  { filter: blur(0); }
+  to   { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+}
+@keyframes t-row-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

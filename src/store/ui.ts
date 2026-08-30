@@ -12,9 +12,9 @@ export type Screen =
   | 'today'
   | 'notes'
   | 'editor'
-  | 'loom'
+  | 'bindery'
   | 'queue'
-  | 'review'
+  | 'reviewing'
   | 'journal'
   | 'todos'
   | 'watch'
@@ -204,7 +204,7 @@ export const useUI = create<UIState>()(
       setNoteReading: (id, reading) => set((s) => ({ noteMode: { ...s.noteMode, [id]: reading } })),
 
       setScreen: (screen) => set({ screen }),
-      startReview: (id) => set({ reviewId: id, screen: 'review' }),
+      startReview: (id) => set({ reviewId: id, screen: 'reviewing' }),
       endReview: () => set({ reviewId: null, screen: 'queue' }),
       openNote: (id) =>
         set((s) => ({

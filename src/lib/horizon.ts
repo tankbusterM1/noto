@@ -64,7 +64,7 @@ export interface GridCell {
  * "Year in ink" — `weeks` columns × 7 rows of review volume, ending on today.
  * The last column holds today, so the grid always reads right-to-now.
  */
-export function yearGrid(ledgerByDay: Record<number, number>, weeks = 26): GridCell[] {
+export function yearGrid(ledgerByDay: Record<number, number>, weeks = 26, cap = Infinity): GridCell[] {
   const today = todayEpochDay()
   // Walk back to the start of today's week so rows line up as weekdays.
   const todayRow = ((today % 7) + 7) % 7
@@ -74,7 +74,9 @@ export function yearGrid(ledgerByDay: Record<number, number>, weeks = 26): GridC
     for (let row = 0; row < 7; row++) {
       const day = start + col * 7 + row
       if (day > today) continue // never draw the future
-      const count = ledgerByDay[day] ?? 0
+      // Capped by how many notes are actually in review: a vault of 8 notes
+      // cannot have produced 13 reviews in a day, and the grid must not claim it.
+      const count = Math.min(cap, ledgerByDay[day] ?? 0)
       const level = count === 0 ? 0 : count <= 2 ? 1 : count <= 5 ? 2 : 3
       cells.push({ day, count, level, col, row })
     }

@@ -28,10 +28,10 @@ export function NoteCard({
   const openNote = useUI((s) => s.openNote)
 
   const sr = srs[note.id]
-  // Floor at 0.62: a faded note must still be readable. The previous build let
+  // Floor at 0.76: a faded note must still be readable. The previous build let
   // this fall to 0.55 and below, which is the complaint that started the
   // redesign. Hover restores it to 1 (see .ink-card in global.css).
-  const ink = Math.max(0.62, inkOpacity(sr, inkFade))
+  const ink = Math.max(0.76, inkOpacity(sr, inkFade))
   const pill = srsPill(sr)
   const folder = folderName(folders, note.folderId)
   const pillStyle = { fontFamily: MONO, fontSize: 10, color: pill.color, fontWeight: pill.bold ? 600 : undefined }

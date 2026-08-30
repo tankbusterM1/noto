@@ -57,15 +57,14 @@ export function Queue() {
   const shares = inkSits(notes, srs)
   const forecast = forecastDays(notes, srs, 14)
   const maxF = Math.max(1, ...forecast)
-  const cells = yearGrid(ledgerByDay, 26)
+  const cells = yearGrid(ledgerByDay, 26, Math.max(1, inReview))
   const inkTotal = cells.reduce((a, c) => a + c.count, 0)
-  // Consecutive days with at least one review, counting back from today.
+  // Counted back through the SAME cells, so the total and the streak can never
+  // disagree with the grid printed beneath them.
+  const byDay = new Map(cells.map((c) => [c.day, c.count]))
+  const lastDay = cells.length ? Math.max(...cells.map((c) => c.day)) : 0
   let streak = 0
-  for (let k = 0; ; k++) {
-    const day = Math.max(...cells.map((c) => c.day)) - k
-    if ((ledgerByDay[day] ?? 0) === 0) break
-    streak++
-  }
+  while ((byDay.get(lastDay - streak) ?? 0) > 0) streak++
   const nextWeek = forecast.slice(0, 7).reduce((a, b) => a + b, 0)
 
   const statement = due.length

@@ -5,7 +5,7 @@ import { fmtMins, noteFullText } from '../lib/format'
 import { MONO } from '../lib/ui'
 import { SearchIcon } from './icons'
 
-type Kind = 'action' | 'note' | 'watch' | 'todo'
+type Kind = 'action' | 'screen' | 'note' | 'watch' | 'todo'
 interface PalItem {
   kind: Kind
   label: string
@@ -15,11 +15,14 @@ interface PalItem {
   go: () => void
 }
 
+/* Kinds are named in mono, not colour-coded: amber means "due now" and this
+   list is full of things that are not due. */
 const kindColor: Record<Kind, string> = {
-  note: 'var(--am)',
-  watch: 'var(--ac)',
-  todo: 'var(--g4)',
-  action: 'var(--ink3)',
+  note: 'var(--ink3)',
+  watch: 'var(--ink3)',
+  todo: 'var(--ink3)',
+  screen: 'var(--ink2)',
+  action: 'var(--ink2)',
 }
 
 /**
@@ -47,19 +50,44 @@ export function CommandPalette() {
   const toggleTheme = useUI((s) => s.toggleTheme)
   const toggleSidebar = useUI((s) => s.toggleSidebar)
   const toggleHelp = useUI((s) => s.toggleHelp)
+  const startReview = useUI((s) => s.startReview)
 
   if (pal === null) return null
 
   const dueCount = dueNotes(notes, srs).length
+  /*
+   * Actions are the shortcuts; screens are the destinations. A new top-level
+   * destination is not finished until it is reachable from here, so every
+   * screen gets an entry — including the Bindery and Recently deleted, which
+   * had none and were unreachable by keyboard.
+   *
+   * No "session" copy anywhere: reviewing is one note at a time.
+   */
   const actions: PalItem[] = [
-    { kind: 'action', label: 'Go to review', meta: dueCount + ' due', go: () => { closePalette(); setScreen('queue') } },
+    { kind: 'action', label: 'Review the next due note', meta: dueCount + ' due', go: () => { closePalette(); const first = dueNotes(notes, srs)[0]; if (first) startReview(first.id); else setScreen('queue') } },
     { kind: 'action', label: "Write today's journal", meta: 'journal', go: () => { closePalette(); setScreen('journal') } },
     { kind: 'action', label: 'Toggle appearance', meta: dark ? 'to light' : 'to dark', go: () => { closePalette(); toggleTheme() } },
-    { kind: 'action', label: 'Toggle sidebar', meta: '⌘\\', go: () => { closePalette(); toggleSidebar() } },
-    { kind: 'action', label: 'Open the loom', meta: 'knowledge web', go: () => { closePalette(); setScreen('loom') } },
-    { kind: 'action', label: 'Keyboard shortcuts', meta: '?', go: () => { closePalette(); toggleHelp() } },
     { kind: 'action', label: 'Open month planner', meta: 'todos', go: () => { closePalette(); setScreen('todos'); setTSeg('month') } },
+    { kind: 'action', label: 'Toggle sidebar', meta: '⌘\\', go: () => { closePalette(); toggleSidebar() } },
+    { kind: 'action', label: 'Keyboard shortcuts', meta: '?', go: () => { closePalette(); toggleHelp() } },
   ]
+  const screenItems: PalItem[] = (
+    [
+      ['today', 'Today', 'the day so far'],
+      ['notes', 'Notes', 'the library'],
+      ['bindery', 'Bindery', 'the knowledge map'],
+      ['queue', 'Review', dueCount + ' due'],
+      ['journal', 'Journal', 'the sealed page'],
+      ['todos', 'Todos', 'the ledger'],
+      ['watch', 'Watch later', 'the shelf'],
+      ['trash', 'Recently deleted', 'the bin'],
+    ] as const
+  ).map(([key, label, meta]) => ({
+    kind: 'screen',
+    label,
+    meta,
+    go: () => { closePalette(); setScreen(key) },
+  }))
   const noteItems: PalItem[] = notes.map((n) => ({
     kind: 'note',
     label: n.title,
@@ -81,7 +109,9 @@ export function CommandPalette() {
   }))
 
   const q = pal.toLowerCase()
-  const all = [...actions, ...noteItems, ...watchItems, ...todoItems]
+  const all = q
+    ? [...screenItems, ...actions, ...noteItems, ...watchItems, ...todoItems]
+    : [...actions, ...screenItems, ...noteItems, ...watchItems, ...todoItems]
   // With a query, the tail slot is always "create a note from this" — so ⌘K
   // doubles as instant capture: type a thought, ↵ on the last row, keep going.
   const createItem: PalItem | null = pal.trim()

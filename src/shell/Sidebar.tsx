@@ -7,7 +7,7 @@ import {
   Caret,
   TodayIcon,
   NotesIcon,
-  LoomIcon,
+  BinderyIcon,
   JournalIcon,
   TodosIcon,
   WatchIcon,
@@ -22,7 +22,7 @@ import s from './Sidebar.module.css'
 /** Which nav row is highlighted for the current screen. */
 function isActive(navId: Screen, screen: Screen): boolean {
   if (navId === 'notes') return screen === 'notes' || screen === 'editor'
-  if (navId === 'queue') return screen === 'queue' || screen === 'review'
+  if (navId === 'queue') return screen === 'queue' || screen === 'reviewing'
   return screen === navId
 }
 
@@ -86,7 +86,7 @@ export function Sidebar() {
   const reviewsWeek = reviewsLastWeek(ledgerByDay, todayEpochDay())
   const vaultFiles = notes.length + watch.length + journal.length + todos.length
 
-  const width = screen === 'review' || !sbOpen ? 0 : slim ? 64 : 193
+  const width = screen === 'reviewing' || !sbOpen ? 0 : slim ? 64 : 193
   const go = (target: Screen) => () => setScreen(target)
 
   // Caret cycles wide → icon rail → fully hidden (Obsidian-style focus mode);
@@ -156,10 +156,10 @@ export function Sidebar() {
             right={<span className={s.count}>{notesCount}</span>}
           />
           <NavItem
-            icon={<LoomIcon />}
-            label="Loom"
-            active={isActive('loom', screen)}
-            onClick={go('loom')}
+            icon={<BinderyIcon />}
+            label="Bindery"
+            active={isActive('bindery', screen)}
+            onClick={go('bindery')}
           />
           <NavItem
             icon={<JournalIcon />}
@@ -180,16 +180,11 @@ export function Sidebar() {
             active={isActive('watch', screen)}
             onClick={go('watch')}
           />
-          <NavItem
-            icon={<TrashIcon size={16} />}
-            label="Recently deleted"
-            active={isActive('trash', screen)}
-            onClick={go('trash')}
-            right={trashCount > 0 ? <span className={s.count}>{trashCount}</span> : undefined}
-          />
         </div>
       </div>
 
+      {/* Recently deleted sits at the foot of the nav, after Memory — its count
+          is always --ink3, never amber (amber means "due now"). */}
       {/* Memory */}
       <div className={s.section}>
         <div className={s.sectionLabel}>Memory</div>
@@ -219,6 +214,17 @@ export function Sidebar() {
             right={bytesCount > 0 ? <span className={s.count}>{bytesCount}</span> : undefined}
           />
         </div>
+      </div>
+
+      {/* A gap, then the bin — the last thing in the nav, its count in --ink3. */}
+      <div className={s.tail}>
+        <NavItem
+          icon={<TrashIcon size={16} />}
+          label="Recently deleted"
+          active={isActive('trash', screen)}
+          onClick={go('trash')}
+          right={trashCount > 0 ? <span className={s.count}>{trashCount}</span> : undefined}
+        />
       </div>
 
       <div className={s.spacer} />
@@ -266,7 +272,7 @@ export function Sidebar() {
     </aside>
 
     {/* Floating reopen chip — the only chrome left in full-screen mode. */}
-    {!sbOpen && screen !== 'review' && (
+    {!sbOpen && screen !== 'reviewing' && (
       <button
         type="button"
         className={s.reopen}

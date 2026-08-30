@@ -2,7 +2,7 @@ import { useUI } from '../store/ui'
 import { Today } from './Today'
 import { Notes } from './Notes'
 import { Editor } from './Editor'
-import { Loom } from './Loom'
+import { Bindery } from './Bindery'
 import { Queue } from './Queue'
 import { Review } from './Review'
 import { Journal } from './Journal'
@@ -21,11 +21,11 @@ export function Router() {
       return <Notes />
     case 'editor':
       return <Editor />
-    case 'loom':
-      return <Loom />
+    case 'bindery':
+      return <Bindery />
     case 'queue':
       return <Queue />
-    case 'review':
+    case 'reviewing':
       return <Review />
     case 'journal':
       return <Journal />

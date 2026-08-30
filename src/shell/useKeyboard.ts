@@ -65,7 +65,7 @@ export function useKeyboard() {
 
       // Whole-note review: no reveal gate — 1-4 grade the open note directly,
       // and space is the one you reach for most (Good).
-      if (ui.screen === 'review' && ui.reviewId && !typing) {
+      if (ui.screen === 'reviewing' && ui.reviewId && !typing) {
         if (['1', '2', '3', '4'].includes(e.key)) {
           e.preventDefault()
           data.grade(Number(e.key) as Grade)
@@ -81,7 +81,7 @@ export function useKeyboard() {
       if (e.key === 'Escape') {
         if (ui.thread) ui.setThread(null)
         else if (ui.wOpenId) ui.closeWatch()
-        else if (ui.screen === 'review') ui.endReview()
+        else if (ui.screen === 'reviewing') ui.endReview()
       }
     }
     window.addEventListener('keydown', onKey)

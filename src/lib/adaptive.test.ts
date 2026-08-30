@@ -172,8 +172,13 @@ describe('recallNow + previewNext (UI surfaces)', () => {
     expect(recallNow({ ease: 2.5, ivl: 1, due: 1, hist: [] })).toBeNull()
   })
 
-  it('previews "10 min" for Again and adaptive days otherwise', () => {
-    expect(previewNext(sr, 1, 1)).toBe('10 min')
+  /*
+   * Again keeps the note due TODAY — this model has no sub-day scheduling, so
+   * the old "10 min" promised behaviour that does not exist. The preview has to
+   * mirror what grade() actually does.
+   */
+  it('previews "again today" for Again and adaptive days otherwise', () => {
+    expect(previewNext(sr, 1, 1)).toBe('again today')
     expect(previewNext(sr, 3, 1)).toMatch(/^\d+d$/)
     // a fresh note falls back to first-review stability (Good = 2.4d → "2d")
     expect(previewNext({ ease: 2.5, ivl: 1, due: 0, hist: [] }, 3, 1)).toBe('2d')

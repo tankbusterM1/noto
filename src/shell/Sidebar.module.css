@@ -239,6 +239,14 @@
   background: var(--am);
 }
 
+/* The bin hangs off the foot of the nav, a 10px gap below Memory. */
+.tail {
+  padding: 10px 12px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .spacer {
   flex: 1;
 }
