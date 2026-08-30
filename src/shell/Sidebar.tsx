@@ -103,7 +103,12 @@ export function Sidebar() {
     <>
     <aside
       className={`${s.sidebar} ${slim ? s.slim : ''}`}
-      style={{ width }}
+      /*
+       * flexBasis, not just width: as a flex item this aside takes its base size
+       * from flex-basis, and with `auto` it was sizing to its CONTENT — so
+       * `width: 0` (⌘\ / immersive mode) left a full-width sidebar on screen.
+       */
+      style={{ width, flex: `0 0 ${width}px`, borderRightWidth: width === 0 ? 0 : undefined }}
     >
       {/* Brand + collapse toggle */}
       <div className={s.header}>
